@@ -1,6 +1,5 @@
 import { PageCanvas } from "@/components/page-canvas";
 import { SAMPLE_RESUME } from "@/components/page-canvas";
-import Image from "next/image";
 
 export default function Home() {
   return (

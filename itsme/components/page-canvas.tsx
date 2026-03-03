@@ -43,6 +43,17 @@ type Block =
       type: "2-column-list";
       header: [string, string] | null;
       points: [string, string][];
+    }
+  | {
+      /**
+       * Equivalent to HTML:
+       * <div style="height: {height}px"></div>
+       */
+      type: "v-spacer";
+      /**
+       * Height in points (will be converted to px in the renderer).
+       */
+      height: number;
     };
 
 type BlockWithSection =
@@ -67,9 +78,12 @@ type TextStyle = {
   fontWeight: "normal" | "bold";
 };
 
-type Document = {
+type DocumentDefinition = {
   name: string;
   pageSize: {
+    /**
+     * US Letter is 8.5 x 11 (inches)
+     */
     width: number;
     height: number;
   };
@@ -98,57 +112,139 @@ type Document = {
   blocks: BlockWithSection[];
 };
 
-const PIXELS_PER_INCH = 96;
+type Document = Omit<
+  DocumentDefinition,
+  "pageSize" | "margins" | "textStyles" | "bulletListStyle" | "spacingBelow"
+> & {
+  pageSize: { width: number; height: number };
+  margins: { top: number; bottom: number; left: number; right: number };
+  textStyles: DocumentDefinition["textStyles"];
+  bulletListStyle: DocumentDefinition["bulletListStyle"];
+  spacingBelow: DocumentDefinition["spacingBelow"];
+};
+
+const CSS_PIXELS_PER_INCH = 96;
+const POINTS_PER_INCH = 72;
+
+function ptToPx(pt: number) {
+  return (pt * CSS_PIXELS_PER_INCH) / POINTS_PER_INCH;
+}
+
+function inchToPx(inches: number) {
+  return inches * CSS_PIXELS_PER_INCH;
+}
+
+function resolveDocument(def: DocumentDefinition): Document {
+  const resolveBlocks = (blocks: BlockWithSection[]): BlockWithSection[] =>
+    blocks.map((b) => {
+      if (b.type === "v-spacer") {
+        return { ...b, height: ptToPx(b.height) };
+      }
+      if (b.type === "section") {
+        return { ...b, blocks: resolveBlocks(b.blocks) as Block[] };
+      }
+      return b;
+    });
+
+  return {
+    ...def,
+    pageSize: {
+      width: inchToPx(def.pageSize.width),
+      height: inchToPx(def.pageSize.height),
+    },
+    margins: {
+      top: ptToPx(def.margins.top),
+      bottom: ptToPx(def.margins.bottom),
+      left: ptToPx(def.margins.left),
+      right: ptToPx(def.margins.right),
+    },
+    textStyles: {
+      default: {
+        ...def.textStyles.default,
+        fontSize: ptToPx(def.textStyles.default.fontSize),
+      },
+      h1: {
+        ...def.textStyles.h1,
+        fontSize: ptToPx(def.textStyles.h1.fontSize),
+      },
+      h2: {
+        ...def.textStyles.h2,
+        fontSize: ptToPx(def.textStyles.h2.fontSize),
+      },
+      h3: {
+        ...def.textStyles.h3,
+        fontSize: ptToPx(def.textStyles.h3.fontSize),
+      },
+      h4: {
+        ...def.textStyles.h4,
+        fontSize: ptToPx(def.textStyles.h4.fontSize),
+      },
+    },
+    bulletListStyle: {
+      ...def.bulletListStyle,
+      indent: ptToPx(def.bulletListStyle.indent),
+      gap: ptToPx(def.bulletListStyle.gap),
+    },
+    spacingBelow: {
+      about: ptToPx(def.spacingBelow.about),
+      "bullet-list": ptToPx(def.spacingBelow["bullet-list"]),
+      "2-column-list": ptToPx(def.spacingBelow["2-column-list"]),
+      section: ptToPx(def.spacingBelow.section),
+      "v-spacer": ptToPx(def.spacingBelow["v-spacer"]),
+    },
+    blocks: resolveBlocks(def.blocks),
+  };
+}
 
 const DEFAULT_TEXT_STYLES: Document["textStyles"] = {
   default: {
-    fontSize: (11 * PIXELS_PER_INCH) / 72,
+    fontSize: 11,
     fontWeight: "normal",
   },
   h1: {
-    fontSize: (16 * PIXELS_PER_INCH) / 72,
+    fontSize: 16,
     fontWeight: "bold",
   },
   h2: {
-    fontSize: (14 * PIXELS_PER_INCH) / 72,
+    fontSize: 14,
     fontWeight: "bold",
   },
   h3: {
-    fontSize: (12 * PIXELS_PER_INCH) / 72,
+    fontSize: 12,
     fontWeight: "bold",
   },
   h4: {
-    fontSize: (11 * PIXELS_PER_INCH) / 72,
+    fontSize: 11,
     fontWeight: "bold",
   },
 };
 
-export const SAMPLE_RESUME: Document = {
+export const SAMPLE_RESUME: DocumentDefinition = {
   name: "Master Resume",
   textStyles: DEFAULT_TEXT_STYLES,
   spacingBelow: {
-    about: (11 * PIXELS_PER_INCH) / 72,
-    "bullet-list": (11 * PIXELS_PER_INCH) / 72,
-    "2-column-list": (11 * PIXELS_PER_INCH) / 72,
-    section: (11 * PIXELS_PER_INCH) / 72,
+    about: 11,
+    "bullet-list": 11,
+    "2-column-list": 11,
+    section: 11,
+    "v-spacer": 0,
   },
   pageSize: {
     // US Letter size 8.5 x 11 inches
-    // Assume 96 DPI
-    width: 816,
-    height: 1056,
+    width: 8.5,
+    height: 11,
   },
   bulletListStyle: {
     bullet: "•",
-    indent: (11 * PIXELS_PER_INCH) / 72,
-    gap: (11 * PIXELS_PER_INCH) / 72,
+    indent: 11,
+    gap: 11,
   },
   font: "Times New Roman",
   margins: {
-    top: (40 * PIXELS_PER_INCH) / 72,
-    bottom: (40 * PIXELS_PER_INCH) / 72,
-    left: (40 * PIXELS_PER_INCH) / 72,
-    right: (40 * PIXELS_PER_INCH) / 72,
+    top: 40,
+    bottom: 40,
+    left: 40,
+    right: 40,
   },
   blocks: [
     {
@@ -185,10 +281,10 @@ export const SAMPLE_RESUME: Document = {
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "Experience 1",
+            "ExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperience",
             "Experience 2",
-            "Experience 3",
-            "Experience 4",
+            "Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3",
+            "Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4",
           ],
         },
         {
@@ -305,6 +401,91 @@ type PageLayout = {
 const LINE_HEIGHT_MULTIPLIER = 1.2;
 const PAGE_GAP = 24;
 
+let _measureCtx: CanvasRenderingContext2D | null = null;
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (_measureCtx) return _measureCtx;
+  const doc = globalThis.document;
+  if (!doc) return null;
+  const canvas = doc.createElement("canvas");
+  _measureCtx = canvas.getContext("2d");
+  return _measureCtx;
+}
+
+function estimateLineCount(
+  text: string,
+  fontFamily: string,
+  fontSize: number,
+  fontWeight: "normal" | "bold",
+  maxWidth: number
+): number {
+  if (!text) return 0;
+
+  const ctx = getMeasureCtx();
+  if (!ctx) {
+    // Fallback if canvas isn't available for some reason.
+    const avgCharWidth = fontSize * 0.5;
+    const maxCharsPerLine = Math.max(1, Math.floor(maxWidth / avgCharWidth));
+    return Math.max(1, Math.ceil(text.length / maxCharsPerLine));
+  }
+
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  const spaceWidth = ctx.measureText(" ").width;
+
+  const words = text.split(/\s+/).filter(Boolean);
+  let lines = 1;
+  let currentWidth = 0;
+
+  const placeLongWord = (word: string) => {
+    for (const ch of word) {
+      const w = ctx.measureText(ch).width;
+      if (currentWidth === 0) {
+        if (w > maxWidth) {
+          // Extremely narrow maxWidth: still advance
+          lines += 1;
+          currentWidth = 0;
+          continue;
+        }
+        currentWidth = w;
+        continue;
+      }
+
+      if (currentWidth + w > maxWidth) {
+        lines += 1;
+        currentWidth = w;
+      } else {
+        currentWidth += w;
+      }
+    }
+  };
+
+  for (const word of words) {
+    const wordWidth = ctx.measureText(word).width;
+
+    if (currentWidth === 0) {
+      if (wordWidth <= maxWidth) {
+        currentWidth = wordWidth;
+      } else {
+        placeLongWord(word);
+      }
+      continue;
+    }
+
+    if (currentWidth + spaceWidth + wordWidth <= maxWidth) {
+      currentWidth += spaceWidth + wordWidth;
+    } else {
+      lines += 1;
+      currentWidth = 0;
+      if (wordWidth <= maxWidth) {
+        currentWidth = wordWidth;
+      } else {
+        placeLongWord(word);
+      }
+    }
+  }
+
+  return lines;
+}
+
 function getHeadingStyle(
   baseLevel: 1 | 2,
   offset: number,
@@ -356,20 +537,32 @@ function layoutDocument(document: Document): PageLayout[] {
     });
   };
 
-  const addHeaderLine = (
-    left: string,
-    right: string,
-    y: number,
-    style: TextStyle
-  ) => {
-    const lineHeight = style.fontSize * LINE_HEIGHT_MULTIPLIER;
-    ensureSpace(lineHeight);
+  const addHeaderLine = (left: string, right: string, style: TextStyle) => {
+    const colWidth = contentWidth / 2;
+    const leftLines = estimateLineCount(
+      left,
+      document.font,
+      style.fontSize,
+      style.fontWeight,
+      colWidth
+    );
+    const rightLines = estimateLineCount(
+      right,
+      document.font,
+      style.fontSize,
+      style.fontWeight,
+      colWidth
+    );
+    const lines = Math.max(leftLines, rightLines || 1);
+    const blockHeight = lines * style.fontSize * LINE_HEIGHT_MULTIPLIER;
+
+    ensureSpace(blockHeight);
 
     addText({
       text: left,
       x: margins.left,
       y: currentY,
-      width: contentWidth,
+      width: colWidth,
       fontSize: style.fontSize,
       fontWeight: style.fontWeight,
       align: "left",
@@ -378,16 +571,16 @@ function layoutDocument(document: Document): PageLayout[] {
     if (right) {
       addText({
         text: right,
-        x: margins.left,
+        x: margins.left + colWidth,
         y: currentY,
-        width: contentWidth,
+        width: colWidth,
         fontSize: style.fontSize,
         fontWeight: style.fontWeight,
         align: "right",
       });
     }
 
-    currentY += lineHeight;
+    currentY += blockHeight;
   };
 
   const addSpacingBelow = (blockType: BlockWithSection["type"]) => {
@@ -407,11 +600,34 @@ function layoutDocument(document: Document): PageLayout[] {
   };
 
   const renderBlock = (block: BlockWithSection, headingOffset: number) => {
+    if (block.type === "v-spacer") {
+      ensureSpace(block.height);
+      currentY += block.height;
+      return;
+    }
+
     if (block.type === "about") {
       const headerStyle = getHeadingStyle(1, headingOffset, textStyles);
-      const headerHeight = headerStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
       const subtitleStyle = textStyles.default;
-      const subtitleHeight = subtitleStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
+      const headerLines = estimateLineCount(
+        block.header,
+        document.font,
+        headerStyle.fontSize,
+        headerStyle.fontWeight,
+        contentWidth
+      );
+      const headerHeight =
+        headerLines * headerStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
+      const subtitleLine = block.points.join(" | ");
+      const subtitleLines = estimateLineCount(
+        subtitleLine,
+        document.font,
+        subtitleStyle.fontSize,
+        subtitleStyle.fontWeight,
+        contentWidth
+      );
+      const subtitleHeight =
+        subtitleLines * subtitleStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
 
       // Header
       ensureSpace(headerHeight);
@@ -427,10 +643,9 @@ function layoutDocument(document: Document): PageLayout[] {
       currentY += headerHeight;
 
       // Points line
-      const line = block.points.join(" | ");
       ensureSpace(subtitleHeight);
       addText({
-        text: line,
+        text: subtitleLine,
         x: margins.left,
         y: currentY,
         width: contentWidth,
@@ -444,17 +659,8 @@ function layoutDocument(document: Document): PageLayout[] {
 
     if (block.type === "section") {
       const sectionHeaderStyle = getHeadingStyle(2, headingOffset, textStyles);
-      const sectionHeaderHeight =
-        sectionHeaderStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
-
-      // Section header
-      ensureSpace(sectionHeaderHeight);
-      addHeaderLine(
-        block.header[0],
-        block.header[1],
-        currentY,
-        sectionHeaderStyle
-      );
+      // Section header (height handled inside addHeaderLine)
+      addHeaderLine(block.header[0], block.header[1], sectionHeaderStyle);
 
       // Inner blocks with heading level downgraded by 1
       const innerBlocks = block.blocks;
@@ -471,54 +677,93 @@ function layoutDocument(document: Document): PageLayout[] {
 
     if (block.type === "bullet-list") {
       const headerStyle = getHeadingStyle(2, headingOffset, textStyles);
-      const headerHeight = headerStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
       const bodyStyle = textStyles.default;
       const bodyLineHeight = bodyStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
 
       // Optional header
       if (block.header) {
-        ensureSpace(headerHeight);
-        addHeaderLine(block.header[0], block.header[1], currentY, headerStyle);
+        addHeaderLine(block.header[0], block.header[1], headerStyle);
       }
 
       // Points, split across pages as needed
       for (const point of block.points) {
-        ensureSpace(bodyLineHeight);
+        const bulletX = margins.left + bulletListStyle.indent;
+        const textX = bulletX + bulletListStyle.gap;
+        const textWidth = contentWidth - (textX - margins.left);
+
+        const lines = estimateLineCount(
+          point,
+          document.font,
+          bodyStyle.fontSize,
+          bodyStyle.fontWeight,
+          textWidth
+        );
+        const height = Math.max(1, lines) * bodyLineHeight;
+
+        ensureSpace(height);
+        // Render bullet
         addText({
-          text: `${bulletListStyle.bullet} ${point}`,
-          x: margins.left + bulletListStyle.indent,
+          text: bulletListStyle.bullet,
+          x: bulletX,
           y: currentY,
-          width: contentWidth - bulletListStyle.indent,
+          width: bulletListStyle.gap,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
           align: "left",
         });
-        currentY += bodyLineHeight;
+
+        // Render text with hanging indent so wrapped lines align under the text
+        addText({
+          text: point,
+          x: textX,
+          y: currentY,
+          width: textWidth,
+          fontSize: bodyStyle.fontSize,
+          fontWeight: bodyStyle.fontWeight,
+          align: "left",
+        });
+        currentY += height;
       }
       return;
     }
 
     if (block.type === "2-column-list") {
       const headerStyle = getHeadingStyle(2, headingOffset, textStyles);
-      const headerHeight = headerStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
       const bodyStyle = textStyles.default;
       const bodyLineHeight = bodyStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
 
       // Optional header
       if (block.header) {
-        ensureSpace(headerHeight);
-        addHeaderLine(block.header[0], block.header[1], currentY, headerStyle);
+        addHeaderLine(block.header[0], block.header[1], headerStyle);
       }
 
       // Points rendered as two columns on a single line, split across pages
       for (const [left, right] of block.points) {
-        ensureSpace(bodyLineHeight);
+        const colWidth = contentWidth / 2;
+        const leftLines = estimateLineCount(
+          left,
+          document.font,
+          bodyStyle.fontSize,
+          bodyStyle.fontWeight,
+          colWidth
+        );
+        const rightLines = estimateLineCount(
+          right,
+          document.font,
+          bodyStyle.fontSize,
+          bodyStyle.fontWeight,
+          colWidth
+        );
+        const lines = Math.max(leftLines, rightLines || 1);
+        const height = lines * bodyLineHeight;
+
+        ensureSpace(height);
 
         addText({
           text: left,
           x: margins.left,
           y: currentY,
-          width: contentWidth,
+          width: colWidth,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
           align: "left",
@@ -526,15 +771,15 @@ function layoutDocument(document: Document): PageLayout[] {
 
         addText({
           text: right,
-          x: margins.left,
+          x: margins.left + colWidth,
           y: currentY,
-          width: contentWidth,
+          width: colWidth,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
           align: "right",
         });
 
-        currentY += bodyLineHeight;
+        currentY += height;
       }
       return;
     }
@@ -553,7 +798,13 @@ function layoutDocument(document: Document): PageLayout[] {
   return pages;
 }
 
-export function PageCanvas({ document }: { document: Document }) {
+export function PageCanvas({
+  document,
+  dpi = 300,
+}: {
+  document: DocumentDefinition;
+  dpi?: number;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
 
@@ -562,18 +813,24 @@ export function PageCanvas({ document }: { document: Document }) {
     if (!el) return;
 
     const updateWidth = () => {
-      setContainerWidth(el.clientWidth || document.pageSize.width);
+      setContainerWidth(
+        el.clientWidth || el.getBoundingClientRect().width || 0
+      );
     };
 
     updateWidth();
     window.addEventListener("resize", updateWidth);
     return () => window.removeEventListener("resize", updateWidth);
-  }, [document.pageSize.width]);
+  }, []);
 
-  const pages = useMemo(() => layoutDocument(document), [document]);
+  const resolvedDocument = useMemo(() => resolveDocument(document), [document]);
+  const pages = useMemo(
+    () => layoutDocument(resolvedDocument),
+    [resolvedDocument]
+  );
 
-  const pageWidth = document.pageSize.width;
-  const pageHeight = document.pageSize.height;
+  const pageWidth = resolvedDocument.pageSize.width;
+  const pageHeight = resolvedDocument.pageSize.height;
 
   const scale =
     containerWidth != null && containerWidth > 0
@@ -587,8 +844,13 @@ export function PageCanvas({ document }: { document: Document }) {
   return (
     <div ref={containerRef} style={{ width: "100%" }}>
       {containerWidth !== null && (
-        <Stage width={stageWidth} height={stageHeight}>
-          <Layer>
+        <Stage
+          width={stageWidth}
+          height={stageHeight}
+          pixelRatio={dpi / 96}
+          listening={false}
+        >
+          <Layer listening={false}>
             {pages.map((page, pageIndex) => {
               const yOffset = pageIndex * (pageHeight + PAGE_GAP) * scale;
 
@@ -608,6 +870,7 @@ export function PageCanvas({ document }: { document: Document }) {
                     stroke="#e5e5e5"
                     fill="#ffffff"
                     cornerRadius={2}
+                    perfectDrawEnabled={false}
                   />
                   {page.items.map((item, idx) => (
                     <Text
@@ -616,11 +879,13 @@ export function PageCanvas({ document }: { document: Document }) {
                       y={item.y}
                       width={item.width}
                       text={item.text}
-                      fontFamily={document.font}
+                      fontFamily={resolvedDocument.font}
                       fontSize={item.fontSize}
+                      lineHeight={LINE_HEIGHT_MULTIPLIER}
                       fontStyle={item.fontWeight === "bold" ? "bold" : "normal"}
                       align={item.align}
                       fill="#000000"
+                      perfectDrawEnabled={false}
                     />
                   ))}
                 </Group>
