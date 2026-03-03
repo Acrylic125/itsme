@@ -130,6 +130,9 @@ type Document = Omit<
 const CSS_PIXELS_PER_INCH = 96;
 const POINTS_PER_INCH = 72;
 
+const MIN_COLUMN_RATIO = 0.25;
+const MAX_COLUMN_RATIO = 0.75;
+
 function ptToPx(pt: number) {
   return (pt * CSS_PIXELS_PER_INCH) / POINTS_PER_INCH;
 }
@@ -514,6 +517,59 @@ function getHeadingStyle(
   }
 }
 
+function getProportionalColumnWidths(options: {
+  leftText: string;
+  rightText: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: "normal" | "bold";
+  totalWidth: number;
+  minRatio?: number;
+  maxRatio?: number;
+}): { left: number; right: number } {
+  const {
+    leftText,
+    rightText,
+    fontFamily,
+    fontSize,
+    fontWeight,
+    totalWidth,
+    minRatio = MIN_COLUMN_RATIO,
+    maxRatio = MAX_COLUMN_RATIO,
+  } = options;
+
+  if (totalWidth <= 0) {
+    return { left: 0, right: 0 };
+  }
+
+  const ctx = getMeasureCtx();
+  if (!ctx) {
+    const half = totalWidth / 2;
+    return { left: half, right: half };
+  }
+
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  const rawLeft = Math.max(0, ctx.measureText(leftText).width);
+  const rawRight = Math.max(0, ctx.measureText(rightText).width);
+  const sumWidth = rawLeft + rawRight;
+
+  if (sumWidth <= 0) {
+    const half = totalWidth / 2;
+    return { left: half, right: half };
+  }
+
+  let allocLeft = (rawLeft / sumWidth) * totalWidth;
+  let allocRight = totalWidth - allocLeft;
+
+  const minCol = totalWidth * minRatio;
+  const maxCol = totalWidth * maxRatio;
+
+  allocLeft = Math.min(maxCol, Math.max(minCol, allocLeft));
+  allocRight = totalWidth - allocLeft;
+
+  return { left: allocLeft, right: allocRight };
+}
+
 function layoutDocument(document: Document): PageLayout[] {
   const pages: PageLayout[] = [{ items: [] }];
   const { pageSize, margins, textStyles, bulletListStyle, blocks } = document;
@@ -549,34 +605,18 @@ function layoutDocument(document: Document): PageLayout[] {
   };
 
   const addHeaderLine = (left: string, right: string, style: TextStyle) => {
-    const ctx = getMeasureCtx();
-    const totalAvailable = contentWidth;
+    const { left: allocLeft, right: allocRight } = getProportionalColumnWidths({
+      leftText: left,
+      rightText: right,
+      fontFamily: document.font,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      totalWidth: contentWidth,
+    });
 
-    let leftWidth = 1;
-    let rightWidth = 1;
-
-    if (ctx) {
-      ctx.font = `${style.fontWeight} ${style.fontSize}px ${document.font}`;
-      const rawLeft = ctx.measureText(left).width;
-      const rawRight = ctx.measureText(right).width;
-
-      if (rawLeft > 0) leftWidth = rawLeft;
-      if (rawRight > 0) rightWidth = rawRight;
-    }
-
-    const sumWidth = leftWidth + rightWidth;
-    if (sumWidth <= 0) {
+    if (allocLeft <= 0 && allocRight <= 0) {
       return;
     }
-
-    let allocLeft = (leftWidth / sumWidth) * totalAvailable;
-    let allocRight = totalAvailable - allocLeft;
-
-    const minCol = totalAvailable * 0.25;
-    const maxCol = totalAvailable * 0.75;
-
-    allocLeft = Math.min(maxCol, Math.max(minCol, allocLeft));
-    allocRight = totalAvailable - allocLeft;
 
     const leftLines = estimateLineCount(
       left,
@@ -782,40 +822,21 @@ function layoutDocument(document: Document): PageLayout[] {
         addHeaderLine(block.header[0], block.header[1], headerStyle);
       }
 
-      const ctx = getMeasureCtx();
-
       // Points rendered as two columns on a single line, split across pages.
-      // We let the text widths influence the proportion, but always fit within contentWidth.
       for (const [left, right] of block.points) {
-        const totalAvailable = contentWidth;
+        const { left: allocLeft, right: allocRight } =
+          getProportionalColumnWidths({
+            leftText: left,
+            rightText: right,
+            fontFamily: document.font,
+            fontSize: bodyStyle.fontSize,
+            fontWeight: bodyStyle.fontWeight,
+            totalWidth: contentWidth,
+          });
 
-        let leftWidth = 1;
-        let rightWidth = 1;
-
-        if (ctx) {
-          ctx.font = `${bodyStyle.fontWeight} ${bodyStyle.fontSize}px ${document.font}`;
-          const rawLeft = ctx.measureText(left).width;
-          const rawRight = ctx.measureText(right).width;
-
-          if (rawLeft > 0) leftWidth = rawLeft;
-          if (rawRight > 0) rightWidth = rawRight;
-        }
-
-        const sumWidth = leftWidth + rightWidth;
-        if (sumWidth <= 0) {
+        if (allocLeft <= 0 && allocRight <= 0) {
           continue;
         }
-
-        // Base proportional allocation.
-        let allocLeft = (leftWidth / sumWidth) * totalAvailable;
-        let allocRight = totalAvailable - allocLeft;
-
-        // Prevent any column from becoming unusably small or excessively wide.
-        const minCol = totalAvailable * 0.25;
-        const maxCol = totalAvailable * 0.75;
-
-        allocLeft = Math.min(maxCol, Math.max(minCol, allocLeft));
-        allocRight = totalAvailable - allocLeft;
 
         const leftLines = estimateLineCount(
           left,
