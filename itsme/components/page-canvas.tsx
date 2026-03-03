@@ -208,7 +208,7 @@ const DEFAULT_TEXT_STYLES: DocumentDefinition["textStyles"] = {
   },
   h1: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "normal",
     lineHeight: 1.2,
   },
   h2: {
@@ -250,10 +250,10 @@ export const SAMPLE_RESUME: DocumentDefinition = {
   },
   font: "Times New Roman",
   margins: {
-    top: 40,
-    bottom: 40,
-    left: 40,
-    right: 40,
+    top: 24,
+    bottom: 24,
+    left: 24,
+    right: 24,
   },
   blocks: [
     {
@@ -549,20 +549,48 @@ function layoutDocument(document: Document): PageLayout[] {
   };
 
   const addHeaderLine = (left: string, right: string, style: TextStyle) => {
-    const colWidth = contentWidth / 2;
+    const ctx = getMeasureCtx();
+    const totalAvailable = contentWidth;
+
+    let leftWidth = 1;
+    let rightWidth = 1;
+
+    if (ctx) {
+      ctx.font = `${style.fontWeight} ${style.fontSize}px ${document.font}`;
+      const rawLeft = ctx.measureText(left).width;
+      const rawRight = ctx.measureText(right).width;
+
+      if (rawLeft > 0) leftWidth = rawLeft;
+      if (rawRight > 0) rightWidth = rawRight;
+    }
+
+    const sumWidth = leftWidth + rightWidth;
+    if (sumWidth <= 0) {
+      return;
+    }
+
+    let allocLeft = (leftWidth / sumWidth) * totalAvailable;
+    let allocRight = totalAvailable - allocLeft;
+
+    const minCol = totalAvailable * 0.25;
+    const maxCol = totalAvailable * 0.75;
+
+    allocLeft = Math.min(maxCol, Math.max(minCol, allocLeft));
+    allocRight = totalAvailable - allocLeft;
+
     const leftLines = estimateLineCount(
       left,
       document.font,
       style.fontSize,
       style.fontWeight,
-      colWidth
+      allocLeft
     );
     const rightLines = estimateLineCount(
       right,
       document.font,
       style.fontSize,
       style.fontWeight,
-      colWidth
+      allocRight
     );
     const lines = Math.max(leftLines, rightLines || 1);
     const blockHeight = lines * style.fontSize * style.lineHeight;
@@ -573,7 +601,7 @@ function layoutDocument(document: Document): PageLayout[] {
       text: left,
       x: margins.left,
       y: currentY,
-      width: colWidth,
+      width: allocLeft,
       fontSize: style.fontSize,
       fontWeight: style.fontWeight,
       lineHeight: style.lineHeight,
@@ -583,9 +611,9 @@ function layoutDocument(document: Document): PageLayout[] {
     if (right) {
       addText({
         text: right,
-        x: margins.left + colWidth,
+        x: margins.left + allocLeft,
         y: currentY,
-        width: colWidth,
+        width: allocRight,
         fontSize: style.fontSize,
         fontWeight: style.fontWeight,
         lineHeight: style.lineHeight,
@@ -754,22 +782,54 @@ function layoutDocument(document: Document): PageLayout[] {
         addHeaderLine(block.header[0], block.header[1], headerStyle);
       }
 
-      // Points rendered as two columns on a single line, split across pages
+      const ctx = getMeasureCtx();
+
+      // Points rendered as two columns on a single line, split across pages.
+      // We let the text widths influence the proportion, but always fit within contentWidth.
       for (const [left, right] of block.points) {
-        const colWidth = contentWidth / 2;
+        const totalAvailable = contentWidth;
+
+        let leftWidth = 1;
+        let rightWidth = 1;
+
+        if (ctx) {
+          ctx.font = `${bodyStyle.fontWeight} ${bodyStyle.fontSize}px ${document.font}`;
+          const rawLeft = ctx.measureText(left).width;
+          const rawRight = ctx.measureText(right).width;
+
+          if (rawLeft > 0) leftWidth = rawLeft;
+          if (rawRight > 0) rightWidth = rawRight;
+        }
+
+        const sumWidth = leftWidth + rightWidth;
+        if (sumWidth <= 0) {
+          continue;
+        }
+
+        // Base proportional allocation.
+        let allocLeft = (leftWidth / sumWidth) * totalAvailable;
+        let allocRight = totalAvailable - allocLeft;
+
+        // Prevent any column from becoming unusably small or excessively wide.
+        const minCol = totalAvailable * 0.25;
+        const maxCol = totalAvailable * 0.75;
+
+        allocLeft = Math.min(maxCol, Math.max(minCol, allocLeft));
+        allocRight = totalAvailable - allocLeft;
+
         const leftLines = estimateLineCount(
           left,
           document.font,
           bodyStyle.fontSize,
           bodyStyle.fontWeight,
-          colWidth
+          allocLeft
         );
         const rightLines = estimateLineCount(
           right,
           document.font,
           bodyStyle.fontSize,
           bodyStyle.fontWeight,
-          colWidth
+          allocRight
         );
         const lines = Math.max(leftLines, rightLines || 1);
         const height = lines * bodyLineHeight;
@@ -780,7 +840,7 @@ function layoutDocument(document: Document): PageLayout[] {
           text: left,
           x: margins.left,
           y: currentY,
-          width: colWidth,
+          width: allocLeft,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
           lineHeight: bodyStyle.lineHeight,
@@ -789,9 +849,9 @@ function layoutDocument(document: Document): PageLayout[] {
 
         addText({
           text: right,
-          x: margins.left + colWidth,
+          x: margins.left + allocLeft,
           y: currentY,
-          width: colWidth,
+          width: allocRight,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
           lineHeight: bodyStyle.lineHeight,
