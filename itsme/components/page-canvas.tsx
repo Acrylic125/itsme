@@ -76,6 +76,10 @@ type BlockWithSection =
 type TextStyle = {
   fontSize: number;
   fontWeight: "normal" | "bold";
+  /**
+   * Unitless multiplier, like CSS `line-height`.
+   */
+  lineHeight: number;
 };
 
 type DocumentDefinition = {
@@ -196,26 +200,31 @@ function resolveDocument(def: DocumentDefinition): Document {
   };
 }
 
-const DEFAULT_TEXT_STYLES: Document["textStyles"] = {
+const DEFAULT_TEXT_STYLES: DocumentDefinition["textStyles"] = {
   default: {
     fontSize: 11,
     fontWeight: "normal",
+    lineHeight: 1.2,
   },
   h1: {
     fontSize: 16,
     fontWeight: "bold",
+    lineHeight: 1.2,
   },
   h2: {
     fontSize: 14,
     fontWeight: "bold",
+    lineHeight: 1.2,
   },
   h3: {
     fontSize: 12,
     fontWeight: "bold",
+    lineHeight: 1.2,
   },
   h4: {
     fontSize: 11,
     fontWeight: "bold",
+    lineHeight: 1.2,
   },
 };
 
@@ -391,6 +400,7 @@ type RenderTextItem = {
   width: number;
   fontSize: number;
   fontWeight: "normal" | "bold";
+  lineHeight: number;
   align?: "left" | "center" | "right";
 };
 
@@ -398,7 +408,6 @@ type PageLayout = {
   items: RenderTextItem[];
 };
 
-const LINE_HEIGHT_MULTIPLIER = 1.2;
 const PAGE_GAP = 24;
 
 let _measureCtx: CanvasRenderingContext2D | null = null;
@@ -524,15 +533,17 @@ function layoutDocument(document: Document): PageLayout[] {
   };
 
   const addText = (
-    item: Omit<RenderTextItem, "fontWeight" | "width"> & {
+    item: Omit<RenderTextItem, "fontWeight" | "width" | "lineHeight"> & {
       fontWeight?: RenderTextItem["fontWeight"];
       width?: number;
+      lineHeight?: RenderTextItem["lineHeight"];
     }
   ) => {
     const page = pages[currentPageIndex];
     page.items.push({
       fontWeight: item.fontWeight ?? "normal",
       width: item.width ?? contentWidth,
+      lineHeight: item.lineHeight ?? textStyles.default.lineHeight,
       ...item,
     });
   };
@@ -554,7 +565,7 @@ function layoutDocument(document: Document): PageLayout[] {
       colWidth
     );
     const lines = Math.max(leftLines, rightLines || 1);
-    const blockHeight = lines * style.fontSize * LINE_HEIGHT_MULTIPLIER;
+    const blockHeight = lines * style.fontSize * style.lineHeight;
 
     ensureSpace(blockHeight);
 
@@ -565,6 +576,7 @@ function layoutDocument(document: Document): PageLayout[] {
       width: colWidth,
       fontSize: style.fontSize,
       fontWeight: style.fontWeight,
+      lineHeight: style.lineHeight,
       align: "left",
     });
 
@@ -576,6 +588,7 @@ function layoutDocument(document: Document): PageLayout[] {
         width: colWidth,
         fontSize: style.fontSize,
         fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
         align: "right",
       });
     }
@@ -617,7 +630,7 @@ function layoutDocument(document: Document): PageLayout[] {
         contentWidth
       );
       const headerHeight =
-        headerLines * headerStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
+        headerLines * headerStyle.fontSize * headerStyle.lineHeight;
       const subtitleLine = block.points.join(" | ");
       const subtitleLines = estimateLineCount(
         subtitleLine,
@@ -627,7 +640,7 @@ function layoutDocument(document: Document): PageLayout[] {
         contentWidth
       );
       const subtitleHeight =
-        subtitleLines * subtitleStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
+        subtitleLines * subtitleStyle.fontSize * subtitleStyle.lineHeight;
 
       // Header
       ensureSpace(headerHeight);
@@ -638,6 +651,7 @@ function layoutDocument(document: Document): PageLayout[] {
         width: contentWidth,
         fontSize: headerStyle.fontSize,
         fontWeight: headerStyle.fontWeight,
+        lineHeight: headerStyle.lineHeight,
         align: "center",
       });
       currentY += headerHeight;
@@ -651,6 +665,7 @@ function layoutDocument(document: Document): PageLayout[] {
         width: contentWidth,
         fontSize: subtitleStyle.fontSize,
         fontWeight: subtitleStyle.fontWeight,
+        lineHeight: subtitleStyle.lineHeight,
         align: "center",
       });
       currentY += subtitleHeight;
@@ -678,7 +693,7 @@ function layoutDocument(document: Document): PageLayout[] {
     if (block.type === "bullet-list") {
       const headerStyle = getHeadingStyle(2, headingOffset, textStyles);
       const bodyStyle = textStyles.default;
-      const bodyLineHeight = bodyStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
+      const bodyLineHeight = bodyStyle.fontSize * bodyStyle.lineHeight;
 
       // Optional header
       if (block.header) {
@@ -709,6 +724,7 @@ function layoutDocument(document: Document): PageLayout[] {
           width: bulletListStyle.gap,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
+          lineHeight: bodyStyle.lineHeight,
           align: "left",
         });
 
@@ -720,6 +736,7 @@ function layoutDocument(document: Document): PageLayout[] {
           width: textWidth,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
+          lineHeight: bodyStyle.lineHeight,
           align: "left",
         });
         currentY += height;
@@ -730,7 +747,7 @@ function layoutDocument(document: Document): PageLayout[] {
     if (block.type === "2-column-list") {
       const headerStyle = getHeadingStyle(2, headingOffset, textStyles);
       const bodyStyle = textStyles.default;
-      const bodyLineHeight = bodyStyle.fontSize * LINE_HEIGHT_MULTIPLIER;
+      const bodyLineHeight = bodyStyle.fontSize * bodyStyle.lineHeight;
 
       // Optional header
       if (block.header) {
@@ -766,6 +783,7 @@ function layoutDocument(document: Document): PageLayout[] {
           width: colWidth,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
+          lineHeight: bodyStyle.lineHeight,
           align: "left",
         });
 
@@ -776,6 +794,7 @@ function layoutDocument(document: Document): PageLayout[] {
           width: colWidth,
           fontSize: bodyStyle.fontSize,
           fontWeight: bodyStyle.fontWeight,
+          lineHeight: bodyStyle.lineHeight,
           align: "right",
         });
 
@@ -881,7 +900,7 @@ export function PageCanvas({
                       text={item.text}
                       fontFamily={resolvedDocument.font}
                       fontSize={item.fontSize}
-                      lineHeight={LINE_HEIGHT_MULTIPLIER}
+                      lineHeight={item.lineHeight}
                       fontStyle={item.fontWeight === "bold" ? "bold" : "normal"}
                       align={item.align}
                       fill="#000000"
