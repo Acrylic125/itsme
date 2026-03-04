@@ -1,3 +1,12 @@
+type TextStyle = {
+  fontSize: number;
+  fontWeight: "normal" | "bold";
+  /**
+   * Unitless multiplier, like CSS `line-height`.
+   */
+  lineHeight: number;
+};
+
 type Block =
   | {
       type: "about";
@@ -26,15 +35,6 @@ type BlockWithSection =
       header: [string, string];
       blocks: Block[];
     };
-
-type TextStyle = {
-  fontSize: number;
-  fontWeight: "normal" | "bold";
-  /**
-   * Unitless multiplier, like CSS `line-height`.
-   */
-  lineHeight: number;
-};
 
 type DocumentDefinition = {
   name: string;
