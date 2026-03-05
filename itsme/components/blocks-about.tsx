@@ -9,6 +9,7 @@ import type {
 } from "./document-blocks";
 import { estimateLineCount, getHeadingStyle } from "./document-blocks";
 import { useDocumentRender } from "./document-render-context";
+import { HoverRegion } from "./blocks-shared";
 
 function AboutBlockNode({
   x,
@@ -20,42 +21,48 @@ function AboutBlockNode({
   headerStyle,
   subtitleStyle,
   headerHeight,
+  subtitleHeight,
 }: LayoutBlockComponentProps & {
   headerText: string;
   subtitleText: string;
   headerStyle: TextStyle;
   subtitleStyle: TextStyle;
   headerHeight: number;
+  subtitleHeight: number;
 }) {
   const document = useDocumentRender();
   return (
     <Group x={x} y={y} width={width} height={height}>
-      <Text
-        x={0}
-        y={0}
-        width={width}
-        text={headerText}
-        fontFamily={document.font}
-        fontSize={headerStyle.fontSize}
-        lineHeight={headerStyle.lineHeight}
-        fontStyle={headerStyle.fontWeight === "bold" ? "bold" : "normal"}
-        align="center"
-        fill="#000000"
-        perfectDrawEnabled={false}
-      />
-      <Text
-        x={0}
-        y={headerHeight}
-        width={width}
-        text={subtitleText}
-        fontFamily={document.font}
-        fontSize={subtitleStyle.fontSize}
-        lineHeight={subtitleStyle.lineHeight}
-        fontStyle={subtitleStyle.fontWeight === "bold" ? "bold" : "normal"}
-        align="center"
-        fill="#000000"
-        perfectDrawEnabled={false}
-      />
+      <HoverRegion x={0} y={0} width={width} height={headerHeight}>
+        <Text
+          x={0}
+          y={0}
+          width={width}
+          text={headerText}
+          fontFamily={document.font}
+          fontSize={headerStyle.fontSize}
+          lineHeight={headerStyle.lineHeight}
+          fontStyle={headerStyle.fontWeight === "bold" ? "bold" : "normal"}
+          align="center"
+          fill="#000000"
+          perfectDrawEnabled={false}
+        />
+      </HoverRegion>
+      <HoverRegion x={0} y={headerHeight} width={width} height={subtitleHeight}>
+        <Text
+          x={0}
+          y={0}
+          width={width}
+          text={subtitleText}
+          fontFamily={document.font}
+          fontSize={subtitleStyle.fontSize}
+          lineHeight={subtitleStyle.lineHeight}
+          fontStyle={subtitleStyle.fontWeight === "bold" ? "bold" : "normal"}
+          align="center"
+          fill="#000000"
+          perfectDrawEnabled={false}
+        />
+      </HoverRegion>
     </Group>
   );
 }
@@ -107,6 +114,7 @@ export function renderAbout({
         headerStyle={headerStyle}
         subtitleStyle={subtitleStyle}
         headerHeight={headerHeight}
+        subtitleHeight={subtitleHeight}
       />
     ),
   };

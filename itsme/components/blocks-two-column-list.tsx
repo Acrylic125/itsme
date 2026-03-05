@@ -13,7 +13,12 @@ import {
   getProportionalColumnWidths,
 } from "./document-blocks";
 import { useDocumentRender } from "./document-render-context";
-import { computeHeaderLayout, type HeaderLayout, TwoColumnHeaderNode } from "./blocks-shared";
+import {
+  computeHeaderLayout,
+  HoverRegion,
+  type HeaderLayout,
+  TwoColumnHeaderNode,
+} from "./blocks-shared";
 
 function TwoColumnListBlockNode({
   x,
@@ -39,16 +44,24 @@ function TwoColumnListBlockNode({
   return (
     <Group x={x} y={y} width={width} height={height}>
       {header && (
-        <TwoColumnHeaderNode
-          x={0}
-          y={0}
-          width={width}
-          height={header.height}
-          header={header}
-        />
+        <HoverRegion x={0} y={0} width={width} height={header.height}>
+          <TwoColumnHeaderNode
+            x={0}
+            y={0}
+            width={width}
+            height={header.height}
+            header={header}
+          />
+        </HoverRegion>
       )}
       {rows.map((row, idx) => (
-        <Group key={idx} y={row.y}>
+        <HoverRegion
+          key={idx}
+          x={0}
+          y={row.y}
+          width={width}
+          height={row.height}
+        >
           <Text
             x={0}
             y={0}
@@ -75,7 +88,7 @@ function TwoColumnListBlockNode({
             fill="#000000"
             perfectDrawEnabled={false}
           />
-        </Group>
+        </HoverRegion>
       ))}
     </Group>
   );
@@ -169,4 +182,3 @@ export function renderTwoColumnList({
     ),
   };
 }
-

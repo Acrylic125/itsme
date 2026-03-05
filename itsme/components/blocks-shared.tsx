@@ -1,12 +1,21 @@
 "use client";
 
-import { Group, Text } from "react-konva";
-import type { Document, LayoutBlockComponentProps, TextStyle } from "./document-blocks";
+import { useEffect, useRef, useState } from "react";
+import { Group, Rect, Text } from "react-konva";
+import Konva from "konva";
+import type {
+  Document,
+  LayoutBlockComponentProps,
+  TextStyle,
+} from "./document-blocks";
 import {
   estimateLineCount,
   getProportionalColumnWidths,
 } from "./document-blocks";
 import { useDocumentRender } from "./document-render-context";
+
+const HOVER_FILL = "#f3f4f6";
+const HOVER_DURATION_S = 0.1;
 
 export type HeaderLayout = {
   leftText: string;
@@ -54,6 +63,65 @@ export function computeHeaderLayout(args: {
   return { leftText, rightText, allocLeft, allocRight, height, style };
 }
 
+export function HoverRegion({
+  x,
+  y,
+  width,
+  height,
+  children,
+}: LayoutBlockComponentProps & { children: React.ReactNode }) {
+  const rectRef = useRef<Konva.Rect | null>(null);
+  const tweenRef = useRef<Konva.Tween | null>(null);
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    const node = rectRef.current;
+    if (!node) return;
+
+    tweenRef.current?.destroy();
+    const tween = new Konva.Tween({
+      node,
+      opacity: hovered ? 1 : 0,
+      duration: HOVER_DURATION_S,
+      easing: Konva.Easings.EaseInOut,
+    });
+    tweenRef.current = tween;
+    tween.play();
+
+    return () => {
+      tween.destroy();
+      if (tweenRef.current === tween) {
+        tweenRef.current = null;
+      }
+    };
+  }, [hovered]);
+
+  return (
+    <Group
+      x={x}
+      y={y}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <Rect
+        ref={(n) => {
+          rectRef.current = n;
+        }}
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+        fill={HOVER_FILL}
+        opacity={0}
+        cornerRadius={2}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+      {children}
+    </Group>
+  );
+}
+
 export function TwoColumnHeaderNode({
   x,
   y,
@@ -95,4 +163,3 @@ export function TwoColumnHeaderNode({
     </Group>
   );
 }
-
