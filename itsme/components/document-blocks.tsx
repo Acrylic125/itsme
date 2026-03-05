@@ -81,34 +81,59 @@ type Document = Omit<
   spacingBelow: DocumentDefinition["spacingBelow"];
 };
 
-type RenderTextItem = {
-  text: string;
+export type LayoutParentRect = {
+  width: number;
+  height: number;
+};
+
+export type LayoutBlockDimensions = {
+  width: number;
+  height: number;
+};
+
+export type LayoutBlockComponentProps = {
   x: number;
   y: number;
   width: number;
   height: number;
-  fontSize: number;
-  fontWeight: "normal" | "bold";
-  lineHeight: number;
-  align?: "left" | "center" | "right";
-  /**
-   * A text item can belong to multiple hover groups. Bounds are computed by
-   * unioning all items in the same group.
-   */
-  hoverGroups?: string[];
-  /**
-   * Which hover group should be activated when hovering THIS item.
-   * (Lets split-column items highlight only the hovered region.)
-   */
-  hoverEnterGroup?: string;
-  /**
-   * When true, this item should be ignored by PDF export.
-   */
-  skipPdf?: boolean;
 };
 
-type PageLayout = {
-  items: RenderTextItem[];
+export type LayoutBlockComponent = (
+  props: LayoutBlockComponentProps
+) => unknown;
+
+export type LayoutBlockRendererResult = {
+  estimatedDimensions: LayoutBlockDimensions;
+  component: LayoutBlockComponent;
+};
+
+export type LayoutBlockRenderer<
+  TBlock extends BlockWithSection = BlockWithSection,
+> = (args: {
+  document: Document;
+  block: TBlock;
+  parent: LayoutParentRect;
+  headingOffset: number;
+}) => LayoutBlockRendererResult;
+
+export type LayoutBlockRenderers = {
+  [K in BlockWithSection["type"]]: LayoutBlockRenderer<
+    Extract<BlockWithSection, { type: K }>
+  >;
+};
+
+export type LaidOutBlock = {
+  id: number;
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  component: LayoutBlockComponent;
+};
+
+export type PageLayout = {
+  blocks: LaidOutBlock[];
 };
 
 const CSS_PIXELS_PER_INCH = 96;
@@ -381,7 +406,7 @@ export const SAMPLE_RESUME: DocumentDefinition = {
 };
 
 let _measureCtx: CanvasRenderingContext2D | null = null;
-function getMeasureCtx(): CanvasRenderingContext2D | null {
+export function getMeasureCtx(): CanvasRenderingContext2D | null {
   if (_measureCtx) return _measureCtx;
   const doc = globalThis.document;
   if (!doc) return null;
@@ -390,7 +415,7 @@ function getMeasureCtx(): CanvasRenderingContext2D | null {
   return _measureCtx;
 }
 
-function estimateLineCount(
+export function estimateLineCount(
   text: string,
   fontFamily: string,
   fontSize: number,
@@ -463,7 +488,7 @@ function estimateLineCount(
   return lines;
 }
 
-function getHeadingStyle(
+export function getHeadingStyle(
   baseLevel: 1 | 2,
   offset: number,
   textStyles: Document["textStyles"]
@@ -482,7 +507,7 @@ function getHeadingStyle(
   }
 }
 
-function getProportionalColumnWidths(options: {
+export function getProportionalColumnWidths(options: {
   leftText: string;
   rightText: string;
   fontFamily: string;
@@ -535,9 +560,12 @@ function getProportionalColumnWidths(options: {
   return { left: allocLeft, right: allocRight };
 }
 
-export function layoutDocument(document: Document): PageLayout[] {
-  const pages: PageLayout[] = [{ items: [] }];
-  const { pageSize, margins, textStyles, bulletListStyle, blocks } = document;
+export function layoutDocument(
+  document: Document,
+  renderers: LayoutBlockRenderers
+): PageLayout[] {
+  const pages: PageLayout[] = [{ blocks: [] }];
+  const { pageSize, margins, blocks } = document;
 
   const contentWidth = pageSize.width - margins.left - margins.right;
   const contentBottom = pageSize.height - margins.bottom;
@@ -550,213 +578,79 @@ export function layoutDocument(document: Document): PageLayout[] {
     return blockSeq;
   };
 
-  const ensureSpace = (neededHeight: number) => {
-    if (currentY + neededHeight > contentBottom) {
-      currentPageIndex += 1;
-      pages[currentPageIndex] = { items: [] };
-      currentY = margins.top;
-    }
-  };
-
-  const addText = (
-    item: Omit<
-      RenderTextItem,
-      "fontWeight" | "width" | "lineHeight" | "hoverGroups" | "hoverEnterGroup"
-    > & {
-      fontWeight?: RenderTextItem["fontWeight"];
-      width?: number;
-      lineHeight?: RenderTextItem["lineHeight"];
-      hoverGroups?: RenderTextItem["hoverGroups"];
-      hoverEnterGroup?: RenderTextItem["hoverEnterGroup"];
-    }
-  ) => {
-    const page = pages[currentPageIndex];
-    page.items.push({
-      fontWeight: item.fontWeight ?? "normal",
-      width: item.width ?? contentWidth,
-      lineHeight: item.lineHeight ?? textStyles.default.lineHeight,
-      ...item,
-    });
-  };
-
-  const addHeaderLine = (
-    left: string,
-    right: string,
-    style: TextStyle,
-    hover?: {
-      allGroup?: string;
-      leftGroup?: string;
-      rightGroup?: string;
-      leftEnterGroup?: string;
-      rightEnterGroup?: string;
-    }
-  ) => {
-    const { left: allocLeft, right: allocRight } = getProportionalColumnWidths({
-      leftText: left,
-      rightText: right,
-      fontFamily: document.font,
-      fontSize: style.fontSize,
-      fontWeight: style.fontWeight,
-      totalWidth: contentWidth,
-    });
-
-    if (allocLeft <= 0 && allocRight <= 0) {
-      return;
-    }
-
-    const leftLines = estimateLineCount(
-      left,
-      document.font,
-      style.fontSize,
-      style.fontWeight,
-      allocLeft
-    );
-    const rightLines = estimateLineCount(
-      right,
-      document.font,
-      style.fontSize,
-      style.fontWeight,
-      allocRight
-    );
-    const lines = Math.max(leftLines, rightLines || 1);
-    const blockHeight = lines * style.fontSize * style.lineHeight;
-
-    ensureSpace(blockHeight);
-
-    addText({
-      text: left,
-      x: margins.left,
-      y: currentY,
-      width: allocLeft,
-      height: blockHeight,
-      fontSize: style.fontSize,
-      fontWeight: style.fontWeight,
-      lineHeight: style.lineHeight,
-      align: "left",
-      hoverGroups: [hover?.allGroup, hover?.leftGroup].filter(
-        Boolean
-      ) as string[],
-      hoverEnterGroup: hover?.leftEnterGroup,
-    });
-
-    if (right) {
-      addText({
-        text: right,
-        x: margins.left + allocLeft,
-        y: currentY,
-        width: allocRight,
-        fontSize: style.fontSize,
-        height: blockHeight,
-        fontWeight: style.fontWeight,
-        lineHeight: style.lineHeight,
-        align: "right",
-        hoverGroups: [hover?.allGroup, hover?.rightGroup].filter(
-          Boolean
-        ) as string[],
-        hoverEnterGroup: hover?.rightEnterGroup,
-      });
-    }
-
-    currentY += blockHeight;
-  };
-
   const addSpacingBelow = (blockType: BlockWithSection["type"]) => {
     const spacing = document.spacingBelow[blockType];
     if (!spacing) return;
 
     if (currentY + spacing > contentBottom) {
       currentPageIndex += 1;
-      pages[currentPageIndex] = { items: [] };
+      pages[currentPageIndex] = { blocks: [] };
       currentY = margins.top;
     } else {
       currentY += spacing;
     }
   };
 
-  const renderBlock = (block: BlockWithSection, headingOffset: number) => {
-    if (block.type === "v-spacer") {
-      ensureSpace(block.height);
-      currentY += block.height;
-      return;
+  const placeAtomicBlock = (block: BlockWithSection, headingOffset: number) => {
+    const renderer = renderers[
+      block.type
+    ] as LayoutBlockRenderer<BlockWithSection>;
+    let result = renderer({
+      document,
+      block,
+      parent: {
+        width: contentWidth,
+        height: Math.max(0, contentBottom - currentY),
+      },
+      headingOffset,
+    });
+
+    let { width, height } = result.estimatedDimensions;
+
+    // If it doesn't fit and we're not at the top of a page, move to next page
+    // and re-run the renderer with the new parent height.
+    if (currentY !== margins.top && currentY + height > contentBottom) {
+      currentPageIndex += 1;
+      pages[currentPageIndex] = { blocks: [] };
+      currentY = margins.top;
+
+      result = renderer({
+        document,
+        block,
+        parent: {
+          width: contentWidth,
+          height: Math.max(0, contentBottom - currentY),
+        },
+        headingOffset,
+      });
+      ({ width, height } = result.estimatedDimensions);
     }
 
-    if (block.type === "about") {
-      const aboutId = nextBlockId();
-      const aboutHoverAll = `about-${aboutId}-all`;
+    const id = nextBlockId();
 
-      const headerStyle = getHeadingStyle(1, headingOffset, textStyles);
-      const subtitleStyle = textStyles.default;
-      const headerLines = estimateLineCount(
-        block.header,
-        document.font,
-        headerStyle.fontSize,
-        headerStyle.fontWeight,
-        contentWidth
-      );
-      const headerHeight =
-        headerLines * headerStyle.fontSize * headerStyle.lineHeight;
-      const subtitleLine = block.points.join(" | ");
-      const subtitleLines = estimateLineCount(
-        subtitleLine,
-        document.font,
-        subtitleStyle.fontSize,
-        subtitleStyle.fontWeight,
-        contentWidth
-      );
-      const subtitleHeight =
-        subtitleLines * subtitleStyle.fontSize * subtitleStyle.lineHeight;
+    const page = pages[currentPageIndex];
+    page.blocks.push({
+      id,
+      pageIndex: currentPageIndex,
+      x: margins.left,
+      y: currentY,
+      width,
+      height,
+      component: result.component,
+    });
 
-      ensureSpace(headerHeight);
-      addText({
-        text: block.header,
-        x: margins.left,
-        y: currentY,
-        width: contentWidth,
-        height: headerHeight,
-        fontSize: headerStyle.fontSize,
-        fontWeight: headerStyle.fontWeight,
-        lineHeight: headerStyle.lineHeight,
-        align: "center",
-        hoverGroups: [aboutHoverAll],
-        hoverEnterGroup: aboutHoverAll,
-      });
-      currentY += headerHeight;
+    currentY += height;
+  };
 
-      ensureSpace(subtitleHeight);
-      addText({
-        text: subtitleLine,
-        x: margins.left,
-        y: currentY,
-        width: contentWidth,
-        height: subtitleHeight,
-        fontSize: subtitleStyle.fontSize,
-        fontWeight: subtitleStyle.fontWeight,
-        lineHeight: subtitleStyle.lineHeight,
-        align: "center",
-        hoverGroups: [aboutHoverAll],
-        hoverEnterGroup: aboutHoverAll,
-      });
-      currentY += subtitleHeight;
-      return;
-    }
-
+  const placeBlock = (block: BlockWithSection, headingOffset: number) => {
     if (block.type === "section") {
-      const sectionId = nextBlockId();
-      const sectionHeaderLeft = `section-${sectionId}-header-left`;
-      const sectionHeaderRight = `section-${sectionId}-header-right`;
-
-      const sectionHeaderStyle = getHeadingStyle(2, headingOffset, textStyles);
-      addHeaderLine(block.header[0], block.header[1], sectionHeaderStyle, {
-        leftGroup: sectionHeaderLeft,
-        rightGroup: sectionHeaderRight,
-        leftEnterGroup: sectionHeaderLeft,
-        rightEnterGroup: sectionHeaderRight,
-      });
+      // Place the section header as its own block, then place children.
+      placeAtomicBlock(block, headingOffset);
 
       const innerBlocks = block.blocks;
       for (let i = 0; i < innerBlocks.length; i++) {
         const inner = innerBlocks[i];
-        renderBlock(inner, headingOffset + 1);
+        placeBlock(inner, headingOffset + 1);
         if (i < innerBlocks.length - 1) {
           addSpacingBelow(inner.type);
         }
@@ -764,169 +658,12 @@ export function layoutDocument(document: Document): PageLayout[] {
       return;
     }
 
-    if (block.type === "bullet-list") {
-      const listId = nextBlockId();
-      const listHeaderLeft = `bullet-${listId}-header-left`;
-      const listHeaderRight = `bullet-${listId}-header-right`;
-
-      const headerStyle = getHeadingStyle(2, headingOffset, textStyles);
-      const bodyStyle = textStyles.default;
-      const bodyLineHeight = bodyStyle.fontSize * bodyStyle.lineHeight;
-
-      if (block.header) {
-        addHeaderLine(block.header[0], block.header[1], headerStyle, {
-          leftGroup: listHeaderLeft,
-          rightGroup: listHeaderRight,
-          leftEnterGroup: listHeaderLeft,
-          rightEnterGroup: listHeaderRight,
-        });
-      }
-
-      for (let pointIndex = 0; pointIndex < block.points.length; pointIndex++) {
-        const point = block.points[pointIndex];
-        const pointGroup = `bullet-${listId}-point-${pointIndex}`;
-
-        const bulletX = margins.left + bulletListStyle.indent;
-        const textX = bulletX + bulletListStyle.gap;
-        const textWidth = contentWidth - (textX - margins.left);
-
-        const lines = estimateLineCount(
-          point,
-          document.font,
-          bodyStyle.fontSize,
-          bodyStyle.fontWeight,
-          textWidth
-        );
-        const height = Math.max(1, lines) * bodyLineHeight;
-
-        ensureSpace(height);
-        addText({
-          text: bulletListStyle.bullet,
-          x: bulletX,
-          y: currentY,
-          width: bulletListStyle.gap,
-          height,
-          fontSize: bodyStyle.fontSize,
-          fontWeight: bodyStyle.fontWeight,
-          lineHeight: bodyStyle.lineHeight,
-          align: "left",
-          hoverGroups: [pointGroup],
-          hoverEnterGroup: pointGroup,
-        });
-
-        addText({
-          text: point,
-          x: textX,
-          y: currentY,
-          width: textWidth,
-          height,
-          fontSize: bodyStyle.fontSize,
-          fontWeight: bodyStyle.fontWeight,
-          lineHeight: bodyStyle.lineHeight,
-          align: "left",
-          hoverGroups: [pointGroup],
-          hoverEnterGroup: pointGroup,
-        });
-        currentY += height;
-      }
-      return;
-    }
-
-    if (block.type === "2-column-list") {
-      const listId = nextBlockId();
-      const listHoverAll = `two-col-${listId}-all`;
-      const listHeaderLeft = `two-col-${listId}-header-left`;
-      const listHeaderRight = `two-col-${listId}-header-right`;
-
-      const headerStyle = getHeadingStyle(2, headingOffset, textStyles);
-      const bodyStyle = textStyles.default;
-      const bodyLineHeight = bodyStyle.fontSize * bodyStyle.lineHeight;
-
-      if (block.header) {
-        addHeaderLine(block.header[0], block.header[1], headerStyle, {
-          allGroup: listHoverAll,
-          leftGroup: listHeaderLeft,
-          rightGroup: listHeaderRight,
-          leftEnterGroup: listHeaderLeft,
-          rightEnterGroup: listHeaderRight,
-        });
-      }
-
-      for (let rowIndex = 0; rowIndex < block.points.length; rowIndex++) {
-        const [left, right] = block.points[rowIndex];
-        const rowLeftGroup = `two-col-${listId}-row-${rowIndex}-left`;
-        const rowRightGroup = `two-col-${listId}-row-${rowIndex}-right`;
-
-        const { left: allocLeft, right: allocRight } =
-          getProportionalColumnWidths({
-            leftText: left,
-            rightText: right,
-            fontFamily: document.font,
-            fontSize: bodyStyle.fontSize,
-            fontWeight: bodyStyle.fontWeight,
-            totalWidth: contentWidth,
-          });
-
-        if (allocLeft <= 0 && allocRight <= 0) {
-          continue;
-        }
-
-        const leftLines = estimateLineCount(
-          left,
-          document.font,
-          bodyStyle.fontSize,
-          bodyStyle.fontWeight,
-          allocLeft
-        );
-        const rightLines = estimateLineCount(
-          right,
-          document.font,
-          bodyStyle.fontSize,
-          bodyStyle.fontWeight,
-          allocRight
-        );
-        const lines = Math.max(leftLines, rightLines || 1);
-        const height = lines * bodyLineHeight;
-
-        ensureSpace(height);
-
-        addText({
-          text: left,
-          x: margins.left,
-          y: currentY,
-          width: allocLeft,
-          height,
-          fontSize: bodyStyle.fontSize,
-          fontWeight: bodyStyle.fontWeight,
-          lineHeight: bodyStyle.lineHeight,
-          align: "left",
-          hoverGroups: [rowLeftGroup],
-          hoverEnterGroup: rowLeftGroup,
-        });
-
-        addText({
-          text: right,
-          x: margins.left + allocLeft,
-          y: currentY,
-          width: allocRight,
-          height,
-          fontSize: bodyStyle.fontSize,
-          fontWeight: bodyStyle.fontWeight,
-          lineHeight: bodyStyle.lineHeight,
-          align: "right",
-          hoverGroups: [rowRightGroup],
-          hoverEnterGroup: rowRightGroup,
-        });
-
-        currentY += height;
-      }
-      return;
-    }
+    placeAtomicBlock(block, headingOffset);
   };
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
-    renderBlock(block, 0);
+    placeBlock(block, 0);
     if (i < blocks.length - 1) {
       addSpacingBelow(block.type);
     }
@@ -935,63 +672,10 @@ export function layoutDocument(document: Document): PageLayout[] {
   return pages;
 }
 
-export type HoverGroupBounds = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-export function computeHoverBounds(
-  pages: PageLayout[]
-): Map<string, HoverGroupBounds>[] {
-  return pages.map((page) => {
-    const acc = new Map<
-      string,
-      { minX: number; minY: number; maxX: number; maxY: number }
-    >();
-
-    for (const item of page.items) {
-      const groups = item.hoverGroups ?? [];
-      if (groups.length === 0) continue;
-
-      const x1 = item.x;
-      const y1 = item.y;
-      const x2 = item.x + item.width;
-      const y2 = item.y + item.height;
-
-      for (const groupId of groups) {
-        const prev = acc.get(groupId);
-        if (!prev) {
-          acc.set(groupId, { minX: x1, minY: y1, maxX: x2, maxY: y2 });
-          continue;
-        }
-        prev.minX = Math.min(prev.minX, x1);
-        prev.minY = Math.min(prev.minY, y1);
-        prev.maxX = Math.max(prev.maxX, x2);
-        prev.maxY = Math.max(prev.maxY, y2);
-      }
-    }
-
-    const out = new Map<string, HoverGroupBounds>();
-    acc.forEach((b, key) => {
-      out.set(key, {
-        x: b.minX,
-        y: b.minY,
-        width: b.maxX - b.minX,
-        height: b.maxY - b.minY,
-      });
-    });
-    return out;
-  });
-}
-
 export type {
   Block,
   BlockWithSection,
   TextStyle,
   Document,
   DocumentDefinition,
-  RenderTextItem,
-  PageLayout,
 };
