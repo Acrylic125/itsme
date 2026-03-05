@@ -20,14 +20,20 @@ type AnchorRect = {
 };
 
 type PopupState = {
+  id: string;
   anchor: AnchorRect;
-  text: string;
+  content: ReactNode;
 };
 
 type DomPopupApi = {
-  openPopup: (args: { anchor: AnchorRect; text: string }) => void;
+  openPopup: (args: {
+    id: string;
+    anchor: AnchorRect;
+    content: ReactNode;
+  }) => void;
   closePopup: () => void;
   isOpen: boolean;
+  currentId: string | null;
 };
 
 const DomPopupContext = createContext<DomPopupApi | null>(null);
@@ -43,19 +49,34 @@ export function useDomPopup(): DomPopupApi {
 export function DomPopupProvider({ children }: { children: ReactNode }) {
   const [popup, setPopup] = useState<PopupState | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
-  const [measuredSize, setMeasuredSize] = useState<{ w: number; h: number } | null>(
-    null
-  );
+  const [measuredSize, setMeasuredSize] = useState<{
+    w: number;
+    h: number;
+  } | null>(null);
+
+  const [isVisible, setIsVisible] = useState(false);
 
   const closePopup = useCallback(() => {
-    setPopup(null);
-    setMeasuredSize(null);
+    // fade out, then clear
+    setIsVisible(false);
+    setTimeout(() => {
+      setPopup(null);
+      setMeasuredSize(null);
+    }, 150);
   }, []);
 
-  const openPopup = useCallback((args: { anchor: AnchorRect; text: string }) => {
-    setPopup({ anchor: args.anchor, text: args.text });
-    setMeasuredSize(null);
-  }, []);
+  const openPopup = useCallback(
+    (args: { id: string; anchor: AnchorRect; content: ReactNode }) => {
+      setPopup({ id: args.id, anchor: args.anchor, content: args.content });
+      setMeasuredSize(null);
+      // kick animation on next frame
+      setIsVisible(false);
+      requestAnimationFrame(() => {
+        setIsVisible(true);
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     if (!popup) return;
@@ -89,8 +110,13 @@ export function DomPopupProvider({ children }: { children: ReactNode }) {
   }, [popup]);
 
   const api = useMemo<DomPopupApi>(
-    () => ({ openPopup, closePopup, isOpen: popup != null }),
-    [openPopup, closePopup, popup]
+    () => ({
+      openPopup,
+      closePopup,
+      isOpen: popup != null && isVisible,
+      currentId: popup?.id ?? null,
+    }),
+    [openPopup, closePopup, popup, isVisible]
   );
 
   const anchor = popup?.anchor ?? null;
@@ -98,7 +124,7 @@ export function DomPopupProvider({ children }: { children: ReactNode }) {
 
   let style: React.CSSProperties | undefined;
   if (popup && anchor) {
-    const w = measuredSize?.w ?? 180;
+    const w = anchor.width;
     const h = measuredSize?.h ?? 40;
 
     const preferBelowTop = anchor.top + anchor.height + gap;
@@ -123,7 +149,12 @@ export function DomPopupProvider({ children }: { children: ReactNode }) {
       boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
       fontSize: 14,
       lineHeight: 1.2,
-      maxWidth: 320,
+      width: w,
+      transformOrigin: belowOverflows ? "left bottom" : "left top",
+      transform: isVisible ? "scale(1)" : "scale(0.2)",
+      opacity: isVisible ? 1 : 0,
+      transition:
+        "opacity 0.12s ease-in-out, transform 0.12s ease-in-out, top 0.12s ease-in-out",
     };
   }
 
@@ -132,10 +163,9 @@ export function DomPopupProvider({ children }: { children: ReactNode }) {
       {children}
       {popup && (
         <div ref={popupRef} style={style} role="dialog" aria-modal="false">
-          {popup.text}
+          {popup.content}
         </div>
       )}
     </DomPopupContext.Provider>
   );
 }
-
