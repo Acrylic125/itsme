@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+
 type Block =
   | {
       type: "about";
@@ -98,9 +100,7 @@ export type LayoutBlockComponentProps = {
   height: number;
 };
 
-export type LayoutBlockComponent = (
-  props: LayoutBlockComponentProps
-) => unknown;
+export type LayoutBlockComponent = ComponentType<LayoutBlockComponentProps>;
 
 export type LayoutBlockRendererResult = {
   estimatedDimensions: LayoutBlockDimensions;
