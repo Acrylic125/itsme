@@ -9,11 +9,34 @@ import {
   PageLayout,
 } from "./document-blocks";
 import { DocumentRenderProvider } from "./document-render-context";
+import { DomPopupProvider } from "./dom-popup";
 import { BLOCK_RENDERERS } from "./block-renderers";
 
 export { SAMPLE_RESUME } from "./document-blocks";
 
 const PAGE_GAP = 24;
+
+function useDevicePixelRatio() {
+  const [dpr, setDpr] = useState(() =>
+    typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
+  );
+
+  useEffect(() => {
+    const update = () => setDpr(window.devicePixelRatio || 1);
+
+    update();
+    window.addEventListener("resize", update);
+    // visualViewport fires on zoom in many browsers (esp. mobile/Safari)
+    window.visualViewport?.addEventListener("resize", update);
+
+    return () => {
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
+  }, []);
+
+  return dpr;
+}
 
 export function PageCanvas({
   document,
@@ -24,6 +47,7 @@ export function PageCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
+  const dpr = useDevicePixelRatio();
 
   useEffect(() => {
     const el = containerRef.current;
@@ -58,13 +82,16 @@ export function PageCanvas({
     <div ref={containerRef} style={{ width: "100%" }}>
       {containerWidth !== null && (
         <DocumentRenderProvider document={resolvedDocument}>
-          <DocumentStage
-            pages={pages}
-            pageWidth={pageWidth}
-            pageHeight={pageHeight}
-            scale={scale}
-            dpi={dpi}
-          />
+          <DomPopupProvider>
+            <DocumentStage
+              pages={pages}
+              pageWidth={pageWidth}
+              pageHeight={pageHeight}
+              scale={scale}
+              dpi={dpi}
+              dpr={dpr}
+            />
+          </DomPopupProvider>
         </DocumentRenderProvider>
       )}
     </div>
@@ -77,6 +104,7 @@ type DocumentStageProps = {
   pageHeight: number;
   scale: number;
   dpi: number;
+  dpr: number;
 };
 
 function DocumentStage({
@@ -85,13 +113,22 @@ function DocumentStage({
   pageHeight,
   scale,
   dpi,
+  dpr,
 }: DocumentStageProps) {
   const stageWidth = pageWidth * scale;
   const stageHeight =
     pages.length * (pageHeight + PAGE_GAP) * scale - PAGE_GAP * scale;
 
+  const pixelRatio = (dpi / 96) * dpr;
+
   return (
-    <Stage width={stageWidth} height={stageHeight} pixelRatio={dpi / 96}>
+    <Stage
+      // Force a remount when DPR changes to avoid Konva keeping the old backing store
+      key={`${dpi}:${dpr}`}
+      width={stageWidth}
+      height={stageHeight}
+      pixelRatio={pixelRatio}
+    >
       <Layer>
         {pages.map((page, pageIndex) => {
           const yOffset = pageIndex * (pageHeight + PAGE_GAP) * scale;

@@ -10,6 +10,7 @@ import type {
 import { estimateLineCount, getHeadingStyle } from "./document-blocks";
 import { useDocumentRender } from "./document-render-context";
 import { HoverRegion } from "./blocks-shared";
+import { useDomPopup } from "./dom-popup";
 
 function AboutBlockNode({
   x,
@@ -31,9 +32,18 @@ function AboutBlockNode({
   subtitleHeight: number;
 }) {
   const document = useDocumentRender();
+  const { openPopup } = useDomPopup();
   return (
     <Group x={x} y={y} width={width} height={height}>
-      <HoverRegion x={0} y={0} width={width} height={headerHeight}>
+      <HoverRegion
+        x={0}
+        y={0}
+        width={width}
+        height={headerHeight}
+        onClick={({ anchor }) => {
+          openPopup({ anchor, text: "Hello world" });
+        }}
+      >
         <Text
           x={0}
           y={0}
@@ -119,4 +129,3 @@ export function renderAbout({
     ),
   };
 }
-

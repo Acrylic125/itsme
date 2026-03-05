@@ -69,7 +69,14 @@ export function HoverRegion({
   width,
   height,
   children,
-}: LayoutBlockComponentProps & { children: React.ReactNode }) {
+  onClick,
+}: LayoutBlockComponentProps & {
+  children: React.ReactNode;
+  onClick?: (args: {
+    anchor: { left: number; top: number; width: number; height: number };
+  }) => void;
+}) {
+  const groupRef = useRef<Konva.Group | null>(null);
   const rectRef = useRef<Konva.Rect | null>(null);
   const tweenRef = useRef<Konva.Tween | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -98,10 +105,31 @@ export function HoverRegion({
 
   return (
     <Group
+      ref={(n) => {
+        groupRef.current = n;
+      }}
       x={x}
       y={y}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => {
+        if (!onClick) return;
+        const node = groupRef.current;
+        const stage = node?.getStage();
+        const container = stage?.container();
+        if (!node || !stage || !container) return;
+
+        const stageRect = container.getBoundingClientRect();
+        const r = node.getClientRect();
+        onClick({
+          anchor: {
+            left: stageRect.left + r.x,
+            top: stageRect.top + r.y,
+            width: r.width,
+            height: r.height,
+          },
+        });
+      }}
     >
       <Rect
         ref={(n) => {
