@@ -6,17 +6,17 @@ import type {
   Document,
   LayoutBlockComponentProps,
   TextStyle,
-} from "./document-blocks";
-import { estimateLineCount, getHeadingStyle } from "./document-blocks";
-import { useDocumentRender } from "./document-render-context";
+} from "@/components/document-blocks";
+import { estimateLineCount, getHeadingStyle } from "@/components/document-blocks";
+import { useDocumentRender } from "@/components/document-render-context";
 import {
   computeHeaderLayout,
   HoverRegion,
   type HeaderLayout,
   TwoColumnHeaderNode,
   SingleTextInputModal,
-} from "./blocks-shared";
-import { useDomPopup } from "./dom-popup";
+} from "@/components/blocks-shared";
+import { useDomPopup } from "@/components/dom-popup";
 
 function BulletListBlockNode({
   x,
@@ -153,7 +153,7 @@ export function renderBulletList({
       <BulletListBlockNode
         {...props}
         header={header}
-        rows={rows.map((r, idx) => ({ ...r, y: rowY[idx] }))}
+        rows={rows.map((row, idx) => ({ ...row, y: rowY[idx] }))}
         bodyStyle={bodyStyle}
       />
     ),

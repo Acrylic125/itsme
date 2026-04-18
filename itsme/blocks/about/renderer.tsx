@@ -6,11 +6,11 @@ import type {
   Document,
   LayoutBlockComponentProps,
   TextStyle,
-} from "./document-blocks";
-import { estimateLineCount, getHeadingStyle } from "./document-blocks";
-import { useDocumentRender } from "./document-render-context";
-import { HoverRegion, SingleTextInputModal } from "./blocks-shared";
-import { useDomPopup } from "./dom-popup";
+} from "@/components/document-blocks";
+import { estimateLineCount, getHeadingStyle } from "@/components/document-blocks";
+import { useDocumentRender } from "@/components/document-render-context";
+import { HoverRegion, SingleTextInputModal } from "@/components/blocks-shared";
+import { useDomPopup } from "@/components/dom-popup";
 
 function AboutBlockNode({
   x,
@@ -107,8 +107,7 @@ export function renderAbout({
     headerStyle.fontWeight,
     parent.width
   );
-  const headerHeight =
-    headerLines * headerStyle.fontSize * headerStyle.lineHeight;
+  const headerHeight = headerLines * headerStyle.fontSize * headerStyle.lineHeight;
 
   const subtitleLines = estimateLineCount(
     subtitleLine,

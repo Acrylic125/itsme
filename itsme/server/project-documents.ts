@@ -17,11 +17,12 @@ import {
 } from "@/db/schema";
 import {
   DocumentDefinitionSchema,
-  type Block,
   type BlockWithSection,
   type DocumentDefinition,
 } from "@/components/document-blocks";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { BLOCK_DECODE_CODECS } from "@/blocks/codec-registry";
+import type { DecodeBlockMaps } from "@/blocks/server-codec-types";
 
 function createEmptyDocument(name: string): DocumentDefinition {
   return {
@@ -276,69 +277,33 @@ async function getDocumentDefinitionById(
       sectionChildrenBySectionId.set(row.sectionBlockId, next);
     }
 
+    const maps: DecodeBlockMaps = {
+      aboutByBlockId,
+      bulletByBlockId,
+      twoColumnByBlockId,
+      spacerByBlockId,
+      sectionByBlockId,
+      aboutPointsByBlockId,
+      bulletPointsByBlockId,
+      twoColumnPointsByBlockId,
+      sectionChildrenBySectionId,
+    };
+
     const buildBlock = (blockId: string): BlockWithSection | null => {
       const row = blockRowById.get(blockId);
       if (!row) return null;
 
-      if (row.type === "about") {
-        const detail = aboutByBlockId.get(blockId);
-        if (!detail) return null;
-        return {
-          type: "about",
-          header: detail.header,
-          points: aboutPointsByBlockId.get(blockId) ?? [],
-        };
-      }
+      const codec = BLOCK_DECODE_CODECS[row.type] as (args: {
+        blockId: string;
+        maps: DecodeBlockMaps;
+        helpers: { buildBlock: (id: string) => BlockWithSection | null };
+      }) => BlockWithSection | null;
 
-      if (row.type === "bullet-list") {
-        const detail = bulletByBlockId.get(blockId);
-        if (!detail) return null;
-        const hasHeader =
-          detail.headerLeftContent != null && detail.headerRightContent != null;
-        return {
-          type: "bullet-list",
-          header: hasHeader
-            ? [detail.headerLeftContent!, detail.headerRightContent!]
-            : null,
-          points: bulletPointsByBlockId.get(blockId) ?? [],
-        };
-      }
-
-      if (row.type === "2-column-list") {
-        const detail = twoColumnByBlockId.get(blockId);
-        if (!detail) return null;
-        const hasHeader =
-          detail.headerLeftContent != null && detail.headerRightContent != null;
-        return {
-          type: "2-column-list",
-          header: hasHeader
-            ? [detail.headerLeftContent!, detail.headerRightContent!]
-            : null,
-          points: twoColumnPointsByBlockId.get(blockId) ?? [],
-        };
-      }
-
-      if (row.type === "v-spacer") {
-        const detail = spacerByBlockId.get(blockId);
-        if (!detail) return null;
-        return {
-          type: "v-spacer",
-          height: detail.height,
-        };
-      }
-
-      const detail = sectionByBlockId.get(blockId);
-      if (!detail) return null;
-      const children = (sectionChildrenBySectionId.get(blockId) ?? [])
-        .map((childId) => buildBlock(childId))
-        .filter(
-          (block): block is Block => block != null && block.type !== "section"
-        );
-      return {
-        type: "section",
-        header: [detail.headerLeftContent, detail.headerRightContent],
-        blocks: children,
-      };
+      return codec({
+        blockId,
+        maps,
+        helpers: { buildBlock },
+      });
     };
 
     const topLevelBlocks = documentBlocks
@@ -350,14 +315,10 @@ async function getDocumentDefinitionById(
       ...emptyDocument,
       blocks: topLevelBlocks,
     };
-    reconstructedDocument = candidateDocument;
-    // const parsedDocument =
-    //   DocumentDefinitionSchema.safeParse(candidateDocument);
-
-    // console.log(parsedDocument);
-    // reconstructedDocument = parsedDocument.success
-    //   ? parsedDocument.data
-    //   : emptyDocument;
+    const parsedDocument = DocumentDefinitionSchema.safeParse(candidateDocument);
+    reconstructedDocument = parsedDocument.success
+      ? parsedDocument.data
+      : emptyDocument;
   }
 
   return reconstructedDocument;

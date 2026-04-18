@@ -4,9 +4,9 @@ import type {
   BlockWithSection,
   Document,
   LayoutBlockComponentProps,
-} from "./document-blocks";
-import { getHeadingStyle } from "./document-blocks";
-import { computeHeaderLayout, TwoColumnHeaderNode } from "./blocks-shared";
+} from "@/components/document-blocks";
+import { getHeadingStyle } from "@/components/document-blocks";
+import { computeHeaderLayout, TwoColumnHeaderNode } from "@/components/blocks-shared";
 
 export function renderSection({
   document,

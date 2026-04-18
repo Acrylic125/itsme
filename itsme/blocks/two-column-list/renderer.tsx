@@ -6,19 +6,19 @@ import type {
   Document,
   LayoutBlockComponentProps,
   TextStyle,
-} from "./document-blocks";
+} from "@/components/document-blocks";
 import {
   estimateLineCount,
   getHeadingStyle,
   getProportionalColumnWidths,
-} from "./document-blocks";
-import { useDocumentRender } from "./document-render-context";
+} from "@/components/document-blocks";
+import { useDocumentRender } from "@/components/document-render-context";
 import {
   computeHeaderLayout,
   HoverRegion,
   type HeaderLayout,
   TwoColumnHeaderNode,
-} from "./blocks-shared";
+} from "@/components/blocks-shared";
 
 function TwoColumnListBlockNode({
   x,
@@ -119,15 +119,14 @@ export function renderTwoColumnList({
 
   const rows = block.points
     .map(([leftText, rightText]) => {
-      const { left: allocLeft, right: allocRight } =
-        getProportionalColumnWidths({
-          leftText,
-          rightText,
-          fontFamily: document.font,
-          fontSize: bodyStyle.fontSize,
-          fontWeight: bodyStyle.fontWeight,
-          totalWidth: parent.width,
-        });
+      const { left: allocLeft, right: allocRight } = getProportionalColumnWidths({
+        leftText,
+        rightText,
+        fontFamily: document.font,
+        fontSize: bodyStyle.fontSize,
+        fontWeight: bodyStyle.fontWeight,
+        totalWidth: parent.width,
+      });
 
       if (allocLeft <= 0 && allocRight <= 0) {
         return null;
@@ -174,7 +173,7 @@ export function renderTwoColumnList({
       <TwoColumnListBlockNode
         {...props}
         header={header}
-        rows={rows.map((r, idx) => ({ ...r, y: rowY[idx] }))}
+        rows={rows.map((row, idx) => ({ ...row, y: rowY[idx] }))}
         bodyStyle={bodyStyle}
       />
     ),

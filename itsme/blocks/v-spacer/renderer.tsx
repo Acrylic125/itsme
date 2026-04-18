@@ -4,7 +4,7 @@ import type {
   BlockWithSection,
   Document,
   LayoutBlockComponentProps,
-} from "./document-blocks";
+} from "@/components/document-blocks";
 
 export function renderSpacer({
   block,
@@ -20,4 +20,3 @@ export function renderSpacer({
     component: (_props: LayoutBlockComponentProps) => null,
   };
 }
-

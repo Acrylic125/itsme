@@ -1,5 +1,9 @@
 import type { ComponentType } from "react";
 import { z } from "zod";
+import { AboutBlockSchema } from "@/blocks/about/schema";
+import { BulletListBlockSchema } from "@/blocks/bullet-list/schema";
+import { TwoColumnListBlockSchema } from "@/blocks/two-column-list/schema";
+import { SpacerBlockSchema } from "@/blocks/v-spacer/schema";
 
 export const TextStyleSchema = z.object({
   fontSize: z.number(),
@@ -11,25 +15,10 @@ export const TextStyleSchema = z.object({
 });
 
 export const BlockSchema = z.union([
-  z.object({
-    type: z.literal("about"),
-    header: z.string(),
-    points: z.array(z.string()),
-  }),
-  z.object({
-    type: z.literal("bullet-list"),
-    header: z.tuple([z.string(), z.string()]).nullable(),
-    points: z.array(z.string()),
-  }),
-  z.object({
-    type: z.literal("2-column-list"),
-    header: z.tuple([z.string(), z.string()]).nullable(),
-    points: z.array(z.tuple([z.string(), z.string()])),
-  }),
-  z.object({
-    type: z.literal("v-spacer"),
-    height: z.number(),
-  }),
+  AboutBlockSchema,
+  BulletListBlockSchema,
+  TwoColumnListBlockSchema,
+  SpacerBlockSchema,
 ]);
 
 export const SectionBlockSchema = z.object({
