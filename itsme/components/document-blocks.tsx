@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { prepare, layout } from "@chenglou/pretext";
 
 type Block =
   | {
@@ -422,6 +423,9 @@ export function estimateLineCount(
   fontWeight: "normal" | "bold",
   maxWidth: number
 ): number {
+  // const prepared = prepare(text, `${fontWeight} ${fontSize}px ${fontFamily}`);
+  // const { lineCount } = layout(prepared, maxWidth, 1.2);
+  // return lineCount;
   if (!text) return 0;
 
   const ctx = getMeasureCtx();

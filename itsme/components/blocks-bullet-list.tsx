@@ -15,6 +15,7 @@ import {
   type HeaderLayout,
   TwoColumnHeaderNode,
 } from "./blocks-shared";
+import { useDomPopup } from "./dom-popup";
 
 function BulletListBlockNode({
   x,
@@ -29,6 +30,7 @@ function BulletListBlockNode({
   rows: Array<{ text: string; height: number; y: number }>;
   bodyStyle: TextStyle;
 }) {
+  const { openPopup } = useDomPopup();
   const document = useDocumentRender();
   const bulletX = document.bulletListStyle.indent;
   const textX = bulletX + document.bulletListStyle.gap;
@@ -37,7 +39,20 @@ function BulletListBlockNode({
   return (
     <Group x={x} y={y} width={width} height={height}>
       {header && (
-        <HoverRegion x={0} y={0} width={width} height={header.height}>
+        <HoverRegion
+          x={0}
+          y={0}
+          width={width}
+          height={header.height}
+          onClick={({ anchor }) => {
+            openPopup({
+              anchor,
+              content: () => (
+                <div className="w-full h-48 bg-yellow-500">Hello world</div>
+              ),
+            });
+          }}
+        >
           <TwoColumnHeaderNode
             x={0}
             y={0}
@@ -48,7 +63,13 @@ function BulletListBlockNode({
         </HoverRegion>
       )}
       {rows.map((row, idx) => (
-        <HoverRegion key={idx} x={0} y={row.y} width={width} height={row.height}>
+        <HoverRegion
+          key={idx}
+          x={0}
+          y={row.y}
+          width={width}
+          height={row.height}
+        >
           <Text
             x={bulletX}
             y={0}
@@ -141,4 +162,3 @@ export function renderBulletList({
     ),
   };
 }
-

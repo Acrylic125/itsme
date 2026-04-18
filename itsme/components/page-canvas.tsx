@@ -16,28 +16,6 @@ export { SAMPLE_RESUME } from "./document-blocks";
 
 const PAGE_GAP = 24;
 
-function useDevicePixelRatio() {
-  const [dpr, setDpr] = useState(() =>
-    typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
-  );
-
-  useEffect(() => {
-    const update = () => setDpr(window.devicePixelRatio || 1);
-
-    update();
-    window.addEventListener("resize", update);
-    // visualViewport fires on zoom in many browsers (esp. mobile/Safari)
-    window.visualViewport?.addEventListener("resize", update);
-
-    return () => {
-      window.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("resize", update);
-    };
-  }, []);
-
-  return dpr;
-}
-
 export function PageCanvas({
   document,
   dpi = 300,
@@ -46,24 +24,39 @@ export function PageCanvas({
   dpi?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [containerWidth, setContainerWidth] = useState<number | null>(null);
-  const dpr = useDevicePixelRatio();
+  const [measurements, setMeasurements] = useState<{
+    containerWidth: number | null;
+    dpr: number;
+  }>({
+    containerWidth: null,
+    dpr: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+  });
 
+  // A single effect owns both containerWidth and dpr so they always update
+  // atomically in one render — preventing the stale-pixelRatio blur that
+  // occurs when the two values update in separate render cycles on zoom.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const updateWidth = () => {
-      setContainerWidth(
-        el.clientWidth || el.getBoundingClientRect().width || 0
-      );
+    const update = () => {
+      setMeasurements({
+        containerWidth: el.clientWidth || el.getBoundingClientRect().width || 0,
+        dpr: window.devicePixelRatio || 1,
+      });
     };
 
-    updateWidth();
-    window.addEventListener("resize", updateWidth);
-    return () => window.removeEventListener("resize", updateWidth);
+    update();
+    window.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+
+    return () => {
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
   }, []);
 
+  const { containerWidth, dpr } = measurements;
   const resolvedDocument = useMemo(() => resolveDocument(document), [document]);
   const pages = useMemo<PageLayout[]>(
     () => layoutDocument(resolvedDocument, BLOCK_RENDERERS),
@@ -79,10 +72,10 @@ export function PageCanvas({
       : 1;
 
   return (
-    <div ref={containerRef} style={{ width: "100%" }}>
+    <div ref={containerRef} className="w-full h-full">
       {containerWidth !== null && (
         <DocumentRenderProvider document={resolvedDocument}>
-          <DomPopupProvider>
+          <DomPopupProvider pageWidth={pageWidth} pageHeight={pageHeight}>
             <DocumentStage
               pages={pages}
               pageWidth={pageWidth}
@@ -124,7 +117,7 @@ function DocumentStage({
   return (
     <Stage
       // Force a remount when DPR changes to avoid Konva keeping the old backing store
-      key={`${dpi}:${dpr}`}
+      key={`${dpi}:${dpr}:${scale}`}
       width={stageWidth}
       height={stageHeight}
       pixelRatio={pixelRatio}

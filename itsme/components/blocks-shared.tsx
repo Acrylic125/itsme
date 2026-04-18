@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Group, Rect, Text } from "react-konva";
 import Konva from "konva";
 import type {
@@ -15,7 +15,6 @@ import {
 import { useDocumentRender } from "./document-render-context";
 
 const HOVER_FILL = "#f3f4f6";
-const HOVER_DURATION_S = 0.1;
 
 export type HeaderLayout = {
   leftText: string;
@@ -77,31 +76,7 @@ export function HoverRegion({
   }) => void;
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
-  const rectRef = useRef<Konva.Rect | null>(null);
-  const tweenRef = useRef<Konva.Tween | null>(null);
   const [hovered, setHovered] = useState(false);
-
-  useEffect(() => {
-    const node = rectRef.current;
-    if (!node) return;
-
-    tweenRef.current?.destroy();
-    const tween = new Konva.Tween({
-      node,
-      opacity: hovered ? 1 : 0,
-      duration: HOVER_DURATION_S,
-      easing: Konva.Easings.EaseInOut,
-    });
-    tweenRef.current = tween;
-    tween.play();
-
-    return () => {
-      tween.destroy();
-      if (tweenRef.current === tween) {
-        tweenRef.current = null;
-      }
-    };
-  }, [hovered]);
 
   return (
     <Group
@@ -123,28 +98,26 @@ export function HoverRegion({
         const r = node.getClientRect();
         onClick({
           anchor: {
-            left: stageRect.left + r.x,
-            top: stageRect.top + r.y,
-            width: r.width,
-            height: r.height,
+            left: r.x / stageRect.width,
+            top: (r.y + r.height) / stageRect.height,
+            width: r.width / stageRect.width,
+            height: r.height / stageRect.height,
           },
         });
       }}
     >
-      <Rect
-        ref={(n) => {
-          rectRef.current = n;
-        }}
-        x={0}
-        y={0}
-        width={width}
-        height={height}
-        fill={HOVER_FILL}
-        opacity={0}
-        cornerRadius={2}
-        listening={false}
-        perfectDrawEnabled={false}
-      />
+      {hovered && (
+        <Rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill={HOVER_FILL}
+          cornerRadius={2}
+          perfectDrawEnabled={false}
+          listening={false}
+        />
+      )}
       {children}
     </Group>
   );
