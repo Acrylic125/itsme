@@ -5,9 +5,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -67,6 +64,17 @@ export function DomPopupProvider({ children }: { children: ReactNode }) {
       isOpen: true,
     }));
   }, []);
+
+  useEffect(() => {
+    // Check if user presses ESC key
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closePopup();
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [closePopup]);
 
   return (
     <DomPopupContext.Provider

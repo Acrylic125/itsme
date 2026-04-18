@@ -32,9 +32,8 @@ export function PageCanvas({
     dpr: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
   });
 
-  // A single effect owns both containerWidth and dpr so they always update
-  // atomically in one render — preventing the stale-pixelRatio blur that
-  // occurs when the two values update in separate render cycles on zoom.
+  // Keep width + DPR updates in one effect to avoid stale pixel ratios and
+  // ensure we react when flex/grid layout changes container width.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -47,10 +46,15 @@ export function PageCanvas({
     };
 
     update();
+    const rafId = window.requestAnimationFrame(update);
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(el);
     window.addEventListener("resize", update);
     window.visualViewport?.addEventListener("resize", update);
 
     return () => {
+      window.cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
       window.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("resize", update);
     };
