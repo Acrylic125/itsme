@@ -8,6 +8,13 @@
       "when": 1772515561552,
       "tag": "0000_damp_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776496035773,
+      "tag": "0001_daily_mercury",
+      "breakpoints": true
     }
   ]
 }

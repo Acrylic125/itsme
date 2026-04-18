@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Group, Rect, Text } from "react-konva";
 import Konva from "konva";
 import type {
@@ -71,15 +71,70 @@ export function HoverRegion({
   width,
   height,
   children,
+  onContextMenu,
   onClick,
 }: LayoutBlockComponentProps & {
   children: React.ReactNode;
+  onContextMenu?: (args: {
+    event: Konva.KonvaEventObject<MouseEvent>;
+    anchor: { left: number; top: number; width: number; height: number };
+  }) => void;
   onClick?: (args: {
+    event: Konva.KonvaEventObject<MouseEvent>;
     anchor: { left: number; top: number; width: number; height: number };
   }) => void;
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
   const [hovered, setHovered] = useState(false);
+
+  const handleContextMenu = useCallback(
+    (event: Konva.KonvaEventObject<MouseEvent>) => {
+      event.evt.preventDefault();
+      if (!onContextMenu) return;
+      const node = groupRef.current;
+      const stage = node?.getStage();
+      const container = stage?.container();
+      if (!node || !stage || !container) return;
+
+      const stageRect = container.getBoundingClientRect();
+      const r = node.getClientRect();
+      onContextMenu({
+        event,
+        anchor: {
+          left: r.x / stageRect.width,
+          top: (r.y + r.height) / stageRect.height,
+          width: r.width / stageRect.width,
+          height: r.height / stageRect.height,
+        },
+      });
+    },
+    [onContextMenu]
+  );
+
+  const handleClick = useCallback(
+    (event: Konva.KonvaEventObject<MouseEvent>) => {
+      if (event.evt.button !== 0) return;
+      event.evt.preventDefault();
+      if (!onClick) return;
+      const node = groupRef.current;
+      const stage = node?.getStage();
+      const container = stage?.container();
+      if (!node || !stage || !container) return;
+
+      const stageRect = container.getBoundingClientRect();
+      const r = node.getClientRect();
+      onClick({
+        event,
+        anchor: {
+          left: r.x / stageRect.width,
+          top: (r.y + r.height) / stageRect.height,
+          width: r.width / stageRect.width,
+          height: r.height / stageRect.height,
+        },
+      });
+    },
+    [onClick]
+  );
 
   return (
     <Group
@@ -92,26 +147,8 @@ export function HoverRegion({
       height={height}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={() => {
-        if (!onClick) return;
-        const node = groupRef.current;
-        const stage = node?.getStage();
-        const container = stage?.container();
-        if (!node || !stage || !container) return;
-
-        const stageRect = container.getBoundingClientRect();
-        const r = node.getClientRect();
-        onClick({
-          anchor: {
-            left: r.x / stageRect.width,
-            top: (r.y + r.height) / stageRect.height,
-            // width: width / stageRect.width,
-            // height: height / stageRect.height,
-            width: r.width / stageRect.width,
-            height: r.height / stageRect.height,
-          },
-        });
-      }}
+      onContextMenu={handleContextMenu}
+      onClick={handleClick}
     >
       {hovered && (
         <Rect

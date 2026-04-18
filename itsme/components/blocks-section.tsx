@@ -6,12 +6,7 @@ import type {
   LayoutBlockComponentProps,
 } from "./document-blocks";
 import { getHeadingStyle } from "./document-blocks";
-import {
-  computeHeaderLayout,
-  HoverRegion,
-  TwoColumnHeaderNode,
-} from "./blocks-shared";
-import { Group } from "react-konva";
+import { computeHeaderLayout, TwoColumnHeaderNode } from "./blocks-shared";
 
 export function renderSection({
   document,
