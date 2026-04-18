@@ -75,7 +75,7 @@ export function PageCanvas({
     <div ref={containerRef} className="w-full h-full">
       {containerWidth !== null && (
         <DocumentRenderProvider document={resolvedDocument}>
-          <DomPopupProvider pageWidth={pageWidth} pageHeight={pageHeight}>
+          <DomPopupProvider>
             <DocumentStage
               pages={pages}
               pageWidth={pageWidth}

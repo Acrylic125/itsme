@@ -44,15 +44,13 @@ function TwoColumnListBlockNode({
   return (
     <Group x={x} y={y} width={width} height={height}>
       {header && (
-        <HoverRegion x={0} y={0} width={width} height={header.height}>
-          <TwoColumnHeaderNode
-            x={0}
-            y={0}
-            width={width}
-            height={header.height}
-            header={header}
-          />
-        </HoverRegion>
+        <TwoColumnHeaderNode
+          x={0}
+          y={0}
+          width={width}
+          height={header.height}
+          header={header}
+        />
       )}
       {rows.map((row, idx) => (
         <HoverRegion

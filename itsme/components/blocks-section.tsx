@@ -6,7 +6,12 @@ import type {
   LayoutBlockComponentProps,
 } from "./document-blocks";
 import { getHeadingStyle } from "./document-blocks";
-import { computeHeaderLayout, HoverRegion, TwoColumnHeaderNode } from "./blocks-shared";
+import {
+  computeHeaderLayout,
+  HoverRegion,
+  TwoColumnHeaderNode,
+} from "./blocks-shared";
+import { Group } from "react-konva";
 
 export function renderSection({
   document,
@@ -31,16 +36,13 @@ export function renderSection({
   return {
     estimatedDimensions: { width: parent.width, height: header.height },
     component: (props: LayoutBlockComponentProps) => (
-      <HoverRegion {...props}>
-        <TwoColumnHeaderNode
-          x={0}
-          y={0}
-          width={props.width}
-          height={props.height}
-          header={header}
-        />
-      </HoverRegion>
+      <TwoColumnHeaderNode
+        x={props.x}
+        y={props.y}
+        width={props.width}
+        height={props.height}
+        header={header}
+      />
     ),
   };
 }
-

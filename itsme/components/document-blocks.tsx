@@ -547,8 +547,20 @@ export function getProportionalColumnWidths(options: {
   const rawRight = Math.max(0, ctx.measureText(rightText).width);
   const sumWidth = rawLeft + rawRight;
 
+  const half = totalWidth / 2;
   if (sumWidth <= 0) {
-    const half = totalWidth / 2;
+    return { left: half, right: half };
+  }
+
+  if (rawLeft <= 0) {
+    return { left: 0, right: totalWidth };
+  }
+  if (rawRight <= 0) {
+    return { left: totalWidth, right: 0 };
+  }
+
+  // If both are < half, give them half.
+  if (rawLeft <= half && rawRight <= half) {
     return { left: half, right: half };
   }
 

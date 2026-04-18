@@ -14,6 +14,7 @@ import {
   HoverRegion,
   type HeaderLayout,
   TwoColumnHeaderNode,
+  SingleTextInputModal,
 } from "./blocks-shared";
 import { useDomPopup } from "./dom-popup";
 
@@ -39,28 +40,13 @@ function BulletListBlockNode({
   return (
     <Group x={x} y={y} width={width} height={height}>
       {header && (
-        <HoverRegion
+        <TwoColumnHeaderNode
           x={0}
           y={0}
           width={width}
           height={header.height}
-          onClick={({ anchor }) => {
-            openPopup({
-              anchor,
-              content: () => (
-                <div className="w-full h-48 bg-yellow-500">Hello world</div>
-              ),
-            });
-          }}
-        >
-          <TwoColumnHeaderNode
-            x={0}
-            y={0}
-            width={width}
-            height={header.height}
-            header={header}
-          />
-        </HoverRegion>
+          header={header}
+        />
       )}
       {rows.map((row, idx) => (
         <HoverRegion
@@ -69,6 +55,17 @@ function BulletListBlockNode({
           y={row.y}
           width={width}
           height={row.height}
+          onClick={({ anchor }) => {
+            openPopup({
+              anchor,
+              content: ({ closePopup }) => (
+                <SingleTextInputModal
+                  defaultValue={row.text}
+                  closePopup={closePopup}
+                />
+              ),
+            });
+          }}
         >
           <Text
             x={bulletX}

@@ -13,6 +13,9 @@ import {
   getProportionalColumnWidths,
 } from "./document-blocks";
 import { useDocumentRender } from "./document-render-context";
+import { useDomPopup } from "./dom-popup";
+import { Textarea } from "./ui/textarea";
+import { Button } from "./ui/button";
 
 const HOVER_FILL = "#f3f4f6";
 
@@ -85,6 +88,8 @@ export function HoverRegion({
       }}
       x={x}
       y={y}
+      width={width}
+      height={height}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => {
@@ -100,6 +105,8 @@ export function HoverRegion({
           anchor: {
             left: r.x / stageRect.width,
             top: (r.y + r.height) / stageRect.height,
+            // width: width / stageRect.width,
+            // height: height / stageRect.height,
             width: r.width / stageRect.width,
             height: r.height / stageRect.height,
           },
@@ -123,6 +130,26 @@ export function HoverRegion({
   );
 }
 
+export function SingleTextInputModal({
+  defaultValue,
+  closePopup,
+}: {
+  defaultValue: string;
+  closePopup: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 border border-border bg-card p-4 rounded-xl shadow-xl">
+      <Textarea className="w-full" defaultValue={defaultValue} />
+      <div className="flex gap-2">
+        <Button className="w-fit">Save</Button>
+        <Button className="w-fit" variant="outline" onClick={closePopup}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function TwoColumnHeaderNode({
   x,
   y,
@@ -131,35 +158,76 @@ export function TwoColumnHeaderNode({
   header,
 }: LayoutBlockComponentProps & { header: HeaderLayout }) {
   const document = useDocumentRender();
+  const { openPopup } = useDomPopup();
   return (
     <Group x={x} y={y} width={width} height={height}>
-      <Text
+      <HoverRegion
         x={0}
         y={0}
         width={header.allocLeft}
-        text={header.leftText}
-        fontFamily={document.font}
-        fontSize={header.style.fontSize}
-        lineHeight={header.style.lineHeight}
-        fontStyle={header.style.fontWeight === "bold" ? "bold" : "normal"}
-        align="left"
-        fill="#000000"
-        perfectDrawEnabled={false}
-      />
-      {header.rightText && (
+        height={header.height}
+        onClick={({ anchor }) => {
+          openPopup({
+            anchor,
+            content: ({ closePopup }) => (
+              <SingleTextInputModal
+                defaultValue={header.leftText}
+                key={header.leftText}
+                closePopup={closePopup}
+              />
+              // <div className="w-full h-48 bg-yellow-500">Hello world</div>
+            ),
+          });
+        }}
+      >
         <Text
-          x={header.allocLeft}
+          x={0}
           y={0}
-          width={header.allocRight}
-          text={header.rightText}
+          width={header.allocLeft}
+          text={header.leftText}
           fontFamily={document.font}
           fontSize={header.style.fontSize}
           lineHeight={header.style.lineHeight}
           fontStyle={header.style.fontWeight === "bold" ? "bold" : "normal"}
-          align="right"
+          align="left"
           fill="#000000"
           perfectDrawEnabled={false}
         />
+      </HoverRegion>
+      {header.rightText && (
+        <HoverRegion
+          x={header.allocLeft}
+          y={0}
+          width={header.allocRight}
+          height={header.height}
+          onClick={({ anchor }) => {
+            openPopup({
+              anchor,
+              content: ({ closePopup }) => (
+                <SingleTextInputModal
+                  defaultValue={header.rightText}
+                  key={header.rightText}
+                  closePopup={closePopup}
+                />
+                // <div className="w-full h-48 bg-yellow-500">Hello world</div>
+              ),
+            });
+          }}
+        >
+          <Text
+            // x={header.allocLeft}
+            // y={0}
+            width={header.allocRight}
+            text={header.rightText}
+            fontFamily={document.font}
+            fontSize={header.style.fontSize}
+            lineHeight={header.style.lineHeight}
+            fontStyle={header.style.fontWeight === "bold" ? "bold" : "normal"}
+            align="right"
+            fill="#000000"
+            perfectDrawEnabled={false}
+          />
+        </HoverRegion>
       )}
     </Group>
   );

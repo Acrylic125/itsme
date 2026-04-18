@@ -21,7 +21,7 @@ type AnchorRect = {
 
 type PopupState = {
   anchor: AnchorRect;
-  content: () => ReactNode;
+  content: ({ closePopup }: { closePopup: () => void }) => ReactNode;
 };
 
 type DomPopupApi = {
@@ -40,15 +40,7 @@ export function useDomPopup(): DomPopupApi {
   return ctx;
 }
 
-export function DomPopupProvider({
-  children,
-  pageWidth,
-  pageHeight,
-}: {
-  children: ReactNode;
-  pageWidth: number;
-  pageHeight: number;
-}) {
+export function DomPopupProvider({ children }: { children: ReactNode }) {
   const [popups, setPopups] = useState<
     | {
         state: PopupState;
@@ -86,7 +78,7 @@ export function DomPopupProvider({
     >
       <div className="relative w-full h-full">
         {children}
-        {popups.state && (
+        {popups.isOpen && (
           <div
             role="dialog"
             className="absolute inset-0 z-50"
@@ -105,7 +97,7 @@ export function DomPopupProvider({
               // height: `${(popups.state.anchor.height / pageHeight) * 100}%`,
             }}
           >
-            {popups.state.content()}
+            {popups.state.content({ closePopup })}
           </div>
         )}
       </div>

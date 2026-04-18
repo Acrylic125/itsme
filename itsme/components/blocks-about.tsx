@@ -9,8 +9,8 @@ import type {
 } from "./document-blocks";
 import { estimateLineCount, getHeadingStyle } from "./document-blocks";
 import { useDocumentRender } from "./document-render-context";
-import { HoverRegion } from "./blocks-shared";
-import { CanvasPopupTrigger } from "./canvas-popup-trigger";
+import { HoverRegion, SingleTextInputModal } from "./blocks-shared";
+import { useDomPopup } from "./dom-popup";
 
 function AboutBlockNode({
   x,
@@ -32,14 +32,25 @@ function AboutBlockNode({
   subtitleHeight: number;
 }) {
   const document = useDocumentRender();
+  const { openPopup } = useDomPopup();
   return (
     <Group x={x} y={y} width={width} height={height}>
-      <CanvasPopupTrigger
+      <HoverRegion
         x={0}
         y={0}
         width={width}
         height={headerHeight}
-        popupContent="Hello world"
+        onClick={({ anchor }) => {
+          openPopup({
+            anchor,
+            content: ({ closePopup }) => (
+              <SingleTextInputModal
+                defaultValue={headerText}
+                closePopup={closePopup}
+              />
+            ),
+          });
+        }}
       >
         <Text
           x={0}
@@ -54,7 +65,7 @@ function AboutBlockNode({
           fill="#000000"
           perfectDrawEnabled={false}
         />
-      </CanvasPopupTrigger>
+      </HoverRegion>
       <HoverRegion x={0} y={headerHeight} width={width} height={subtitleHeight}>
         <Text
           x={0}
