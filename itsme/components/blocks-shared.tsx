@@ -18,6 +18,7 @@ import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 
 const HOVER_FILL = "#f3f4f6";
+Konva.showWarnings = false;
 
 export type HeaderLayout = {
   leftText: string;

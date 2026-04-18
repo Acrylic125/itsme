@@ -1,79 +1,89 @@
 import type { ComponentType } from "react";
-import { prepare, layout } from "@chenglou/pretext";
+import { z } from "zod";
 
-type Block =
-  | {
-      type: "about";
-      header: string;
-      points: string[];
-    }
-  | {
-      type: "bullet-list";
-      header: [string, string] | null;
-      points: string[];
-    }
-  | {
-      type: "2-column-list";
-      header: [string, string] | null;
-      points: [string, string][];
-    }
-  | {
-      type: "v-spacer";
-      height: number;
-    };
-
-type BlockWithSection =
-  | Block
-  | {
-      type: "section";
-      header: [string, string];
-      blocks: Block[];
-    };
-
-type TextStyle = {
-  fontSize: number;
-  fontWeight: "normal" | "bold";
+export const TextStyleSchema = z.object({
+  fontSize: z.number(),
+  fontWeight: z.enum(["normal", "bold"]),
   /**
    * Unitless multiplier, like CSS `line-height`.
    */
-  lineHeight: number;
-};
+  lineHeight: z.number(),
+});
 
-type DocumentDefinition = {
-  name: string;
-  pageSize: {
+export const BlockSchema = z.union([
+  z.object({
+    type: z.literal("about"),
+    header: z.string(),
+    points: z.array(z.string()),
+  }),
+  z.object({
+    type: z.literal("bullet-list"),
+    header: z.tuple([z.string(), z.string()]).nullable(),
+    points: z.array(z.string()),
+  }),
+  z.object({
+    type: z.literal("2-column-list"),
+    header: z.tuple([z.string(), z.string()]).nullable(),
+    points: z.array(z.tuple([z.string(), z.string()])),
+  }),
+  z.object({
+    type: z.literal("v-spacer"),
+    height: z.number(),
+  }),
+]);
+
+export const SectionBlockSchema = z.object({
+  type: z.literal("section"),
+  header: z.tuple([z.string(), z.string()]),
+  blocks: z.array(BlockSchema),
+});
+
+export const BlockWithSectionSchema = z.union([BlockSchema, SectionBlockSchema]);
+
+export const DocumentDefinitionSchema = z.object({
+  name: z.string(),
+  pageSize: z.object({
     /**
      * US Letter is 8.5 x 11 (inches)
      */
-    width: number;
-    height: number;
-  };
-  font: "Times New Roman";
-  spacingBelow: {
-    [key in Extract<BlockWithSection, { type: string }>["type"]]: number;
-  };
-  margins: {
-    top: number;
-    bottom: number;
-    left: number;
-    right: number;
-  };
-  textStyles: {
-    default: TextStyle;
-    h1: TextStyle;
-    h2: TextStyle;
-    h3: TextStyle;
-    h4: TextStyle;
-  };
-  bulletListStyle: {
-    bullet: string;
-    indent: number;
-    gap: number;
-  };
-  blocks: BlockWithSection[];
-};
+    width: z.number(),
+    height: z.number(),
+  }),
+  font: z.literal("Times New Roman"),
+  spacingBelow: z.object({
+    about: z.number(),
+    "bullet-list": z.number(),
+    "2-column-list": z.number(),
+    section: z.number(),
+    "v-spacer": z.number(),
+  }),
+  margins: z.object({
+    top: z.number(),
+    bottom: z.number(),
+    left: z.number(),
+    right: z.number(),
+  }),
+  textStyles: z.object({
+    default: TextStyleSchema,
+    h1: TextStyleSchema,
+    h2: TextStyleSchema,
+    h3: TextStyleSchema,
+    h4: TextStyleSchema,
+  }),
+  bulletListStyle: z.object({
+    bullet: z.string(),
+    indent: z.number(),
+    gap: z.number(),
+  }),
+  blocks: z.array(BlockWithSectionSchema),
+});
 
-type Document = Omit<
+export type Block = z.infer<typeof BlockSchema>;
+export type BlockWithSection = z.infer<typeof BlockWithSectionSchema>;
+export type TextStyle = z.infer<typeof TextStyleSchema>;
+export type DocumentDefinition = z.infer<typeof DocumentDefinitionSchema>;
+
+export type Document = Omit<
   DocumentDefinition,
   "pageSize" | "margins" | "textStyles" | "bulletListStyle" | "spacingBelow"
 > & {
@@ -688,10 +698,3 @@ export function layoutDocument(
   return pages;
 }
 
-export type {
-  Block,
-  BlockWithSection,
-  TextStyle,
-  Document,
-  DocumentDefinition,
-};

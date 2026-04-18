@@ -1,8 +1,8 @@
 import { router } from "./trpc";
-import { testRouter } from "./router";
+import { resumesRouter } from "./resumes-route";
 
 export const appRouter = router({
-  test: testRouter,
+  resumes: resumesRouter,
 });
 
 // Export the router type signature (for the client), not the router itself

@@ -1,21 +1,16 @@
 "use client";
 
 import { useTRPC } from "@/server/utils";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 export function TestComponent() {
   const trpc = useTRPC();
-  //   const { data } = useQuery(
-  //     trpc.test.test.queryOptions({
-  //       id: "1",
-  //     })
-  //   );
 
   const [prompt, setPrompt] = useState("");
 
   const resp = useMutation(
-    trpc.test.testAi.mutationOptions({
+    trpc.resumes.createProject.mutationOptions({
       onSuccess: (data) => {
         console.log(data);
       },
@@ -26,7 +21,7 @@ export function TestComponent() {
       <button
         onClick={() => {
           resp.mutate({
-            prompt: `Convert the following resume to JSON in the form, { "header": string, "points": string[] }[]: <resume>${prompt}</resume>. Only return the JSON.`,
+            resume: prompt || "Mock resume from test component",
           });
           console.log("Success");
         }}
@@ -38,7 +33,7 @@ export function TestComponent() {
         className="border border-gray-300 rounded-md p-2 w-full h-40"
         onChange={(e) => setPrompt(e.target.value)}
       />
-      <div>{resp.data?.choices[0].message.content ?? "No data"}</div>
+      <div>{resp.data?.projectId ?? "No data"}</div>
     </div>
   );
 }

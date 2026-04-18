@@ -72,7 +72,7 @@ export function PageCanvas({
       : 1;
 
   return (
-    <div ref={containerRef} className="w-full h-full">
+    <div ref={containerRef} className="w-full">
       {containerWidth !== null && (
         <DocumentRenderProvider document={resolvedDocument}>
           <DomPopupProvider>
