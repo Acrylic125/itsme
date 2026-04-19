@@ -1,14 +1,16 @@
 import db from "@/db/db";
 import { vSpacerBlocks } from "@/db/schema";
+import type { BlockWithSection } from "@/blocks/schema";
+import type { L1_DocumentBlockInserter } from "@/blocks/insertion-utils";
 import { L1_DocumentBlockResolver } from "../retriever-utils";
 
 export async function insertSpacerBlockDetails(args: {
+  tx: typeof db;
   blockId: string;
   block: Extract<BlockWithSection, { type: "v-spacer" }>;
-  helpers: InsertBlockHelpers;
 }) {
-  const { blockId, block } = args;
-  await db.insert(vSpacerBlocks).values({
+  const { tx, blockId, block } = args;
+  await tx.insert(vSpacerBlocks).values({
     blockId,
     height: Math.round(block.height),
   });
@@ -28,5 +30,17 @@ export const vSpacerBlockResolver: L1_DocumentBlockResolver<"v-spacer"> = {
       },
       orderIndex: block.orderIndex,
     };
+  },
+};
+
+export const vSpacerBlockInserter: L1_DocumentBlockInserter<"v-spacer"> = {
+  type: "v-spacer",
+  insert: async ({ tx, blockId, entry }) => {
+    await insertSpacerBlockDetails({
+      tx,
+      blockId,
+      block: entry.block,
+    });
+    return { ok: true };
   },
 };

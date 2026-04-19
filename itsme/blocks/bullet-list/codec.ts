@@ -1,32 +1,41 @@
 import db from "@/db/db";
-import { bulletListBlocks, bulletListPoints } from "@/db/schema";
-import type { BlockWithSection } from "@/components/document-blocks";
-import type { InsertBlockHelpers } from "@/blocks/server-codec-types";
+import { bulletListBlocks, bulletListPoints, points } from "@/db/schema";
+import type { BlockWithSection } from "@/blocks/schema";
+// import type { L1_DocumentBlockInserter } from "@/blocks/insertion-utils";
+// import { createPrefixedId } from "@/blocks/insertion-utils";
 import { L1_DocumentBlockResolver } from "../retriever-utils";
 
-export async function insertBulletListBlockDetails(args: {
-  blockId: string;
-  block: Extract<BlockWithSection, { type: "bullet-list" }>;
-  helpers: InsertBlockHelpers;
-}) {
-  const { blockId, block, helpers } = args;
-  await db.insert(bulletListBlocks).values({
-    blockId,
-    headerLeftContent: block.header?.[0] ?? null,
-    headerRightContent: block.header?.[1] ?? null,
-  });
+// export async function insertBulletListBlockDetails(args: {
+//   tx: typeof db;
+//   blockId: string;
+//   block: Extract<BlockWithSection, { type: "bullet-list" }>;
+// }) {
+//   const { tx, blockId, block } = args;
+//   await tx.insert(bulletListBlocks).values({
+//     blockId,
+//     headerLeftContent: block.header?.[0] ?? null,
+//     headerRightContent: block.header?.[1] ?? null,
+//   });
 
-  const pointIds = await helpers.insertPointChain(block.points);
-  if (pointIds.length > 0) {
-    await db.insert(bulletListPoints).values(
-      pointIds.map((pointId, index) => ({
-        blockId,
-        pointId,
-        orderIndex: index,
-      }))
-    );
-  }
-}
+//   const contents = block.points.map((point) => point.value);
+//   if (contents.length > 0) {
+//     const pointIds = contents.map(() => createPrefixedId("p_"));
+//     await tx.insert(points).values(
+//       contents.map((content, index) => ({
+//         id: pointIds[index],
+//         content: content.slice(0, 512),
+//         refPointId: null,
+//       }))
+//     );
+//     await tx.insert(bulletListPoints).values(
+//       pointIds.map((pointId, index) => ({
+//         blockId,
+//         pointId,
+//         orderIndex: index,
+//       }))
+//     );
+//   }
+// }
 
 export const bulletListBlockResolver: L1_DocumentBlockResolver<"bullet-list"> =
   {
@@ -54,3 +63,15 @@ export const bulletListBlockResolver: L1_DocumentBlockResolver<"bullet-list"> =
       };
     },
   };
+
+// export const bulletListBlockInserter: L1_DocumentBlockInserter<"bullet-list"> = {
+//   type: "bullet-list",
+//   insert: async ({ tx, blockId, entry }) => {
+//     await insertBulletListBlockDetails({
+//       tx,
+//       blockId,
+//       block: entry.block,
+//     });
+//     return { ok: true };
+//   },
+// };

@@ -16,10 +16,6 @@ import {
 } from "@/blocks/retriever-utils";
 import { blockResolverPipeline } from "@/blocks/retriever-pipeline";
 import { DEFAULT_TEXT_STYLES } from "@/blocks/renderer-utils";
-// import {
-//   getProjectById,
-//   getProjectDocumentDefinition,
-// } from "@/server/project-documents";
 
 export async function getProjectById(projectId: string) {
   return db
@@ -44,14 +40,6 @@ export default async function ProjectResumePage({
   if (!project) {
     notFound();
   }
-
-  // const document = await getProjectDocumentDefinition({
-  //   projectId,
-  //   documentId,
-  // });
-  // if (!document) {
-  //   notFound();
-  // }
 
   const document = await db
     .select({
