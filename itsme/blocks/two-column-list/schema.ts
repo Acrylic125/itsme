@@ -5,15 +5,25 @@ export const TwoColumnListBlockSchema = z.object({
   type: z.literal("2-column-list"),
   header: z.tuple([z.string(), z.string()]).nullable(),
   points: z.array(
-    z.object({
-      leftPoint: z.object({
-        id: z.string(),
+    // z.object({
+    //   leftPoint: z.object({
+    //     id: z.string().nullable(),
+    //     content: z.string(),
+    //   }),
+    //   rightPoint: z.object({
+    //     id: z.string().nullable(),
+    //     content: z.string(),
+    //   }),
+    // })
+    z.tuple([
+      z.object({
+        id: z.string().nullable(),
         content: z.string(),
       }),
-      rightPoint: z.object({
-        id: z.string(),
+      z.object({
+        id: z.string().nullable(),
         content: z.string(),
       }),
-    })
+    ])
   ),
 });

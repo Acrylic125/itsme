@@ -170,10 +170,18 @@ function noRef<T>(value: T): { refPointId: string | null; value: T } {
 }
 
 function noRefTwoCol(left: string, right: string) {
-  return {
-    refPointId: null,
-    value: [left, right] as [string, string],
-  };
+  // return {
+  //   // refPointId: null,
+  //   value: [
+  //   ],
+  // };
+  return [
+    { id: null, content: left },
+    { id: null, content: right },
+  ] as [
+    { id: string | null; content: string },
+    { id: string | null; content: string },
+  ];
 }
 
 export const SAMPLE_RESUME: DocumentDefinition = {
@@ -224,6 +232,17 @@ export const SAMPLE_RESUME: DocumentDefinition = {
           type: "2-column-list",
           header: null,
           points: [
+            // {
+            //   [0]: {
+            //     id: "p_sample_edu_2col_1",
+            //     content:
+            //       "Nanyang Technological University | Bachelor's of Computing | cGPA 4.53",
+            //   },
+            //   [1]: {
+            //     id: null,
+            //     content: "August 2024 - Dec 2027",
+            //   },
+            // },
             noRefTwoCol(
               "Nanyang Technological University | Bachelor's of Computing | cGPA 4.53",
               "August 2024 - Dec 2027"

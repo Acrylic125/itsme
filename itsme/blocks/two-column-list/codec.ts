@@ -64,17 +64,25 @@ export const twoColumnListBlockResolver: L1_DocumentBlockResolver<"2-column-list
       const detail = maps.twoColumn.blocks.get(block.id);
       if (!detail)
         return { ok: false, error: "Two column list block not found" };
-      const points = maps.twoColumn.rows.get(block.id) ?? [];
+      const rows = maps.twoColumn.rows.get(block.id) ?? [];
+      const sorted = [...rows].sort((a, b) => a.orderIndex - b.orderIndex);
+      const header =
+        detail.headerLeftContent != null && detail.headerRightContent != null
+          ? ([detail.headerLeftContent, detail.headerRightContent] as [
+              string,
+              string,
+            ])
+          : null;
       return {
         ok: true,
         value: {
           id: block.id,
           type: "2-column-list",
-          header: null,
-          points: points.map((point) => ({
-            leftPoint: point.leftPoint,
-            rightPoint: point.rightPoint,
-          })),
+          header,
+          points: sorted.map((row) => [
+            { id: row.leftPointId, content: row.leftContent },
+            { id: row.rightPointId, content: row.rightContent },
+          ]),
         },
         orderIndex: block.orderIndex,
       };

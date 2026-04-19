@@ -2,10 +2,8 @@ import db from "@/db/db";
 import { sectionBlockChildren, sectionBlocks } from "@/db/schema";
 import type { Block, BlockWithSection } from "@/components/document-blocks";
 import type { InsertBlockHelpers } from "@/blocks/server-codec-types";
-import {
-  L1_DocumentBlockResolver,
-  L2_DocumentBlockResolver,
-} from "../retriever-utils";
+import type { BaseBlock } from "./schema";
+import type { L2_DocumentBlockResolver } from "../retriever-utils";
 
 export async function insertSectionBlockDetails(args: {
   blockId: string;
@@ -36,10 +34,12 @@ export const sectionBlockResolver: L2_DocumentBlockResolver<"section"> = {
     const detail = maps.section.blocks.get(block.id);
     if (!detail) return { ok: false, error: "Section block not found" };
     const childrenRefs = maps.section.children.get(block.id) ?? [];
-
-    const childrenBlocks = blocksFromL1.filter((block) =>
-      childrenRefs.some((ref) => ref.childBlockId === block.id)
+    const sortedRefs = [...childrenRefs].sort(
+      (a, b) => a.orderIndex - b.orderIndex
     );
+    const childrenBlocks = sortedRefs
+      .map((ref) => blocksFromL1.find((child) => child.id === ref.childBlockId))
+      .filter((child): child is BaseBlock => child != null);
 
     return {
       ok: true,
@@ -49,7 +49,6 @@ export const sectionBlockResolver: L2_DocumentBlockResolver<"section"> = {
         header: [detail.headerLeftContent, detail.headerRightContent],
         blocks: childrenBlocks,
       },
-      removedBlockIds: childrenBlocks.map((block) => block.id),
       orderIndex: block.orderIndex,
     };
   },

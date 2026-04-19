@@ -114,7 +114,9 @@ export function renderTwoColumnList({
     : null;
 
   const rows = block.points
-    .map(({ leftPoint, rightPoint }) => {
+    .map((v) => {
+      const leftPoint = v[0];
+      const rightPoint = v[1];
       const { left: allocLeft, right: allocRight } =
         getProportionalColumnWidths({
           leftText: leftPoint.content,

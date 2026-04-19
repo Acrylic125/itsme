@@ -75,7 +75,7 @@ export default async function ProjectResumePage({
     maps: blockMappings,
   });
 
-  console.log("blocks", JSON.stringify(blocks, null, 2));
+  // console.log("blocks", JSON.stringify(blocks, null, 2));
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1400px] gap-6 px-6 py-10">
       <Suspense fallback={<ProjectDocumentsSidebarSkeleton />}>

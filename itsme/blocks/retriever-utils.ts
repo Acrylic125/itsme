@@ -15,7 +15,6 @@ import {
 import type { BlockWithSection } from "./schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import { BaseBlock } from "./section/schema";
-import { alias } from "drizzle-orm/sqlite-core";
 
 export async function getDocumentBlockMappings(documentId: string) {
   const blockRows = await db
@@ -29,9 +28,6 @@ export async function getDocumentBlockMappings(documentId: string) {
     .orderBy(asc(blocks.orderIndex));
   return new Map(blockRows.map((row) => [row.id, row]));
 }
-
-const leftAlias = alias(points, "left_points");
-const rightAlias = alias(points, "right_points");
 
 export async function getBlockMappings(blockIds: string[]) {
   const [
@@ -88,23 +84,53 @@ export async function getBlockMappings(blockIds: string[]) {
       })
       .from(twoColumnListBlocks)
       .where(inArray(twoColumnListBlocks.blockId, blockIds)),
-    db
-      .select({
-        blockId: twoColumnListRows.blockId,
-        leftPoint: {
-          id: leftAlias.id,
-          content: leftAlias.content,
-        },
-        rightPoint: {
-          id: rightAlias.id,
-          content: rightAlias.content,
-        },
-        orderIndex: twoColumnListRows.orderIndex,
-      })
-      .from(twoColumnListRows)
-      .where(inArray(twoColumnListRows.blockId, blockIds))
-      .innerJoin(leftAlias, eq(twoColumnListRows.leftPointId, leftAlias.id))
-      .innerJoin(rightAlias, eq(twoColumnListRows.rightPointId, rightAlias.id)),
+    (async () => {
+      if (blockIds.length === 0) return [];
+      const rowList = await db
+        .select({
+          blockId: twoColumnListRows.blockId,
+          orderIndex: twoColumnListRows.orderIndex,
+          leftPointId: twoColumnListRows.leftPointId,
+          rightPointId: twoColumnListRows.rightPointId,
+        })
+        .from(twoColumnListRows)
+        .where(inArray(twoColumnListRows.blockId, blockIds));
+      const pointIdSet = new Set<string>();
+      for (const r of rowList) {
+        pointIdSet.add(r.leftPointId);
+        pointIdSet.add(r.rightPointId);
+      }
+      const pointIdList = [...pointIdSet];
+      const pointRows =
+        pointIdList.length === 0
+          ? []
+          : await db
+              .select({
+                id: points.id,
+                content: points.content,
+                refPointId: points.refPointId,
+              })
+              .from(points)
+              .where(inArray(points.id, pointIdList));
+      const pointById = new Map(pointRows.map((p) => [p.id, p]));
+      return rowList.flatMap((r) => {
+        const left = pointById.get(r.leftPointId);
+        const right = pointById.get(r.rightPointId);
+        if (!left || !right) return [];
+        return [
+          {
+            blockId: r.blockId,
+            orderIndex: r.orderIndex,
+            leftPointId: r.leftPointId,
+            leftContent: left.content,
+            leftRefPointId: left.refPointId,
+            rightPointId: r.rightPointId,
+            rightContent: right.content,
+            rightRefPointId: right.refPointId,
+          },
+        ];
+      });
+    })(),
     db
       .select({
         blockId: vSpacerBlocks.blockId,
@@ -212,7 +238,6 @@ export type L2_DocumentBlockResolver<T extends BlockWithSection["type"]> = {
     | {
         ok: true;
         value: BlockWithSection;
-        removedBlockIds: string[];
         orderIndex: number;
       }
     | {

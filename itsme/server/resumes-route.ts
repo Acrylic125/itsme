@@ -5,7 +5,13 @@ import {
   type Block,
   type BlockWithSection,
 } from "@/components/document-blocks";
-import { blocks, documents, points, projectMasterDocuments, projects } from "@/db/schema";
+import {
+  blocks,
+  documents,
+  points,
+  projectMasterDocuments,
+  projects,
+} from "@/db/schema";
 import { publicProcedure, router } from "./trpc";
 import { z } from "zod";
 import { BLOCK_INSERT_CODECS } from "@/blocks/codec-registry";
