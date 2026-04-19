@@ -70,18 +70,13 @@ type PageTextChunk = {
   width: number;
   height: number;
   fontSize: number;
-  isBold: boolean;
   content: string;
 };
-
-function getFontWeightHint(fontName: string): "bold" | "normal" {
-  return /bold|black|heavy|semibold|demi/i.test(fontName) ? "bold" : "normal";
-}
 
 type TextTag = "h1" | "h2" | "h3" | "p";
 
 function getChunkStyleKey(chunk: PageTextChunk): string {
-  return `${chunk.fontSize}|${chunk.isBold ? 1 : 0}`;
+  return `${chunk.fontSize}`;
 }
 
 function getTagForRank(args: { rank: number; pairCount: number }): TextTag {
@@ -104,18 +99,12 @@ function buildChunkTagMap(chunks: PageTextChunk[]): Map<string, TextTag> {
     ...new Set(chunks.map((chunk) => getChunkStyleKey(chunk))),
   ]
     .map((key) => {
-      const [fontSizeRaw, isBoldRaw] = key.split("|");
       return {
         key,
-        fontSize: Number(fontSizeRaw),
-        isBold: isBoldRaw === "1",
+        fontSize: Number(key),
       };
     })
-    .sort((a, b) => {
-      if (a.fontSize !== b.fontSize) return b.fontSize - a.fontSize;
-      if (a.isBold === b.isBold) return 0;
-      return a.isBold ? -1 : 1;
-    });
+    .sort((a, b) => b.fontSize - a.fontSize);
 
   const pairCount = uniqueStyles.length;
   return new Map(
@@ -151,7 +140,6 @@ function groupTextItemsIntoChunks(args: {
           1,
           Math.round(Math.max(item.height, Math.abs(item.transform[0])))
         ),
-        isBold: getFontWeightHint(item.fontName) === "bold",
         content: item.str.trim(),
       };
     })
@@ -187,7 +175,6 @@ function groupTextItemsIntoChunks(args: {
     previous.width = mergedRight - previous.x;
     previous.height = Math.max(previous.height, item.height);
     previous.fontSize = Math.max(previous.fontSize, item.fontSize);
-    previous.isBold = previous.isBold || item.isBold;
     previous.y = Math.round((previous.y + item.y) / 2);
   }
 
@@ -258,12 +245,8 @@ export function ProjectsPageClient({
       // pages.push({ pageNumber, textItems });
     }
 
-    console.log(pages);
+    // console.log(pages);
     return {
-      name: file.name,
-      type: file.type as "application/pdf",
-      size: file.size,
-      pageCount: pdfDocument.numPages,
       pages,
     };
   }
@@ -294,7 +277,7 @@ export function ProjectsPageClient({
             if (!selectedFile) return;
             const parsedPdf = await parsePdfOnClient(selectedFile);
             createProjectMutation.mutate({
-              parsedPdf,
+              textItems: parsedPdf.pages.flatMap((page) => page.textItems),
             });
           }}
         >
