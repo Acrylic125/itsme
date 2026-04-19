@@ -15,6 +15,7 @@ type ProjectListItem = {
 
 const MAX_PDF_SIZE_BYTES = 256 * 1024;
 const PDF_MAGIC_HEADER = "%PDF-";
+const TEXT_SPACER = "<SPACER>";
 GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url
@@ -61,6 +62,138 @@ const PDFPageSchema = z.object({
   }),
 });
 
+type ParsedPdfTextItem = z.infer<typeof PDFTextItemSchema>;
+
+type PageTextChunk = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  isBold: boolean;
+  content: string;
+};
+
+function getFontWeightHint(fontName: string): "bold" | "normal" {
+  return /bold|black|heavy|semibold|demi/i.test(fontName) ? "bold" : "normal";
+}
+
+type TextTag = "h1" | "h2" | "h3" | "p";
+
+function getChunkStyleKey(chunk: PageTextChunk): string {
+  return `${chunk.fontSize}|${chunk.isBold ? 1 : 0}`;
+}
+
+function getTagForRank(args: { rank: number; pairCount: number }): TextTag {
+  const { rank, pairCount } = args;
+  if (pairCount <= 1) return "p";
+  if (pairCount === 2) return rank === 0 ? "h1" : "p";
+  if (pairCount === 3) {
+    if (rank === 0) return "h1";
+    if (rank === 1) return "h2";
+    return "p";
+  }
+  if (rank === 0) return "h1";
+  if (rank === 1) return "h2";
+  if (rank === 2) return "h3";
+  return "p";
+}
+
+function buildChunkTagMap(chunks: PageTextChunk[]): Map<string, TextTag> {
+  const uniqueStyles = [
+    ...new Set(chunks.map((chunk) => getChunkStyleKey(chunk))),
+  ]
+    .map((key) => {
+      const [fontSizeRaw, isBoldRaw] = key.split("|");
+      return {
+        key,
+        fontSize: Number(fontSizeRaw),
+        isBold: isBoldRaw === "1",
+      };
+    })
+    .sort((a, b) => {
+      if (a.fontSize !== b.fontSize) return b.fontSize - a.fontSize;
+      if (a.isBold === b.isBold) return 0;
+      return a.isBold ? -1 : 1;
+    });
+
+  const pairCount = uniqueStyles.length;
+  return new Map(
+    uniqueStyles.map((style, index) => [
+      style.key,
+      getTagForRank({ rank: index, pairCount }),
+    ])
+  );
+}
+
+function wrapChunkWithTag(args: {
+  chunk: PageTextChunk;
+  tagMap: Map<string, TextTag>;
+}) {
+  const tag = args.tagMap.get(getChunkStyleKey(args.chunk)) ?? "p";
+  return `<${tag}>${args.chunk.content}</${tag}>`;
+}
+
+function groupTextItemsIntoChunks(args: {
+  items: ParsedPdfTextItem[];
+  pageHeight: number;
+}): PageTextChunk[] {
+  const normalized = args.items
+    .map((item) => {
+      const x = Math.round(item.transform[4]);
+      const y = args.pageHeight - Math.round(item.transform[5]);
+      return {
+        x,
+        y,
+        width: Math.max(1, Math.round(item.width)),
+        height: Math.max(1, Math.round(item.height)),
+        fontSize: Math.max(
+          1,
+          Math.round(Math.max(item.height, Math.abs(item.transform[0])))
+        ),
+        isBold: getFontWeightHint(item.fontName) === "bold",
+        content: item.str.trim(),
+      };
+    })
+    .filter((item) => item.content.length > 0)
+    .sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
+
+  const groups: PageTextChunk[] = [];
+  for (const item of normalized) {
+    const previous = groups[groups.length - 1];
+    if (!previous) {
+      groups.push(item);
+      continue;
+    }
+
+    const sameLineTolerance = Math.max(previous.height, item.height) * 0.5;
+    const sameLine = Math.abs(previous.y - item.y) <= sameLineTolerance;
+    const previousRight = previous.x + previous.width;
+    const horizontalGap = item.x - previousRight;
+    const shouldJoin = sameLine && horizontalGap >= -2;
+
+    if (!shouldJoin) {
+      groups.push(item);
+      continue;
+    }
+
+    const superCloseThreshold = Math.max(
+      1,
+      Math.round(Math.min(previous.height, item.height) * 0.25)
+    );
+    const separator = horizontalGap <= superCloseThreshold ? "" : TEXT_SPACER;
+    previous.content = `${previous.content}${separator}${item.content}`;
+    const mergedRight = Math.max(previousRight, item.x + item.width);
+    previous.width = mergedRight - previous.x;
+    previous.height = Math.max(previous.height, item.height);
+    previous.fontSize = Math.max(previous.fontSize, item.fontSize);
+    previous.isBold = previous.isBold || item.isBold;
+    previous.y = Math.round((previous.y + item.y) / 2);
+  }
+
+  return groups;
+}
+
 export function ProjectsPageClient({
   initialProjects,
 }: {
@@ -97,13 +230,7 @@ export function ProjectsPageClient({
     } as unknown as Parameters<typeof getDocument>[0]);
     const pdfDocument = await loadingTask.promise;
     // const pages: Array<{ pageNumber: number; textItems: string[] }> = [];
-    const pages: {
-      text: {
-        x: number;
-        y: number;
-        content: string;
-      }[];
-    }[] = [];
+    const pages: Array<{ pageNumber: number; textItems: string[] }> = [];
     for (
       let pageNumber = 1;
       pageNumber <= pdfDocument.numPages;
@@ -111,19 +238,20 @@ export function ProjectsPageClient({
     ) {
       const page = await pdfDocument.getPage(pageNumber);
       const textContent = await page.getTextContent();
-      const pageTexts: (typeof pages)[number] = { text: [] };
       const parsedPage = PDFPageSchema.parse(page);
       const items = PDFTextItemSchema.array().parse(textContent.items);
       // console.log(items);
       // console.log(page._pageInfo.view);
       // const pageWidth = parsedPage._pageInfo.view[2];
       const pageHeight = parsedPage._pageInfo.view[3];
-      items.forEach((item) => {
-        const x = Math.round(item.transform[4]);
-        const y = pageHeight - Math.round(item.transform[5]);
-        pageTexts.text.push({ x, y, content: item.str });
+      const groupedItems = groupTextItemsIntoChunks({ items, pageHeight });
+      const tagMap = buildChunkTagMap(groupedItems);
+      pages.push({
+        pageNumber,
+        textItems: groupedItems.map((item) =>
+          wrapChunkWithTag({ chunk: item, tagMap })
+        ),
       });
-      pages.push({ text: pageTexts.text });
       // const textItems = textContent.items.flatMap((item) =>
       //   "str" in item ? [item.str] : []
       // );
