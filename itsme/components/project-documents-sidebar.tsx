@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { getProjectDocuments } from "@/server/project-documents";
+import { documents } from "@/db/schema";
+import db from "@/db/db";
+import { asc, eq } from "drizzle-orm";
 
 export async function ProjectDocumentsSidebar({
   projectId,
@@ -10,7 +12,15 @@ export async function ProjectDocumentsSidebar({
   projectId: string;
   activeDocumentId: string;
 }) {
-  const projectDocuments = await getProjectDocuments(projectId);
+  // const projectDocuments = await getProjectDocuments(projectId);
+  const projectDocuments = await db
+    .select({
+      id: documents.id,
+      name: documents.name,
+    })
+    .from(documents)
+    .where(eq(documents.projectId, projectId))
+    .orderBy(asc(documents.name));
 
   return (
     <aside className="w-72 shrink-0 rounded-xl border border-border bg-card p-3">

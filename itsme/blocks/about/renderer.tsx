@@ -1,13 +1,12 @@
 "use client";
 
 import { Group, Text } from "react-konva";
-import type {
-  BlockWithSection,
-  Document,
+import type { BlockWithSection, Document, TextStyle } from "../schema";
+import {
+  estimateLineCount,
+  getHeadingStyle,
   LayoutBlockComponentProps,
-  TextStyle,
-} from "@/components/document-blocks";
-import { estimateLineCount, getHeadingStyle } from "@/components/document-blocks";
+} from "../renderer-utils";
 import { useDocumentRender } from "@/components/document-render-context";
 import { HoverRegion, SingleTextInputModal } from "@/components/blocks-shared";
 import { useDomPopup } from "@/components/dom-popup";
@@ -107,7 +106,8 @@ export function renderAbout({
     headerStyle.fontWeight,
     parent.width
   );
-  const headerHeight = headerLines * headerStyle.fontSize * headerStyle.lineHeight;
+  const headerHeight =
+    headerLines * headerStyle.fontSize * headerStyle.lineHeight;
 
   const subtitleLines = estimateLineCount(
     subtitleLine,

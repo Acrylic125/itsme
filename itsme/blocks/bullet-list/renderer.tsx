@@ -1,13 +1,12 @@
 "use client";
 
 import { Group, Text } from "react-konva";
-import type {
-  BlockWithSection,
-  Document,
+import type { BlockWithSection, Document, TextStyle } from "../schema";
+import {
+  estimateLineCount,
+  getHeadingStyle,
   LayoutBlockComponentProps,
-  TextStyle,
-} from "@/components/document-blocks";
-import { estimateLineCount, getHeadingStyle } from "@/components/document-blocks";
+} from "../renderer-utils";
 import { useDocumentRender } from "@/components/document-render-context";
 import {
   computeHeaderLayout,
@@ -128,16 +127,16 @@ export function renderBulletList({
   const textX = bulletX + document.bulletListStyle.gap;
   const textWidth = parent.width - textX;
 
-  const rows = block.points.map((point) => {
+  const rows = block.points.map(({ value: text }) => {
     const lines = estimateLineCount(
-      point,
+      text,
       document.font,
       bodyStyle.fontSize,
       bodyStyle.fontWeight,
       textWidth
     );
     const height = Math.max(1, lines) * bodyLineHeight;
-    return { text: point, height };
+    return { text, height };
   });
 
   const rowY: number[] = [];

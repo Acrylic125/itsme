@@ -1,7 +1,8 @@
 import db from "@/db/db";
 import { bulletListBlocks, bulletListPoints } from "@/db/schema";
 import type { BlockWithSection } from "@/components/document-blocks";
-import type { DecodeBlockMaps, InsertBlockHelpers } from "@/blocks/server-codec-types";
+import type { InsertBlockHelpers } from "@/blocks/server-codec-types";
+import { L1_DocumentBlockResolver } from "../retriever-utils";
 
 export async function insertBulletListBlockDetails(args: {
   blockId: string;
@@ -27,21 +28,29 @@ export async function insertBulletListBlockDetails(args: {
   }
 }
 
-export function decodeBulletListBlock(args: {
-  blockId: string;
-  maps: DecodeBlockMaps;
-}): Extract<BlockWithSection, { type: "bullet-list" }> | null {
-  const { blockId, maps } = args;
-  const detail = maps.bulletByBlockId.get(blockId);
-  if (!detail) return null;
-
-  const hasHeader =
-    detail.headerLeftContent != null && detail.headerRightContent != null;
-  return {
+export const bulletListBlockResolver: L1_DocumentBlockResolver<"bullet-list"> =
+  {
     type: "bullet-list",
-    header: hasHeader
-      ? [detail.headerLeftContent!, detail.headerRightContent!]
-      : null,
-    points: maps.bulletPointsByBlockId.get(blockId) ?? [],
+    resolve: async ({ block, maps }) => {
+      const detail = maps.bullet.blocks.get(block.id);
+      if (!detail) return { ok: false, error: "Bullet list block not found" };
+      const points = maps.bullet.points.get(block.id) ?? [];
+      return {
+        ok: true,
+        value: {
+          id: block.id,
+          type: "bullet-list",
+          header:
+            detail.headerLeftContent != null &&
+            detail.headerRightContent != null
+              ? [detail.headerLeftContent, detail.headerRightContent]
+              : null,
+          points: points.map((point) => ({
+            refPointId: point.pointId,
+            value: point.content,
+          })),
+        },
+        orderIndex: block.orderIndex,
+      };
+    },
   };
-}

@@ -1,17 +1,13 @@
 "use client";
 
 import { Group, Text } from "react-konva";
-import type {
-  BlockWithSection,
-  Document,
-  LayoutBlockComponentProps,
-  TextStyle,
-} from "@/components/document-blocks";
+import type { BlockWithSection, Document, TextStyle } from "../schema";
 import {
   estimateLineCount,
   getHeadingStyle,
   getProportionalColumnWidths,
-} from "@/components/document-blocks";
+  LayoutBlockComponentProps,
+} from "../renderer-utils";
 import { useDocumentRender } from "@/components/document-render-context";
 import {
   computeHeaderLayout,
@@ -118,29 +114,30 @@ export function renderTwoColumnList({
     : null;
 
   const rows = block.points
-    .map(([leftText, rightText]) => {
-      const { left: allocLeft, right: allocRight } = getProportionalColumnWidths({
-        leftText,
-        rightText,
-        fontFamily: document.font,
-        fontSize: bodyStyle.fontSize,
-        fontWeight: bodyStyle.fontWeight,
-        totalWidth: parent.width,
-      });
+    .map(({ leftPoint, rightPoint }) => {
+      const { left: allocLeft, right: allocRight } =
+        getProportionalColumnWidths({
+          leftText: leftPoint.content,
+          rightText: rightPoint.content,
+          fontFamily: document.font,
+          fontSize: bodyStyle.fontSize,
+          fontWeight: bodyStyle.fontWeight,
+          totalWidth: parent.width,
+        });
 
       if (allocLeft <= 0 && allocRight <= 0) {
         return null;
       }
 
       const leftLines = estimateLineCount(
-        leftText,
+        leftPoint.content,
         document.font,
         bodyStyle.fontSize,
         bodyStyle.fontWeight,
         allocLeft
       );
       const rightLines = estimateLineCount(
-        rightText,
+        rightPoint.content,
         document.font,
         bodyStyle.fontSize,
         bodyStyle.fontWeight,
@@ -150,11 +147,11 @@ export function renderTwoColumnList({
       const lines = Math.max(leftLines, rightLines || 1);
       const height = Math.max(1, lines) * bodyLineHeight;
 
-      return { leftText, rightText, allocLeft, allocRight, height };
+      return { leftPoint, rightPoint, allocLeft, allocRight, height };
     })
     .filter(Boolean) as Array<{
-    leftText: string;
-    rightText: string;
+    leftPoint: { id: string; content: string };
+    rightPoint: { id: string; content: string };
     allocLeft: number;
     allocRight: number;
     height: number;
@@ -173,7 +170,15 @@ export function renderTwoColumnList({
       <TwoColumnListBlockNode
         {...props}
         header={header}
-        rows={rows.map((row, idx) => ({ ...row, y: rowY[idx] }))}
+        rows={rows.map((row, idx) => ({
+          leftText: row.leftPoint.content,
+          rightText: row.rightPoint.content,
+          rightPoint: row.rightPoint,
+          allocLeft: row.allocLeft,
+          allocRight: row.allocRight,
+          height: row.height,
+          y: rowY[idx],
+        }))}
         bodyStyle={bodyStyle}
       />
     ),

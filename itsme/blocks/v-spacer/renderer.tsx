@@ -1,10 +1,7 @@
 "use client";
 
-import type {
-  BlockWithSection,
-  Document,
-  LayoutBlockComponentProps,
-} from "@/components/document-blocks";
+import { LayoutBlockComponentProps } from "../renderer-utils";
+import type { BlockWithSection, Document } from "../schema";
 
 export function renderSpacer({
   block,

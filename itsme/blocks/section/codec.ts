@@ -1,11 +1,11 @@
 import db from "@/db/db";
 import { sectionBlockChildren, sectionBlocks } from "@/db/schema";
 import type { Block, BlockWithSection } from "@/components/document-blocks";
-import type {
-  DecodeBlockHelpers,
-  DecodeBlockMaps,
-  InsertBlockHelpers,
-} from "@/blocks/server-codec-types";
+import type { InsertBlockHelpers } from "@/blocks/server-codec-types";
+import {
+  L1_DocumentBlockResolver,
+  L2_DocumentBlockResolver,
+} from "../retriever-utils";
 
 export async function insertSectionBlockDetails(args: {
   blockId: string;
@@ -30,22 +30,27 @@ export async function insertSectionBlockDetails(args: {
   }
 }
 
-export function decodeSectionBlock(args: {
-  blockId: string;
-  maps: DecodeBlockMaps;
-  helpers: DecodeBlockHelpers;
-}): Extract<BlockWithSection, { type: "section" }> | null {
-  const { blockId, maps, helpers } = args;
-  const detail = maps.sectionByBlockId.get(blockId);
-  if (!detail) return null;
+export const sectionBlockResolver: L2_DocumentBlockResolver<"section"> = {
+  type: "section",
+  resolve: async ({ block, maps, blocksFromL1 }) => {
+    const detail = maps.section.blocks.get(block.id);
+    if (!detail) return { ok: false, error: "Section block not found" };
+    const childrenRefs = maps.section.children.get(block.id) ?? [];
 
-  const children = (maps.sectionChildrenBySectionId.get(blockId) ?? [])
-    .map((childId) => helpers.buildBlock(childId))
-    .filter((block): block is Block => block != null && block.type !== "section");
+    const childrenBlocks = blocksFromL1.filter((block) =>
+      childrenRefs.some((ref) => ref.childBlockId === block.id)
+    );
 
-  return {
-    type: "section",
-    header: [detail.headerLeftContent, detail.headerRightContent],
-    blocks: children,
-  };
-}
+    return {
+      ok: true,
+      value: {
+        id: block.id,
+        type: "section",
+        header: [detail.headerLeftContent, detail.headerRightContent],
+        blocks: childrenBlocks,
+      },
+      removedBlockIds: childrenBlocks.map((block) => block.id),
+      orderIndex: block.orderIndex,
+    };
+  },
+};

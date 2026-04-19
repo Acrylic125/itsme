@@ -1,7 +1,6 @@
 import db from "@/db/db";
 import { vSpacerBlocks } from "@/db/schema";
-import type { BlockWithSection } from "@/components/document-blocks";
-import type { DecodeBlockMaps, InsertBlockHelpers } from "@/blocks/server-codec-types";
+import { L1_DocumentBlockResolver } from "../retriever-utils";
 
 export async function insertSpacerBlockDetails(args: {
   blockId: string;
@@ -15,16 +14,19 @@ export async function insertSpacerBlockDetails(args: {
   });
 }
 
-export function decodeSpacerBlock(args: {
-  blockId: string;
-  maps: DecodeBlockMaps;
-}): Extract<BlockWithSection, { type: "v-spacer" }> | null {
-  const { blockId, maps } = args;
-  const detail = maps.spacerByBlockId.get(blockId);
-  if (!detail) return null;
-
-  return {
-    type: "v-spacer",
-    height: detail.height,
-  };
-}
+export const vSpacerBlockResolver: L1_DocumentBlockResolver<"v-spacer"> = {
+  type: "v-spacer",
+  resolve: async ({ block, maps }) => {
+    const detail = maps.spacer.blocks.get(block.id);
+    if (!detail) return { ok: false, error: "Spacer block not found" };
+    return {
+      ok: true,
+      value: {
+        id: block.id,
+        type: "v-spacer",
+        height: detail.height,
+      },
+      orderIndex: block.orderIndex,
+    };
+  },
+};

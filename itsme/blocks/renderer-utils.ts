@@ -1,87 +1,11 @@
-import type { ComponentType } from "react";
-import { z } from "zod";
-import { AboutBlockSchema } from "@/blocks/about/schema";
-import { BulletListBlockSchema } from "@/blocks/bullet-list/schema";
-import { TwoColumnListBlockSchema } from "@/blocks/two-column-list/schema";
-import { SpacerBlockSchema } from "@/blocks/v-spacer/schema";
-
-export const TextStyleSchema = z.object({
-  fontSize: z.number(),
-  fontWeight: z.enum(["normal", "bold"]),
-  /**
-   * Unitless multiplier, like CSS `line-height`.
-   */
-  lineHeight: z.number(),
-});
-
-export const BlockSchema = z.union([
-  AboutBlockSchema,
-  BulletListBlockSchema,
-  TwoColumnListBlockSchema,
-  SpacerBlockSchema,
-]);
-
-export const SectionBlockSchema = z.object({
-  type: z.literal("section"),
-  header: z.tuple([z.string(), z.string()]),
-  blocks: z.array(BlockSchema),
-});
-
-export const BlockWithSectionSchema = z.union([BlockSchema, SectionBlockSchema]);
-
-export const DocumentDefinitionSchema = z.object({
-  name: z.string(),
-  pageSize: z.object({
-    /**
-     * US Letter is 8.5 x 11 (inches)
-     */
-    width: z.number(),
-    height: z.number(),
-  }),
-  font: z.literal("Times New Roman"),
-  spacingBelow: z.object({
-    about: z.number(),
-    "bullet-list": z.number(),
-    "2-column-list": z.number(),
-    section: z.number(),
-    "v-spacer": z.number(),
-  }),
-  margins: z.object({
-    top: z.number(),
-    bottom: z.number(),
-    left: z.number(),
-    right: z.number(),
-  }),
-  textStyles: z.object({
-    default: TextStyleSchema,
-    h1: TextStyleSchema,
-    h2: TextStyleSchema,
-    h3: TextStyleSchema,
-    h4: TextStyleSchema,
-  }),
-  bulletListStyle: z.object({
-    bullet: z.string(),
-    indent: z.number(),
-    gap: z.number(),
-  }),
-  blocks: z.array(BlockWithSectionSchema),
-});
-
-export type Block = z.infer<typeof BlockSchema>;
-export type BlockWithSection = z.infer<typeof BlockWithSectionSchema>;
-export type TextStyle = z.infer<typeof TextStyleSchema>;
-export type DocumentDefinition = z.infer<typeof DocumentDefinitionSchema>;
-
-export type Document = Omit<
+import { ComponentType } from "react";
+import {
+  BlockWithSection,
+  Document,
   DocumentDefinition,
-  "pageSize" | "margins" | "textStyles" | "bulletListStyle" | "spacingBelow"
-> & {
-  pageSize: { width: number; height: number };
-  margins: { top: number; bottom: number; left: number; right: number };
-  textStyles: DocumentDefinition["textStyles"];
-  bulletListStyle: DocumentDefinition["bulletListStyle"];
-  spacingBelow: DocumentDefinition["spacingBelow"];
-};
+  TextStyle,
+} from "./schema";
+import { BaseBlock } from "./section/schema";
 
 export type LayoutParentRect = {
   width: number;
@@ -151,13 +75,14 @@ function inchToPx(inches: number) {
 }
 
 export function resolveDocument(def: DocumentDefinition): Document {
+  console.log("resolveDocument", def.pageSize);
   const resolveBlocks = (blocks: BlockWithSection[]): BlockWithSection[] =>
     blocks.map((b) => {
       if (b.type === "v-spacer") {
         return { ...b, height: ptToPx(b.height) };
       }
       if (b.type === "section") {
-        return { ...b, blocks: resolveBlocks(b.blocks) as Block[] };
+        return { ...b, blocks: resolveBlocks(b.blocks) as BaseBlock[] };
       }
       return b;
     });
@@ -240,6 +165,17 @@ export const DEFAULT_TEXT_STYLES: DocumentDefinition["textStyles"] = {
   },
 };
 
+function noRef<T>(value: T): { refPointId: string | null; value: T } {
+  return { refPointId: null, value };
+}
+
+function noRefTwoCol(left: string, right: string) {
+  return {
+    refPointId: null,
+    value: [left, right] as [string, string],
+  };
+}
+
 export const SAMPLE_RESUME: DocumentDefinition = {
   name: "Master Resume",
   textStyles: DEFAULT_TEXT_STYLES,
@@ -269,13 +205,14 @@ export const SAMPLE_RESUME: DocumentDefinition = {
   },
   blocks: [
     {
+      id: "b_sample_about",
       type: "about",
       header: "John Doe",
       points: [
-        "Software Engineer",
-        "Full Stack Developer",
-        "Github",
-        "LinkedIn",
+        noRef("Software Engineer"),
+        noRef("Full Stack Developer"),
+        noRef("Github"),
+        noRef("LinkedIn"),
       ],
     },
     {
@@ -283,13 +220,14 @@ export const SAMPLE_RESUME: DocumentDefinition = {
       header: ["Education", ""],
       blocks: [
         {
+          id: "b_sample_edu_2col",
           type: "2-column-list",
           header: null,
           points: [
-            [
+            noRefTwoCol(
               "Nanyang Technological University | Bachelor's of Computing | cGPA 4.53",
-              "August 2024 - Dec 2027",
-            ],
+              "August 2024 - Dec 2027"
+            ),
           ],
         },
       ],
@@ -299,43 +237,53 @@ export const SAMPLE_RESUME: DocumentDefinition = {
       header: ["Experience", ""],
       blocks: [
         {
+          id: "b_sample_exp_bl_1",
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "ExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperience",
-            "Experience 2",
-            "Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3",
-            "Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4",
+            noRef(
+              "ExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperienceExperience"
+            ),
+            noRef("Experience 2"),
+            noRef(
+              "Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3 Experience 3"
+            ),
+            noRef(
+              "Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4 Experience 4"
+            ),
           ],
         },
         {
+          id: "b_sample_exp_bl_2",
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "Experience 1",
-            "Experience 2",
-            "Experience 3",
-            "Experience 4",
+            noRef("Experience 1"),
+            noRef("Experience 2"),
+            noRef("Experience 3"),
+            noRef("Experience 4"),
           ],
         },
         {
+          id: "b_sample_exp_bl_3",
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "Experience 1",
-            "Experience 2",
-            "Experience 3",
-            "Experience 4",
+            noRef("Experience 1"),
+            noRef("Experience 2"),
+            noRef("Experience 3"),
+            noRef("Experience 4"),
           ],
         },
         {
+          id: "b_sample_exp_bl_4",
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "Experience 1",
-            "Experience 2",
-            "Experience 3",
-            "Experience 4",
+            noRef("Experience 1"),
+            noRef("Experience 2"),
+            noRef("Experience 3"),
+            noRef("Experience 4"),
           ],
         },
       ],
@@ -345,43 +293,47 @@ export const SAMPLE_RESUME: DocumentDefinition = {
       header: ["Projects", ""],
       blocks: [
         {
+          id: "b_sample_proj_bl_1",
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "Experience 1",
-            "Experience 2",
-            "Experience 3",
-            "Experience 4",
+            noRef("Experience 1"),
+            noRef("Experience 2"),
+            noRef("Experience 3"),
+            noRef("Experience 4"),
           ],
         },
         {
+          id: "b_sample_proj_bl_2",
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "Experience 1",
-            "Experience 2",
-            "Experience 3",
-            "Experience 4",
+            noRef("Experience 1"),
+            noRef("Experience 2"),
+            noRef("Experience 3"),
+            noRef("Experience 4"),
           ],
         },
         {
+          id: "b_sample_proj_bl_3",
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "Experience 1",
-            "Experience 2",
-            "Experience 3",
-            "Experience 4",
+            noRef("Experience 1"),
+            noRef("Experience 2"),
+            noRef("Experience 3"),
+            noRef("Experience 4"),
           ],
         },
         {
+          id: "b_sample_proj_bl_4",
           type: "bullet-list",
           header: ["ASDF, ASDF", "Jan 2026 - Present"],
           points: [
-            "Experience 1",
-            "Experience 2",
-            "Experience 3",
-            "Experience 4",
+            noRef("Experience 1"),
+            noRef("Experience 2"),
+            noRef("Experience 3"),
+            noRef("Experience 4"),
           ],
         },
       ],
@@ -391,13 +343,14 @@ export const SAMPLE_RESUME: DocumentDefinition = {
       header: ["Achievements", ""],
       blocks: [
         {
+          id: "b_sample_ach_2col",
           type: "2-column-list",
           header: null,
           points: [
-            ["ASDF, ASDF", "Jan 2026 - Present"],
-            ["ASDF, ASDF", "Jan 2026 - Present"],
-            ["ASDF, ASDF", "Jan 2026 - Present"],
-            ["ASDF, ASDF", "Jan 2026 - Present"],
+            noRefTwoCol("ASDF, ASDF", "Jan 2026 - Present"),
+            noRefTwoCol("ASDF, ASDF", "Jan 2026 - Present"),
+            noRefTwoCol("ASDF, ASDF", "Jan 2026 - Present"),
+            noRefTwoCol("ASDF, ASDF", "Jan 2026 - Present"),
           ],
         },
       ],
@@ -686,4 +639,3 @@ export function layoutDocument(
 
   return pages;
 }
-

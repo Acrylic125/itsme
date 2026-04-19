@@ -1,12 +1,11 @@
 "use client";
 
-import type {
-  BlockWithSection,
-  Document,
-  LayoutBlockComponentProps,
-} from "@/components/document-blocks";
-import { getHeadingStyle } from "@/components/document-blocks";
-import { computeHeaderLayout, TwoColumnHeaderNode } from "@/components/blocks-shared";
+import type { BlockWithSection, Document } from "../schema";
+import { LayoutBlockComponentProps, getHeadingStyle } from "../renderer-utils";
+import {
+  computeHeaderLayout,
+  TwoColumnHeaderNode,
+} from "@/components/blocks-shared";
 
 export function renderSection({
   document,

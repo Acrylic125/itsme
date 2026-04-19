@@ -3,22 +3,18 @@
 import { useCallback, useRef, useState } from "react";
 import { Group, Rect, Text } from "react-konva";
 import Konva from "konva";
-import type {
-  Document,
-  LayoutBlockComponentProps,
-  TextStyle,
-} from "./document-blocks";
+import type { Document, TextStyle } from "../blocks/schema";
 import {
   estimateLineCount,
   getProportionalColumnWidths,
-} from "./document-blocks";
+  LayoutBlockComponentProps,
+} from "../blocks/renderer-utils";
 import { useDocumentRender } from "./document-render-context";
 import { useDomPopup } from "./dom-popup";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 
 const HOVER_FILL = "#f3f4f6";
-Konva.showWarnings = false;
 
 export type HeaderLayout = {
   leftText: string;

@@ -58,6 +58,8 @@
   --shadow-xl: 0px 1px 3px 0px oklch(0 0 0 / 0.01),
     0px 8px 10px -1px oklch(0 0 0 / 0.01);
   --shadow-2xl: 0px 1px 3px 0px oklch(0 0 0 / 0.03);
+
+  --width-ui: 1920px;
 }
 
 .dark {
@@ -171,4 +173,13 @@
   html {
     @apply font-sans;
   }
+}
+
+.safe-height {
+  --safe-area-inset-top: 0px;
+  --safe-area-inset-bottom: 0;
+  /* height: calc(
+    100vh - var(--safe-area-inset-top) - var(--safe-area-inset-bottom)
+  ); */
+  @apply h-[calc(100vh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom))];
 }

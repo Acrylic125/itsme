@@ -3,16 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Stage, Group } from "react-konva";
 import {
-  DocumentDefinition,
   layoutDocument,
   resolveDocument,
   PageLayout,
-} from "./document-blocks";
+} from "../blocks/renderer-utils";
 import { DocumentRenderProvider } from "./document-render-context";
 import { DomPopupProvider } from "./dom-popup";
 import { BLOCK_RENDERERS } from "./block-renderers";
+import { DocumentDefinition } from "@/blocks/schema";
 
-export { SAMPLE_RESUME } from "./document-blocks";
+export { SAMPLE_RESUME } from "../blocks/renderer-utils";
 
 const PAGE_GAP = 24;
 

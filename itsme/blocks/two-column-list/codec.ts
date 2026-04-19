@@ -1,10 +1,8 @@
 import db from "@/db/db";
 import { points, twoColumnListBlocks, twoColumnListRows } from "@/db/schema";
 import type { BlockWithSection } from "@/components/document-blocks";
-import type {
-  DecodeBlockMaps,
-  InsertBlockHelpers,
-} from "@/blocks/server-codec-types";
+import type { InsertBlockHelpers } from "@/blocks/server-codec-types";
+import { L1_DocumentBlockResolver } from "../retriever-utils";
 
 export async function insertTwoColumnListBlockDetails(args: {
   blockId: string;
@@ -59,21 +57,26 @@ export async function insertTwoColumnListBlockDetails(args: {
   }
 }
 
-export function decodeTwoColumnListBlock(args: {
-  blockId: string;
-  maps: DecodeBlockMaps;
-}): Extract<BlockWithSection, { type: "2-column-list" }> | null {
-  const { blockId, maps } = args;
-  const detail = maps.twoColumnByBlockId.get(blockId);
-  if (!detail) return null;
-
-  const hasHeader =
-    detail.headerLeftContent != null && detail.headerRightContent != null;
-  return {
+export const twoColumnListBlockResolver: L1_DocumentBlockResolver<"2-column-list"> =
+  {
     type: "2-column-list",
-    header: hasHeader
-      ? [detail.headerLeftContent!, detail.headerRightContent!]
-      : null,
-    points: maps.twoColumnPointsByBlockId.get(blockId) ?? [],
+    resolve: async ({ block, maps }) => {
+      const detail = maps.twoColumn.blocks.get(block.id);
+      if (!detail)
+        return { ok: false, error: "Two column list block not found" };
+      const points = maps.twoColumn.rows.get(block.id) ?? [];
+      return {
+        ok: true,
+        value: {
+          id: block.id,
+          type: "2-column-list",
+          header: null,
+          points: points.map((point) => ({
+            leftPoint: point.leftPoint,
+            rightPoint: point.rightPoint,
+          })),
+        },
+        orderIndex: block.orderIndex,
+      };
+    },
   };
-}
