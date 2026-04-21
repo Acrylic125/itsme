@@ -2,25 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Stage, Group } from "react-konva";
-import {
-  layoutDocument,
-  resolveDocument,
-  PageLayout,
-} from "../blocks/renderer-utils";
 import { DocumentRenderProvider } from "./document-render-context";
 import { DomPopupProvider } from "./dom-popup";
-import { BLOCK_RENDERERS } from "./block-renderers";
-import { DocumentDefinition } from "@/blocks/schema";
-
-export { SAMPLE_RESUME } from "../blocks/renderer-utils";
-
-const PAGE_GAP = 24;
+import {
+  DocumentSchema,
+  getPageLayoutMetrics,
+  renderDocumentLayout,
+  type RenderedLayoutBlock,
+} from "@/blocks/renderer";
+import { z } from "zod";
 
 export function PageCanvas({
   document,
   dpi = 300,
 }: {
-  document: DocumentDefinition;
+  document: z.infer<typeof DocumentSchema>;
   dpi?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -61,14 +57,29 @@ export function PageCanvas({
   }, []);
 
   const { containerWidth, dpr } = measurements;
-  const resolvedDocument = useMemo(() => resolveDocument(document), [document]);
-  const pages = useMemo<PageLayout[]>(
-    () => layoutDocument(resolvedDocument, BLOCK_RENDERERS),
-    [resolvedDocument]
+  const resolvedDocument = useMemo(
+    () => DocumentSchema.parse(document),
+    [document]
+  );
+  const canMeasureText =
+    typeof window !== "undefined" &&
+    (typeof OffscreenCanvas !== "undefined" ||
+      (!!window.document &&
+        !!window.document.createElement("canvas").getContext("2d")));
+  const blocks = useMemo(
+    () =>
+      canMeasureText
+        ? renderDocumentLayout({ document: resolvedDocument, dpi })
+        : [],
+    [resolvedDocument, dpi, canMeasureText]
   );
 
-  const pageWidth = resolvedDocument.pageSize.width;
-  const pageHeight = resolvedDocument.pageSize.height;
+  const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(
+    () => getPageLayoutMetrics(resolvedDocument, dpi),
+    [resolvedDocument, dpi]
+  );
+  const pageWidth = pageWidthPx;
+  const pageHeight = pageHeightPx;
 
   const scale =
     containerWidth != null && containerWidth > 0
@@ -76,14 +87,16 @@ export function PageCanvas({
       : 1;
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} className="w-full bg-black">
       {containerWidth !== null && (
         <DocumentRenderProvider document={resolvedDocument}>
           <DomPopupProvider>
             <DocumentStage
-              pages={pages}
+              blocks={blocks}
               pageWidth={pageWidth}
               pageHeight={pageHeight}
+              pageStridePx={pageStridePx}
+              gapPx={gapPx}
               scale={scale}
               dpi={dpi}
               dpr={dpr}
@@ -96,27 +109,40 @@ export function PageCanvas({
 }
 
 type DocumentStageProps = {
-  pages: PageLayout[];
+  blocks: RenderedLayoutBlock[];
   pageWidth: number;
   pageHeight: number;
+  /** Layout stride in px: page height plus inter-page gap (matches renderer `createContext`). */
+  pageStridePx: number;
+  gapPx: number;
   scale: number;
   dpi: number;
   dpr: number;
 };
 
 function DocumentStage({
-  pages,
+  blocks,
   pageWidth,
   pageHeight,
+  pageStridePx,
+  gapPx,
   scale,
   dpi,
   dpr,
 }: DocumentStageProps) {
+  const maxEndY = blocks.reduce(
+    (m, b) => Math.max(m, b.y + b.height),
+    0
+  );
+  const pageCount = Math.max(1, Math.ceil(maxEndY / pageStridePx));
   const stageWidth = pageWidth * scale;
   const stageHeight =
-    pages.length * (pageHeight + PAGE_GAP) * scale - PAGE_GAP * scale;
+    (pageCount * pageHeight + Math.max(0, pageCount - 1) * gapPx) * scale;
 
-  const pixelRatio = (dpi / 96) * dpr;
+  const requestedPixelRatio = (dpi / 96) * dpr;
+  // Very large backing stores can exceed browser canvas limits.
+  // Cap pixel ratio for interactive editing stability.
+  const pixelRatio = Math.min(requestedPixelRatio, 2);
 
   return (
     <Stage
@@ -127,9 +153,17 @@ function DocumentStage({
       pixelRatio={pixelRatio}
     >
       <Layer>
-        {pages.map((page, pageIndex) => {
-          const yOffset = pageIndex * (pageHeight + PAGE_GAP) * scale;
-
+        <Rect
+          x={0}
+          y={0}
+          width={stageWidth}
+          height={stageHeight}
+          fill="#000000"
+          perfectDrawEnabled={false}
+          listening={false}
+        />
+        {Array.from({ length: pageCount }, (_, pageIndex) => {
+          const yOffset = pageIndex * pageStridePx * scale;
           return (
             <Group key={pageIndex} y={yOffset} scaleX={scale} scaleY={scale}>
               <Rect
@@ -143,21 +177,14 @@ function DocumentStage({
                 perfectDrawEnabled={false}
                 listening={false}
               />
-              {page.blocks.map((block) => {
-                const Component = block.component;
-                return (
-                  <Component
-                    key={block.id}
-                    x={block.x}
-                    y={block.y}
-                    width={block.width}
-                    height={block.height}
-                  />
-                );
-              })}
             </Group>
           );
         })}
+        <Group scaleX={scale} scaleY={scale}>
+          {blocks.map((block) => (
+            <Group key={block.id}>{block.component()}</Group>
+          ))}
+        </Group>
       </Layer>
     </Stage>
   );

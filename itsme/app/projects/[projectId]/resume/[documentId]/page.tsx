@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { PageCanvas, SAMPLE_RESUME } from "@/components/page-canvas";
+import { PageCanvas } from "@/components/page-canvas";
 import {
   ProjectDocumentsSidebar,
   ProjectDocumentsSidebarSkeleton,
@@ -10,12 +10,7 @@ import { Button } from "@/components/ui/button";
 import { eq } from "drizzle-orm";
 import { documents, projects } from "@/db/schema";
 import db from "@/db/db";
-import {
-  getBlockMappings,
-  getDocumentBlockMappings,
-} from "@/blocks/retriever-utils";
-import { blockResolverPipeline } from "@/blocks/retriever-pipeline";
-import { DEFAULT_TEXT_STYLES } from "@/blocks/renderer-utils";
+import { SAMPLE_DOCUMENT } from "@/blocks/renderer";
 
 export async function getProjectById(projectId: string) {
   return db
@@ -53,15 +48,11 @@ export default async function ProjectResumePage({
     notFound();
   }
 
-  const documentBlocks = await getDocumentBlockMappings(documentId);
-  const blockMappings = await getBlockMappings(
-    Array.from(documentBlocks.keys())
-  );
-
-  const blocks = await blockResolverPipeline({
-    blockMap: documentBlocks,
-    maps: blockMappings,
-  });
+  // Temporarily bypass retriever pipeline while refactoring block retrieval.
+  const renderedDocument = {
+    ...SAMPLE_DOCUMENT,
+    name: document.name,
+  };
 
   // console.log("blocks", JSON.stringify(blocks, null, 2));
   return (
@@ -86,35 +77,7 @@ export default async function ProjectResumePage({
           </p>
         </div>
         <div className="w-full">
-          <PageCanvas
-            document={{
-              // ...SAMPLE_RESUME,
-              name: document.name,
-              pageSize: { width: 8.5, height: 11 },
-              font: "Times New Roman",
-              spacingBelow: {
-                about: 11,
-                "bullet-list": 11,
-                "2-column-list": 11,
-                section: 11,
-                "v-spacer": 0,
-              },
-              margins: {
-                top: 24,
-                bottom: 24,
-                left: 24,
-                right: 24,
-              },
-              textStyles: DEFAULT_TEXT_STYLES,
-              bulletListStyle: {
-                bullet: "•",
-                indent: 11,
-                gap: 11,
-              },
-              blocks: blocks,
-            }}
-            dpi={300}
-          />
+          <PageCanvas document={renderedDocument} dpi={300} />
         </div>
       </section>
     </main>

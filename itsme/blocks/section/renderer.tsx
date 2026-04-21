@@ -1,42 +1,74 @@
 "use client";
 
-import type { BlockWithSection, Document } from "../schema";
-import { LayoutBlockComponentProps, getHeadingStyle } from "../renderer-utils";
-import {
-  computeHeaderLayout,
-  TwoColumnHeaderNode,
-} from "@/components/blocks-shared";
+import { z } from "zod";
+import { Group } from "react-konva";
+import { BlockRenderer } from "../renderer-types";
+import { BlockSchema } from "../blocks";
 
-export function renderSection({
-  document,
-  block,
-  parent,
-  headingOffset,
+function SectionBlockComponent({
+  dimensions,
+  pos,
+  nodes,
 }: {
-  document: Document;
-  block: Extract<BlockWithSection, { type: "section" }>;
-  parent: { width: number; height: number };
-  headingOffset: number;
+  dimensions: { width: number; height: number };
+  pos: { x: number; y: number };
+  nodes: React.ReactNode[];
 }) {
-  const style = getHeadingStyle(2, headingOffset, document.textStyles);
-  const header = computeHeaderLayout({
-    document,
-    leftText: block.header[0],
-    rightText: block.header[1],
-    style,
-    totalWidth: parent.width,
-  });
-
-  return {
-    estimatedDimensions: { width: parent.width, height: header.height },
-    component: (props: LayoutBlockComponentProps) => (
-      <TwoColumnHeaderNode
-        x={props.x}
-        y={props.y}
-        width={props.width}
-        height={props.height}
-        header={header}
-      />
-    ),
-  };
+  return (
+    <Group
+      x={pos.x}
+      y={pos.y}
+      width={dimensions.width}
+      height={dimensions.height}
+    >
+      {nodes}
+    </Group>
+  );
 }
+
+export const SectionBlockRenderer: BlockRenderer<"section"> = {
+  type: "section",
+  render: (block, relativeTo, ctx) => {
+    const childBlocks = block.blocks
+      .map((id) => ctx.allBlocks.find((b) => b.id === id))
+      .filter((b): b is z.infer<typeof BlockSchema> => b != null);
+
+    const sectionStartPosition = {
+      ...ctx.getNextPosition(),
+      width: relativeTo.width,
+    };
+    // Child components will do the space claiming.
+    const children = childBlocks.map((b) => {
+      const renderer = ctx.renderers[b.type];
+      if (!renderer) {
+        throw new Error(`Renderer not found for block type: ${b.type}`);
+      }
+      // I hate this.
+      const result = renderer.render(b as never, sectionStartPosition, ctx);
+      return result.component();
+    });
+    const sectionEndPosition = ctx.getNextPosition();
+
+    const dimensions = {
+      width: relativeTo.width,
+      height: sectionEndPosition.y - sectionStartPosition.y,
+    };
+
+    // Groups are relative the their parent, so we need to adjust the position to be relative to the parent.
+    const sectionPosRelativeTo = {
+      x: sectionStartPosition.x - relativeTo.x,
+      y: sectionStartPosition.y - relativeTo.y,
+    };
+
+    return {
+      estimatedDimensions: dimensions,
+      component: () => (
+        <SectionBlockComponent
+          dimensions={dimensions}
+          pos={sectionPosRelativeTo}
+          nodes={children}
+        />
+      ),
+    };
+  },
+};

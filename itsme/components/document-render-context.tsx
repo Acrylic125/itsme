@@ -1,15 +1,18 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
-import type { Document } from "./document-blocks";
+import { DocumentSchema } from "@/blocks/renderer";
+import { z } from "zod";
 
-const DocumentRenderContext = createContext<Document | null>(null);
+const DocumentRenderContext = createContext<z.infer<
+  typeof DocumentSchema
+> | null>(null);
 
 export function DocumentRenderProvider({
   document,
   children,
 }: {
-  document: Document;
+  document: z.infer<typeof DocumentSchema>;
   children: ReactNode;
 }) {
   return (
@@ -19,11 +22,10 @@ export function DocumentRenderProvider({
   );
 }
 
-export function useDocumentRender(): Document {
+export function useDocumentRender(): z.infer<typeof DocumentSchema> {
   const ctx = useContext(DocumentRenderContext);
   if (!ctx) {
     throw new Error("DocumentRenderProvider not provided");
   }
   return ctx;
 }
-

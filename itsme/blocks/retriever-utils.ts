@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import type { BlockWithSection } from "./schema";
 import { asc, eq, inArray } from "drizzle-orm";
-import { BaseBlock } from "./section/schema";
+import { BaseBlock } from "./section_old/schema";
 
 export async function getDocumentBlockMappings(documentId: string) {
   const blockRows = await db

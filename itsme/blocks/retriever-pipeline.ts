@@ -1,11 +1,11 @@
-import { aboutBlockResolver } from "./about/codec";
-import { bulletListBlockResolver } from "./bullet-list/codec";
+// import { aboutBlockResolver } from "./about/codec";
+// import { bulletListBlockResolver } from "./bullet-list/codec";
 import { getBlockMappings, getDocumentBlockMappings } from "./retriever-utils";
-import { BaseBlock } from "./section/schema";
-import { BlockWithSection } from "./schema";
-import { sectionBlockResolver } from "./section/codec";
-import { twoColumnListBlockResolver } from "./two-column-list/codec";
-import { vSpacerBlockResolver } from "./v-spacer/codec";
+// import { BaseBlock } from "./section_old/schema";
+// import { BlockWithSection } from "./schema";
+// import { sectionBlockResolver } from "./section_old/codec";
+// import { twoColumnListBlockResolver } from "./two-column-list/codec";
+// import { vSpacerBlockResolver } from "./v-spacer/codec";
 
 const L1_RESOLVERS = [
   aboutBlockResolver,
