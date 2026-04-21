@@ -6,7 +6,7 @@ import { ListBlockSchema } from "./schema";
 
 export const ListBlockRetriever: L1_DocumentBlockRetriever<"list"> = {
   type: "list",
-  async resolve({ block }) {
+  async get({ block }) {
     const list = await db
       .select({
         bulletType: listBlocks.bulletType,

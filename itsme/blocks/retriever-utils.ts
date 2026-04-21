@@ -28,17 +28,17 @@ export async function getDocumentBlockMappings(documentId: string) {
   return new Map(blockRows.map((row) => [row.id, row]));
 }
 
-export type DocumentBlockRow = Awaited<
-  ReturnType<typeof getDocumentBlockMappings>
-> extends Map<string, infer V>
-  ? V
-  : never;
+export type DocumentBlockRow =
+  Awaited<ReturnType<typeof getDocumentBlockMappings>> extends Map<
+    string,
+    infer V
+  >
+    ? V
+    : never;
 
 export type L1_DocumentBlockRetriever<T extends Block["type"]> = {
   type: T;
-  resolve: (ctx: {
-    block: DocumentBlockRow;
-  }) => Promise<
+  get: (ctx: { block: DocumentBlockRow }) => Promise<
     | {
         ok: true;
         value: Extract<Block, { type: T }>;

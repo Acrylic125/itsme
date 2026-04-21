@@ -1,5 +1,8 @@
 import { Block } from "./blocks";
-import { getDocumentBlockMappings, getDocumentMainLayout } from "./retriever-utils";
+import {
+  getDocumentBlockMappings,
+  getDocumentMainLayout,
+} from "./retriever-utils";
 import { TextBlockRetriever } from "./text/server";
 import { SectionBlockRetriever } from "./section/server";
 import { ColumnsBlockRetriever } from "./columns/server";
@@ -28,7 +31,7 @@ export async function blockResolverPipeline(ctx: {
       if (!retriever) {
         return null;
       }
-      const resolved = await retriever.resolve({ block });
+      const resolved = await retriever.get({ block });
       if (!resolved.ok) {
         return null;
       }

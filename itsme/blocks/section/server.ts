@@ -6,7 +6,7 @@ import { SectionBlockSchema } from "./schema";
 
 export const SectionBlockRetriever: L1_DocumentBlockRetriever<"section"> = {
   type: "section",
-  async resolve({ block }) {
+  async get({ block }) {
     const section = await db
       .select({
         ref: sectionBlocks.ref,
@@ -46,4 +46,3 @@ export const SectionBlockRetriever: L1_DocumentBlockRetriever<"section"> = {
     };
   },
 };
-

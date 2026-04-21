@@ -6,7 +6,7 @@ import { ColumnsBlockSchema } from "./schema";
 
 export const ColumnsBlockRetriever: L1_DocumentBlockRetriever<"columns"> = {
   type: "columns",
-  async resolve({ block }) {
+  async get({ block }) {
     const columns = await db
       .select({
         ref: columnsBlocks.ref,
@@ -47,4 +47,3 @@ export const ColumnsBlockRetriever: L1_DocumentBlockRetriever<"columns"> = {
     };
   },
 };
-

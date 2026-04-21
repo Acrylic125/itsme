@@ -6,7 +6,7 @@ import { TextBlockSchema } from "./schema";
 
 export const TextBlockRetriever: L1_DocumentBlockRetriever<"text"> = {
   type: "text",
-  async resolve({ block }) {
+  async get({ block }) {
     const row = await db
       .select({
         text: textBlocks.text,
@@ -43,4 +43,3 @@ export const TextBlockRetriever: L1_DocumentBlockRetriever<"text"> = {
     };
   },
 };
-
