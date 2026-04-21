@@ -20,45 +20,40 @@ resource "cloudflare_r2_bucket" "itsme-bucket" {
   name       = "itsme-bucket"
 }
 
-resource "cloudflare_account_token" "itsme-account-token" {
-  account_id = "cea74c56c18a082fab52ca288c594c10"
-  name       = "dev"
+# Add your own token.
+# resource "cloudflare_account_token" "itsme-account-token" {
+#   account_id = var.account_id
+#   name       = "prod"
 
-  policies = [{
-    effect = "allow"
-    permission_groups = [{
-      id = "09b2857d1c31407795e75e3fed8617a1"
-    }]
-    resources = jsonencode({
-      "com.cloudflare.api.account.cea74c56c18a082fab52ca288c594c10" = "*"
-    })
-    }, {
-    effect = "allow"
-    permission_groups = [{
-      id = "bf7481a1826f439697cb59a20b22293e"
-    }]
-    resources = jsonencode({
-      "com.cloudflare.api.account.cea74c56c18a082fab52ca288c594c10" = "*"
-    })
-    }, {
-    effect = "allow"
-    permission_groups = [{
-      id = "644535f4ed854494a59cb289d634b257"
-      }, {
-      id = "6c8a3737f07f46369c1ea1f22138daaf"
-      }, {
-      id = "bacc64e0f6c34fc0883a1223f938a104"
-    }]
-    resources = jsonencode({
-      "com.cloudflare.api.account.cea74c56c18a082fab52ca288c594c10" = "*"
-    })
-  }]
+#   policies = [{
+#     effect = "allow"
+#     permission_groups = [{
+#       id = "192192df92ee43ac90f2aeeffce67e35"
+#       }, {
+#       id = "09b2857d1c31407795e75e3fed8617a1"
+#       }, {
+#       id = "b4992e1108244f5d8bfbd5744320c2e1"
+#       }, {
+#       id = "bf7481a1826f439697cb59a20b22293e"
+#       }, {
+#       id = "bacc64e0f6c34fc0883a1223f938a104"
+#       }, {
+#       id = "a92d2450e05d4e7bb7d0a64968f83d11"
+#       }, {
+#       id = "eb56a6953c034b9d97dd838155666f06"
+#       }, {
+#       id = "5bc3f8b21c554832afc660159ab75fa4"
+#     }]
+#     resources = jsonencode({
+#       "com.cloudflare.api.account.cea74c56c18a082fab52ca288c594c10" = "*"
+#     })
+#   }]
 
-  # condition = {
-  #   request_ip = {
-  #     in = ["115.66.83.164/32"]
-  #   }
-  # }
-
-  expires_on = "2027-04-18T23:59:59Z"
-}
+#   condition = {
+#     request_ip = {
+#       in = [
+#       // TODO: Add IP ranges
+#       ]
+#     }
+#   }
+# }
