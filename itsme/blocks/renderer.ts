@@ -4,6 +4,7 @@ import { BlockRendererContext } from "./renderer-types";
 import { SectionBlockRenderer } from "./section/renderer";
 import { ColumnsBlockRenderer } from "./columns/renderer";
 import { TextBlockRenderer } from "./text/renderer";
+import { ListBlockRenderer } from "./list/renderer";
 
 const DEFAULT_STYLE_SHEET: z.infer<typeof StyleSheetSchema> = {
   page: {
@@ -40,6 +41,12 @@ const DEFAULT_STYLE_SHEET: z.infer<typeof StyleSheetSchema> = {
       fontFamily: "Times New Roman",
       lineHeight: 1.2,
     },
+  },
+  list: {
+    /** Bullet column width (inches). */
+    leftSpace: 0.35,
+    /** Gap between bullet column and list body (inches). */
+    rightSpace: 0.12,
   },
 };
 
@@ -351,7 +358,7 @@ export const SAMPLE_DOCUMENT: z.infer<typeof DocumentSchema> = {
     {
       type: "section",
       id: "section-5",
-      blocks: ["text-15", "text-16", "text-35", "text-36"],
+      blocks: ["text-15", "text-16", "list-1", "text-35", "text-36"],
     },
     {
       type: "text",
@@ -364,6 +371,35 @@ export const SAMPLE_DOCUMENT: z.infer<typeof DocumentSchema> = {
       type: "text",
       id: "text-16",
       text: "Resume builder (2025) — Next.js + Konva canvas editor with block-based layout and PDF export. Open-source CLI for theme tokens.",
+      style: "default",
+      align: "left",
+    },
+    {
+      type: "list",
+      id: "list-1",
+      bullet: {
+        type: "alphabetical",
+      },
+      blocks: ["text-38", "text-39", "text-40"],
+    },
+    {
+      type: "text",
+      id: "text-38",
+      text: "Built a design-system playground that renders components against multiple themes, locales, viewport presets, and mocked API states so visual regressions show up before launch instead of during a customer demo.",
+      style: "default",
+      align: "left",
+    },
+    {
+      type: "text",
+      id: "text-39",
+      text: "Created an internal release assistant that aggregates changelog fragments, validates semantic version bumps, checks migration guide presence, and generates release notes in a tone that sounds much more organized than the week that actually produced the release.",
+      style: "default",
+      align: "left",
+    },
+    {
+      type: "text",
+      id: "text-40",
+      text: "Extreme wrap case for the new list renderer: designed a migration planner that compares old and new schema graphs, highlights incompatible field transitions, simulates phased backfills, estimates lock contention risk, and emits a step-by-step rollout plan with preflight checks, canary thresholds, rollback triggers, dashboards to watch, and a post-deploy verification checklist that keeps going long after everyone in the room wishes the sentence had already ended.",
       style: "default",
       align: "left",
     },
@@ -521,6 +557,7 @@ export function createContext(
       section: SectionBlockRenderer,
       text: TextBlockRenderer,
       columns: ColumnsBlockRenderer,
+      list: ListBlockRenderer,
     },
     // renderers: [
     //   SectionBlockRenderer,

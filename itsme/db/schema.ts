@@ -1,19 +1,15 @@
 import {
   check,
-  foreignKey,
+  primaryKey,
   integer,
+  real,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
-const BLOCK_TYPES = [
-  "about",
-  "bullet-list",
-  "2-column-list",
-  "v-spacer",
-  "section",
-] as const;
+const BLOCK_TYPES = ["text", "section", "columns", "list"] as const;
 
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
@@ -37,6 +33,20 @@ export const documents = sqliteTable(
       sql`length(${table.id}) = 24 and ${table.id} like 'd_%'`
     ),
   ]
+);
+
+export const documentMainLayout = sqliteTable(
+  "document_main_layout",
+  {
+    documentId: text("document_id").references(() => documents.id, {
+      onDelete: "cascade",
+    }),
+    blockId: text("block_id")
+      .notNull()
+      .references(() => blocks.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.documentId, table.blockId] })]
 );
 
 export const projectMasterDocuments = sqliteTable("project_master_documents", {
@@ -67,117 +77,61 @@ export const blocks = sqliteTable(
   ]
 );
 
-export const points = sqliteTable(
-  "points",
+export const documentPageStyles = sqliteTable("document_page_styles", {
+  documentId: text("document_id")
+    .primaryKey()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  gap: real("gap").notNull(),
+  marginTop: real("margin_top").notNull(),
+  marginBottom: real("margin_bottom").notNull(),
+  marginLeft: real("margin_left").notNull(),
+  marginRight: real("margin_right").notNull(),
+});
+
+export const documentTextStyles = sqliteTable(
+  "document_text_styles",
   {
-    id: text("id").primaryKey(),
-    content: text("content").notNull(),
-    refPointId: text("ref_point_id"),
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    style: text("style", { enum: ["default", "h1", "h2", "h3"] }).notNull(),
+    fontSize: real("font_size").notNull(),
+    fontWeight: text("font_weight", { enum: ["normal", "bold"] }).notNull(),
+    fontFamily: text("font_family").notNull(),
+    lineHeight: real("line_height").notNull(),
   },
   (table) => [
-    foreignKey({
-      columns: [table.refPointId],
-      foreignColumns: [table.id],
-      name: "points_ref_point_id_fk",
-    }).onDelete("set null"),
-    check(
-      "points_id_format_chk",
-      sql`length(${table.id}) = 24 and ${table.id} like 'p_%'`
+    uniqueIndex("document_text_styles_doc_style_uq").on(
+      table.documentId,
+      table.style
     ),
-    check("points_content_max_len_chk", sql`length(${table.content}) <= 512`),
   ]
 );
 
-export const aboutBlocks = sqliteTable("about_blocks", {
+export const documentListStyles = sqliteTable("document_list_styles", {
+  documentId: text("document_id")
+    .primaryKey()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  leftSpace: real("left_space").notNull(),
+  rightSpace: real("right_space").notNull(),
+});
+
+export const textBlocks = sqliteTable("text_blocks", {
   blockId: text("block_id")
     .primaryKey()
     .references(() => blocks.id, { onDelete: "cascade" }),
-  header: text("header").notNull(),
-});
-
-export const aboutBlockPoints = sqliteTable("about_block_points", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  blockId: text("block_id")
-    .notNull()
-    .references(() => aboutBlocks.blockId, { onDelete: "cascade" }),
-  pointId: text("point_id")
-    .notNull()
-    .references(() => points.id, { onDelete: "cascade" }),
-  orderIndex: integer("order_index").notNull(),
-});
-
-export const bulletListBlocks = sqliteTable(
-  "bullet_list_blocks",
-  {
-    blockId: text("block_id")
-      .primaryKey()
-      .references(() => blocks.id, { onDelete: "cascade" }),
-    headerLeftContent: text("header_left_content"),
-    headerRightContent: text("header_right_content"),
-  },
-  (table) => [
-    check(
-      "bullet_list_blocks_header_pair_chk",
-      sql`(${table.headerLeftContent} is null and ${table.headerRightContent} is null) or (${table.headerLeftContent} is not null and ${table.headerRightContent} is not null)`
-    ),
-  ]
-);
-
-export const bulletListPoints = sqliteTable("bullet_list_points", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  blockId: text("block_id")
-    .notNull()
-    .references(() => bulletListBlocks.blockId, { onDelete: "cascade" }),
-  pointId: text("point_id")
-    .notNull()
-    .references(() => points.id, { onDelete: "cascade" }),
-  orderIndex: integer("order_index").notNull(),
-});
-
-export const twoColumnListBlocks = sqliteTable(
-  "two_column_list_blocks",
-  {
-    blockId: text("block_id")
-      .primaryKey()
-      .references(() => blocks.id, { onDelete: "cascade" }),
-    headerLeftContent: text("header_left_content"),
-    headerRightContent: text("header_right_content"),
-  },
-  (table) => [
-    check(
-      "two_column_list_blocks_header_pair_chk",
-      sql`(${table.headerLeftContent} is null and ${table.headerRightContent} is null) or (${table.headerLeftContent} is not null and ${table.headerRightContent} is not null)`
-    ),
-  ]
-);
-
-export const twoColumnListRows = sqliteTable("two_column_list_rows", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  blockId: text("block_id")
-    .notNull()
-    .references(() => twoColumnListBlocks.blockId, { onDelete: "cascade" }),
-  leftPointId: text("left_point_id")
-    .notNull()
-    .references(() => points.id, { onDelete: "cascade" }),
-  rightPointId: text("right_point_id")
-    .notNull()
-    .references(() => points.id, { onDelete: "cascade" }),
-  orderIndex: integer("order_index").notNull(),
-});
-
-export const vSpacerBlocks = sqliteTable("v_spacer_blocks", {
-  blockId: text("block_id")
-    .primaryKey()
-    .references(() => blocks.id, { onDelete: "cascade" }),
-  height: integer("height").notNull(),
+  text: text("text").notNull(),
+  align: text("align", { enum: ["left", "center", "right"] }).notNull(),
+  style: text("style", { enum: ["default", "h1", "h2", "h3"] }).notNull(),
+  ref: text("ref"),
 });
 
 export const sectionBlocks = sqliteTable("section_blocks", {
   blockId: text("block_id")
     .primaryKey()
     .references(() => blocks.id, { onDelete: "cascade" }),
-  headerLeftContent: text("header_left_content").notNull(),
-  headerRightContent: text("header_right_content").notNull(),
+  ref: text("ref"),
 });
 
 export const sectionBlockChildren = sqliteTable("section_block_children", {
@@ -185,6 +139,59 @@ export const sectionBlockChildren = sqliteTable("section_block_children", {
   sectionBlockId: text("section_block_id")
     .notNull()
     .references(() => sectionBlocks.blockId, { onDelete: "cascade" }),
+  childBlockId: text("child_block_id")
+    .notNull()
+    .references(() => blocks.id, { onDelete: "cascade" })
+    .unique(),
+  orderIndex: integer("order_index").notNull(),
+});
+
+export const columnsBlocks = sqliteTable("columns_blocks", {
+  blockId: text("block_id")
+    .primaryKey()
+    .references(() => blocks.id, { onDelete: "cascade" }),
+  ref: text("ref"),
+});
+
+export const columnsBlockChildren = sqliteTable("columns_block_children", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  columnsBlockId: text("columns_block_id")
+    .notNull()
+    .references(() => columnsBlocks.blockId, { onDelete: "cascade" }),
+  childBlockId: text("child_block_id")
+    .notNull()
+    .references(() => blocks.id, { onDelete: "cascade" }),
+  span: real("span").notNull(),
+  orderIndex: integer("order_index").notNull(),
+});
+
+export const listBlocks = sqliteTable(
+  "list_blocks",
+  {
+    blockId: text("block_id")
+      .primaryKey()
+      .references(() => blocks.id, { onDelete: "cascade" }),
+    bulletType: text("bullet_type", {
+      enum: ["normal", "alphabetical", "numerical"],
+    }).notNull(),
+    bulletValue: text("bullet_value"),
+    leftSpace: real("left_space"),
+    rightSpace: real("right_space"),
+    ref: text("ref"),
+  },
+  (table) => [
+    check(
+      "list_blocks_bullet_value_for_normal_chk",
+      sql`(${table.bulletType} = 'normal' and ${table.bulletValue} is not null) or (${table.bulletType} != 'normal' and ${table.bulletValue} is null)`
+    ),
+  ]
+);
+
+export const listBlockChildren = sqliteTable("list_block_children", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  listBlockId: text("list_block_id")
+    .notNull()
+    .references(() => listBlocks.blockId, { onDelete: "cascade" }),
   childBlockId: text("child_block_id")
     .notNull()
     .references(() => blocks.id, { onDelete: "cascade" })
