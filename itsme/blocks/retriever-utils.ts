@@ -50,3 +50,8 @@ export type L1_DocumentBlockRetriever<T extends Block["type"]> = {
       }
   >;
 };
+
+export type L1_DocumentBlockInserter<T extends Block["type"]> = {
+  type: T;
+  insert: (ctx: { block: Extract<Block, { type: T }> }) => Promise<void>;
+};

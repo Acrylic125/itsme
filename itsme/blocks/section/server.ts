@@ -1,7 +1,10 @@
 import db from "@/db/db";
 import { sectionBlockChildren, sectionBlocks } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { L1_DocumentBlockRetriever } from "../retriever-utils";
+import {
+  L1_DocumentBlockInserter,
+  L1_DocumentBlockRetriever,
+} from "../retriever-utils";
 import { SectionBlockSchema } from "./schema";
 
 export const SectionBlockRetriever: L1_DocumentBlockRetriever<"section"> = {
@@ -44,5 +47,25 @@ export const SectionBlockRetriever: L1_DocumentBlockRetriever<"section"> = {
       value: parsed.data,
       orderIndex: block.orderIndex,
     };
+  },
+};
+
+export const SectionBlockInserter: L1_DocumentBlockInserter<"section"> = {
+  type: "section",
+  async insert({ block }) {
+    await db.insert(sectionBlocks).values({
+      blockId: block.id,
+      ref: block.ref ?? null,
+    });
+
+    if (block.blocks.length === 0) return;
+
+    await db.insert(sectionBlockChildren).values(
+      block.blocks.map((childBlockId, orderIndex) => ({
+        sectionBlockId: block.id,
+        childBlockId,
+        orderIndex,
+      }))
+    );
   },
 };

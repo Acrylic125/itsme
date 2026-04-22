@@ -92,6 +92,7 @@ export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
         includeMarkedContent: true,
       });
       const textItems: PdfMarkedItem[] = [];
+      console.log(markedContent.items);
       for (const rawItem of markedContent.items as unknown[]) {
         if (
           typeof rawItem === "object" &&
@@ -149,7 +150,11 @@ export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
     CreateProjectFromPdfInput,
     { type: "unmarked" }
   >["pages"] = [];
-  for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+  for (
+    let pageNumber = 1;
+    pageNumber <= pdfDocument.numPages;
+    pageNumber += 1
+  ) {
     const page = await pdfDocument.getPage(pageNumber);
     const textContent = await page.getTextContent();
     const items = PDFTextItemSchema.array().parse(textContent.items);
@@ -173,4 +178,3 @@ export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
     pages,
   });
 }
-

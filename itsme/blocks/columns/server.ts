@@ -1,7 +1,10 @@
 import db from "@/db/db";
 import { columnsBlockChildren, columnsBlocks } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { L1_DocumentBlockRetriever } from "../retriever-utils";
+import {
+  L1_DocumentBlockInserter,
+  L1_DocumentBlockRetriever,
+} from "../retriever-utils";
 import { ColumnsBlockSchema } from "./schema";
 
 export const ColumnsBlockRetriever: L1_DocumentBlockRetriever<"columns"> = {
@@ -45,5 +48,26 @@ export const ColumnsBlockRetriever: L1_DocumentBlockRetriever<"columns"> = {
       value: parsed.data,
       orderIndex: block.orderIndex,
     };
+  },
+};
+
+export const ColumnsBlockInserter: L1_DocumentBlockInserter<"columns"> = {
+  type: "columns",
+  async insert({ block }) {
+    await db.insert(columnsBlocks).values({
+      blockId: block.id,
+      ref: block.ref ?? null,
+    });
+
+    if (block.blocks.length === 0) return;
+
+    await db.insert(columnsBlockChildren).values(
+      block.blocks.map((child, orderIndex) => ({
+        columnsBlockId: block.id,
+        childBlockId: child.blockId,
+        span: child.span,
+        orderIndex,
+      }))
+    );
   },
 };

@@ -3,16 +3,17 @@ import type { Block } from "@/blocks/blocks";
 import {
   CreateProjectFromPdfInput,
   ExtendedPDFTextItemSchema,
-  PDFEndMarkedContentSchema,
   TEXT_SPACER,
 } from "./schema";
 import { z } from "zod";
 
 type PdfTextWithFont = z.infer<typeof ExtendedPDFTextItemSchema>;
+type PdfMarkedTag = "H1" | "H2" | "H3" | "P" | "LI" | "SPAN";
 type PdfMarkedItem =
   | (PdfTextWithFont & { type: "text" })
-  | { type: "startMarkedContent" }
-  | z.infer<typeof PDFEndMarkedContentSchema>;
+  | { type: "beginMarkedContentProps"; tag: PdfMarkedTag }
+  | { type: "endMarkedContent" }
+  | { type: "startMarkedContent" };
 
 type PageTextChunk = {
   x: number;
@@ -23,8 +24,32 @@ type PageTextChunk = {
   content: string;
 };
 
-type MarkedChunk = PageTextChunk & {
-  tag: "H1" | "H2" | "H3" | "P" | "LI" | "SPAN";
+type MarkedTextNode = {
+  kind: "text";
+  item: PdfTextWithFont;
+};
+
+type MarkedGroupNode = {
+  kind: "group";
+  tag: PdfMarkedTag | null;
+  children: MarkedNode[];
+};
+
+type MarkedNode = MarkedTextNode | MarkedGroupNode;
+
+type FlowPart =
+  | {
+      type: "text";
+      item: PdfTextWithFont;
+    }
+  | {
+      type: "li";
+      group: MarkedGroupNode & { tag: "LI" };
+    };
+
+type PendingListItem = {
+  blockId: string | null;
+  bulletValue: string | null;
 };
 
 type TextTag = "h1" | "h2" | "h3" | "p";
@@ -45,7 +70,7 @@ function mapTagToStyle(tag: TextTag): "h1" | "h2" | "h3" | "default" {
 }
 
 function mapMarkedTagToTextStyle(
-  tag: MarkedChunk["tag"]
+  tag: PdfMarkedTag
 ): "h1" | "h2" | "h3" | "default" {
   if (tag === "H1") return "h1";
   if (tag === "H2") return "h2";
@@ -73,7 +98,9 @@ function getTagForRank(args: { rank: number; pairCount: number }): TextTag {
 }
 
 function buildChunkTagMap(chunks: PageTextChunk[]): Map<string, TextTag> {
-  const uniqueStyles = [...new Set(chunks.map((chunk) => getChunkStyleKey(chunk)))]
+  const uniqueStyles = [
+    ...new Set(chunks.map((chunk) => getChunkStyleKey(chunk))),
+  ]
     .map((key) => {
       return {
         key,
@@ -149,71 +176,418 @@ function groupTextItemsIntoChunks(args: {
   return groups;
 }
 
-function groupMarkedItemsIntoChunks(args: {
-  items: PdfMarkedItem[];
-  pageHeight: number;
-}): MarkedChunk[] {
-  let activeTag: MarkedChunk["tag"] = "SPAN";
-  const chunks: MarkedChunk[] = [];
+function isCloseMarkedContent(item: PdfMarkedItem): boolean {
+  return item.type === "endMarkedContent" || item.type === "startMarkedContent";
+}
 
-  for (const item of args.items) {
+function isListGroupNode(
+  node: MarkedGroupNode
+): node is MarkedGroupNode & { tag: "LI" } {
+  return node.tag === "LI";
+}
+
+function buildMarkedTree(items: PdfMarkedItem[]): MarkedGroupNode {
+  const root: MarkedGroupNode = {
+    kind: "group",
+    tag: null,
+    children: [],
+  };
+  const stack: MarkedGroupNode[] = [root];
+  let openGroupCount = 0;
+
+  items.forEach((item, index) => {
+    const currentGroup = stack[stack.length - 1];
+    if (!currentGroup) {
+      throw new Error("Invalid marked content tree state.");
+    }
+
     if (item.type === "beginMarkedContentProps") {
-      activeTag = item.tag;
-      continue;
+      const nextGroup: MarkedGroupNode = {
+        kind: "group",
+        tag: item.tag,
+        children: [],
+      };
+      currentGroup.children.push(nextGroup);
+      stack.push(nextGroup);
+      openGroupCount += 1;
+      return;
     }
-    if (item.type === "startMarkedContent") {
-      activeTag = "SPAN";
-      continue;
-    }
-    const textItem = item;
 
-    const content = textItem.str.trim();
-    if (!content) continue;
-    const x = Math.round(textItem.transform[4]);
-    const y = args.pageHeight - Math.round(textItem.transform[5]);
-    const width = Math.max(1, Math.round(textItem.width));
-    const height = Math.max(1, Math.round(textItem.height));
-    const fontSize = Math.max(
-      1,
-      Math.round(Math.max(textItem.height, Math.abs(textItem.transform[0])))
+    if (isCloseMarkedContent(item)) {
+      if (openGroupCount === 0 || stack.length === 1) {
+        throw new Error(
+          `Invalid marked content at item ${index}: encountered endMarkedContent without a matching beginMarkedContentProps.`
+        );
+      }
+      stack.pop();
+      openGroupCount -= 1;
+      return;
+    }
+
+    if (item.type !== "text") {
+      throw new Error(
+        `Invalid marked content at item ${index}: unsupported marker ${item.type}.`
+      );
+    }
+
+    currentGroup.children.push({
+      kind: "text",
+      item,
+    });
+  });
+
+  if (openGroupCount !== 0 || stack.length !== 1) {
+    throw new Error(
+      `Invalid marked content: ${openGroupCount} group(s) were opened but not closed.`
+    );
+  }
+
+  return root;
+}
+
+function flattenTextLikeNodes(nodes: MarkedNode[]): FlowPart[] {
+  const parts: FlowPart[] = [];
+
+  for (const node of nodes) {
+    if (node.kind === "text") {
+      parts.push({
+        type: "text",
+        item: node.item,
+      });
+      continue;
+    }
+
+    if (isListGroupNode(node)) {
+      parts.push({
+        type: "li",
+        group: node,
+      });
+      continue;
+    }
+
+    parts.push(...flattenTextLikeNodes(node.children));
+  }
+
+  return parts;
+}
+
+function createTextBlock(args: {
+  blocks: Block[];
+  text: string;
+  style: "h1" | "h2" | "h3" | "default";
+  align?: "left" | "center" | "right";
+}): string | null {
+  const content = normalizeText(args.text);
+  if (!content) return null;
+
+  const id = createBlockId();
+  args.blocks.push({
+    id,
+    type: "text",
+    text: content,
+    style: args.style,
+    align: args.align ?? "left",
+  });
+  return id;
+}
+
+function createSectionBlock(args: {
+  blocks: Block[];
+  childBlockIds: string[];
+}): string | null {
+  if (args.childBlockIds.length === 0) return null;
+  if (args.childBlockIds.length === 1) return args.childBlockIds[0] ?? null;
+
+  const id = createBlockId();
+  args.blocks.push({
+    id,
+    type: "section",
+    blocks: args.childBlockIds,
+  });
+  return id;
+}
+
+function createListBlock(args: {
+  blocks: Block[];
+  items: PendingListItem[];
+}): string | null {
+  const childBlockIds = args.items
+    .map((item) => item.blockId)
+    .filter((blockId): blockId is string => blockId != null);
+  if (childBlockIds.length === 0) return null;
+
+  const bulletValues = args.items
+    .map((item) => item.bulletValue)
+    .filter((value): value is string => value != null && value.length > 0);
+  const uniqueBulletValues = [...new Set(bulletValues)];
+  const bulletValue =
+    uniqueBulletValues.length === 1 ? (uniqueBulletValues[0] ?? "-") : "-";
+
+  const id = createBlockId();
+  args.blocks.push({
+    id,
+    type: "list",
+    blocks: childBlockIds,
+    bullet: {
+      type: "normal",
+      value: bulletValue,
+    },
+  });
+  return id;
+}
+
+function getTextItemBounds(item: PdfTextWithFont) {
+  const x = Math.round(item.transform[4]);
+  const width = Math.max(1, Math.round(item.width));
+  return {
+    left: x,
+    right: x + width,
+  };
+}
+
+function createTextOrColumnsBlock(args: {
+  blocks: Block[];
+  textItems: PdfTextWithFont[];
+  style: "h1" | "h2" | "h3" | "default";
+}): string | null {
+  const segments: PdfTextWithFont[][] = [];
+  let currentSegment: PdfTextWithFont[] = [];
+
+  for (const item of args.textItems) {
+    if (!item.str) continue;
+
+    if (item.str === " ") {
+      if (currentSegment.length > 0) {
+        segments.push(currentSegment);
+        currentSegment = [];
+      }
+      continue;
+    }
+
+    currentSegment.push(item);
+  }
+
+  if (currentSegment.length > 0) {
+    segments.push(currentSegment);
+  }
+
+  if (segments.length === 0) return null;
+
+  if (segments.length === 1) {
+    return createTextBlock({
+      blocks: args.blocks,
+      text: segments[0]!.map((item) => item.str).join(""),
+      style: args.style,
+    });
+  }
+
+  const columnEntries = segments
+    .map((segment, index) => {
+      const blockId = createTextBlock({
+        blocks: args.blocks,
+        text: segment.map((item) => item.str).join(""),
+        style: args.style,
+        align: index === segments.length - 1 ? "right" : "left",
+      });
+      if (!blockId) return null;
+
+      const bounds = segment.map(getTextItemBounds);
+      const left = Math.min(...bounds.map((bound) => bound.left));
+      const right = Math.max(...bounds.map((bound) => bound.right));
+      return {
+        blockId,
+        span: Math.max(1, right - left),
+      };
+    })
+    .filter(
+      (entry): entry is { blockId: string; span: number } => entry != null
     );
 
-    const previous = chunks[chunks.length - 1];
-    if (previous) {
-      const sameLineTolerance = Math.max(previous.height, height) * 0.5;
-      const sameLine = Math.abs(previous.y - y) <= sameLineTolerance;
-      const previousRight = previous.x + previous.width;
-      const horizontalGap = x - previousRight;
-      const shouldJoin =
-        previous.tag === activeTag && sameLine && horizontalGap >= -2;
-      if (shouldJoin) {
-        const separator =
-          horizontalGap <=
-          Math.max(1, Math.round(Math.min(previous.height, height) * 0.25))
-            ? ""
-            : TEXT_SPACER;
-        previous.content = `${previous.content}${separator}${content}`;
-        const mergedRight = Math.max(previousRight, x + width);
-        previous.width = mergedRight - previous.x;
-        previous.height = Math.max(previous.height, height);
-        previous.fontSize = Math.max(previous.fontSize, fontSize);
-        previous.y = Math.round((previous.y + y) / 2);
+  if (columnEntries.length === 0) return null;
+  if (columnEntries.length === 1) return columnEntries[0]!.blockId;
+
+  const id = createBlockId();
+  args.blocks.push({
+    id,
+    type: "columns",
+    blocks: columnEntries,
+  });
+  return id;
+}
+
+function emitFlowParts(args: {
+  blocks: Block[];
+  parts: FlowPart[];
+  style: "h1" | "h2" | "h3" | "default";
+}): string[] {
+  const emittedBlockIds: string[] = [];
+  const pendingListItems: PendingListItem[] = [];
+  let pendingTextItems: PdfTextWithFont[] = [];
+
+  const flushTextItems = () => {
+    const blockId = createTextOrColumnsBlock({
+      blocks: args.blocks,
+      textItems: pendingTextItems,
+      style: args.style,
+    });
+    if (blockId) {
+      emittedBlockIds.push(blockId);
+    }
+    pendingTextItems = [];
+  };
+
+  const flushListItems = () => {
+    const blockId = createListBlock({
+      blocks: args.blocks,
+      items: pendingListItems,
+    });
+    if (blockId) {
+      emittedBlockIds.push(blockId);
+    }
+    pendingListItems.length = 0;
+  };
+
+  for (const part of args.parts) {
+    if (part.type === "li") {
+      flushTextItems();
+      pendingListItems.push(emitListItem(part.group, args.blocks));
+      continue;
+    }
+
+    if (pendingListItems.length > 0) {
+      flushListItems();
+    }
+
+    pendingTextItems.push(part.item);
+  }
+
+  flushTextItems();
+  flushListItems();
+
+  return emittedBlockIds;
+}
+
+function emitTextLikeGroup(
+  group: MarkedGroupNode,
+  blocks: Block[]
+): string | null {
+  if (group.tag === null || group.tag === "LI") {
+    throw new Error("emitTextLikeGroup called with a non text-like group.");
+  }
+
+  const flowParts = flattenTextLikeNodes(group.children);
+  const childBlockIds = emitFlowParts({
+    blocks,
+    parts: flowParts,
+    style: mapMarkedTagToTextStyle(group.tag),
+  });
+
+  return createSectionBlock({
+    blocks,
+    childBlockIds,
+  });
+}
+
+function emitListItem(
+  group: MarkedGroupNode & { tag: "LI" },
+  blocks: Block[]
+): PendingListItem {
+  const flowParts = flattenTextLikeNodes(group.children);
+  const bodyParts: FlowPart[] = [];
+
+  let bulletValue: string | null = null;
+  let sawBullet = false;
+  let maybeIgnoreNextSpacer = false;
+
+  for (const part of flowParts) {
+    if (!sawBullet && part.type === "text") {
+      const normalized = normalizeText(part.item.str);
+      if (!normalized) {
+        continue;
+      }
+      bulletValue = normalized;
+      sawBullet = true;
+      maybeIgnoreNextSpacer = true;
+      continue;
+    }
+
+    if (maybeIgnoreNextSpacer && part.type === "text") {
+      maybeIgnoreNextSpacer = false;
+      if (part.item.str === " ") {
         continue;
       }
     }
 
-    chunks.push({
-      x,
-      y,
-      width,
-      height,
-      fontSize,
-      content,
-      tag: activeTag,
-    });
+    bodyParts.push(part);
   }
 
-  return chunks;
+  const childBlockIds = emitFlowParts({
+    blocks,
+    parts: bodyParts,
+    style: "default",
+  });
+
+  return {
+    blockId: createSectionBlock({
+      blocks,
+      childBlockIds,
+    }),
+    bulletValue,
+  };
+}
+
+function emitMarkedNodes(nodes: MarkedNode[], blocks: Block[]) {
+  const pendingListItems: PendingListItem[] = [];
+  let pendingTextItems: PdfTextWithFont[] = [];
+
+  const flushTextItems = () => {
+    const blockId = createTextOrColumnsBlock({
+      blocks,
+      textItems: pendingTextItems,
+      style: "default",
+    });
+    if (blockId) {
+      pendingTextItems = [];
+      return;
+    }
+    pendingTextItems = [];
+  };
+
+  const flushListItems = () => {
+    const blockId = createListBlock({
+      blocks,
+      items: pendingListItems,
+    });
+    pendingListItems.length = 0;
+    if (!blockId) return;
+  };
+
+  for (const node of nodes) {
+    if (node.kind === "text") {
+      if (pendingListItems.length > 0) {
+        flushListItems();
+      }
+      pendingTextItems.push(node.item);
+      continue;
+    }
+
+    if (isListGroupNode(node)) {
+      flushTextItems();
+      pendingListItems.push(emitListItem(node, blocks));
+      continue;
+    }
+
+    if (pendingListItems.length > 0) {
+      flushListItems();
+    }
+    flushTextItems();
+    if (!emitTextLikeGroup(node, blocks)) {
+      continue;
+    }
+  }
+
+  flushTextItems();
+  flushListItems();
 }
 
 function unmarkedToBlocks(
@@ -248,55 +622,12 @@ function markedToBlocks(
   input: Extract<CreateProjectFromPdfInput, { type: "marked" }>
 ): Block[] {
   const blocks: Block[] = [];
-  const pendingListItems: string[] = [];
-
-  const flushList = () => {
-    if (pendingListItems.length === 0) return;
-    blocks.push({
-      id: createBlockId(),
-      type: "list",
-      blocks: [...pendingListItems],
-      bullet: { type: "normal", value: "-" },
-    });
-    pendingListItems.length = 0;
-  };
 
   for (const page of input.pages) {
-    const pageHeight = page.view[3];
-    const chunks = groupMarkedItemsIntoChunks({
-      items: page.textItems,
-      pageHeight,
-    });
-
-    for (const chunk of chunks) {
-      const content = normalizeText(chunk.content);
-      if (!content) continue;
-
-      if (chunk.tag === "LI") {
-        const textId = createBlockId();
-        blocks.push({
-          id: textId,
-          type: "text",
-          text: content,
-          style: "default",
-          align: "left",
-        });
-        pendingListItems.push(textId);
-        continue;
-      }
-
-      flushList();
-      blocks.push({
-        id: createBlockId(),
-        type: "text",
-        text: content,
-        style: mapMarkedTagToTextStyle(chunk.tag),
-        align: "left",
-      });
-    }
+    const root = buildMarkedTree(page.textItems as PdfMarkedItem[]);
+    emitMarkedNodes(root.children, blocks);
   }
 
-  flushList();
   return blocks;
 }
 
@@ -308,4 +639,3 @@ export async function pdfToBlocks(
   }
   return unmarkedToBlocks(input);
 }
-
