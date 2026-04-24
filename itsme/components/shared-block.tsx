@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { useBlockDragContext } from "./block-dnd-context";
+
+const DRAG_INTENT_THRESHOLD_PX = 6;
 
 export function HoverRegion({
   x,
@@ -44,6 +46,7 @@ export function HoverRegion({
   const [hovered, setHovered] = useState(false);
   /** Set to true on mousedown; cleared on mouseup. Prevents click firing after drag. */
   const hasDraggedRef = useRef(false);
+  const pendingDragCleanupRef = useRef<(() => void) | null>(null);
 
   const dragCtx = useBlockDragContext();
   const isDraggingThisBlock =
@@ -52,6 +55,13 @@ export function HoverRegion({
 
   const { registerBlock, unregisterBlock, startDrag, scale: ctxScale } =
     dragCtx ?? {};
+
+  useEffect(() => {
+    return () => {
+      pendingDragCleanupRef.current?.();
+      pendingDragCleanupRef.current = null;
+    };
+  }, []);
 
   // Register / update block bounds whenever the block's position or size changes.
   useLayoutEffect(() => {
@@ -139,41 +149,66 @@ export function HoverRegion({
       if (!pos) return;
 
       hasDraggedRef.current = false;
-      const mouseDocX = pos.x / ctxScale;
-      const mouseDocY = pos.y / ctxScale;
       const cr = node.getClientRect();
 
-      // Capture a snapshot of the block's content (no hover rings) for the ghost.
-      let ghostImageSrc: string | null = null;
-      try {
-        const contentNode = contentGroupRef.current;
-        if (contentNode) {
-          ghostImageSrc = contentNode.toDataURL({
-            pixelRatio: typeof window !== "undefined"
-              ? window.devicePixelRatio || 1
-              : 1,
-          });
+      pendingDragCleanupRef.current?.();
+      const startClientX = event.evt.clientX;
+      const startClientY = event.evt.clientY;
+      const blockBounds = {
+        x: cr.x / ctxScale,
+        y: cr.y / ctxScale,
+        width: cr.width / ctxScale,
+        height: cr.height / ctxScale,
+      };
+
+      const cleanup = () => {
+        window.removeEventListener("mousemove", handleWindowMouseMove);
+        window.removeEventListener("mouseup", handleWindowMouseUp);
+        pendingDragCleanupRef.current = null;
+      };
+
+      const handleWindowMouseMove = (moveEvent: MouseEvent) => {
+        const dx = moveEvent.clientX - startClientX;
+        const dy = moveEvent.clientY - startClientY;
+        if (Math.hypot(dx, dy) < DRAG_INTENT_THRESHOLD_PX) {
+          return;
         }
-      } catch {
-        // Non-critical — ghost falls back to a plain rect.
-      }
 
-      startDrag(
-        blockId,
-        {
-          x: cr.x / ctxScale,
-          y: cr.y / ctxScale,
-          width: cr.width / ctxScale,
-          height: cr.height / ctxScale,
-        },
-        mouseDocX,
-        mouseDocY,
-        ghostImageSrc
-      );
+        cleanup();
 
-      stage.container().style.cursor = "grabbing";
-      // Mark as dragged after a tick so the click handler can check.
-      hasDraggedRef.current = true;
+        const container = stage.container();
+        const rect = container.getBoundingClientRect();
+        const mouseDocX = (moveEvent.clientX - rect.left) / ctxScale;
+        const mouseDocY = (moveEvent.clientY - rect.top) / ctxScale;
+
+        // Capture a snapshot of the block's content (no hover rings) for the ghost.
+        let ghostImageSrc: string | null = null;
+        try {
+          const contentNode = contentGroupRef.current;
+          if (contentNode) {
+            ghostImageSrc = contentNode.toDataURL({
+              pixelRatio:
+                typeof window !== "undefined"
+                  ? window.devicePixelRatio || 1
+                  : 1,
+            });
+          }
+        } catch {
+          // Non-critical — ghost falls back to a plain rect.
+        }
+
+        startDrag(blockId, blockBounds, mouseDocX, mouseDocY, ghostImageSrc);
+        stage.container().style.cursor = "grabbing";
+        hasDraggedRef.current = true;
+      };
+
+      const handleWindowMouseUp = () => {
+        cleanup();
+      };
+
+      window.addEventListener("mousemove", handleWindowMouseMove);
+      window.addEventListener("mouseup", handleWindowMouseUp);
+      pendingDragCleanupRef.current = cleanup;
       event.evt.preventDefault();
     },
     [blockId, startDrag, ctxScale]
