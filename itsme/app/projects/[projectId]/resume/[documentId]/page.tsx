@@ -11,12 +11,11 @@ import { eq } from "drizzle-orm";
 import { documents, projects } from "@/db/schema";
 import db from "@/db/db";
 import { SAMPLE_DOCUMENT } from "@/blocks/renderer";
-import { blockResolverPipeline } from "@/blocks/retriever-pipeline";
 import {
-  getRetrieverContextData,
   getDocumentMainLayout,
-} from "@/blocks/retriever-utils";
-import { benchmarkAsync } from "@/lib/utils";
+  getRetrieverContextData,
+  mapBlocks,
+} from "@/blocks/retriever";
 
 export async function getProjectById(projectId: string) {
   return db
@@ -56,18 +55,11 @@ export default async function ProjectResumePage({
   }
 
   // Benchmark
-  const pipelineBlocks = await benchmarkAsync(
-    "blockResolverPipeline",
-    async () =>
-      blockResolverPipeline({
-        data: await benchmarkAsync(
-          "getDocumentBlockMappings",
-          async () => await getRetrieverContextData(documentId)
-        ),
-        // mainLayout: await getDocumentMainLayout(documentId),
-      })
-  );
-  const mainLayout = await getDocumentMainLayout(documentId);
+  const [ctxData, mainLayout] = await Promise.all([
+    getRetrieverContextData(documentId),
+    getDocumentMainLayout(documentId),
+  ]);
+  const pipelineBlocks = await mapBlocks({ data: ctxData });
 
   const renderedDocument = {
     ...SAMPLE_DOCUMENT,

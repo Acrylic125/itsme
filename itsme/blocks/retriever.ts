@@ -1,4 +1,4 @@
-import db from "@/db/db";
+import { Block } from "./blocks";
 import {
   blocks,
   columnsBlockChildren,
@@ -10,8 +10,13 @@ import {
   sectionBlocks,
   textBlocks,
 } from "@/db/schema";
+import { TextBlockSchema } from "./text/schema";
+import { SectionBlockSchema } from "./section/schema";
+import { ColumnsBlockSchema } from "./columns/schema";
+import { ListBlockSchema } from "./list/schema";
+import z from "zod";
+import db from "@/db/db";
 import { asc, eq } from "drizzle-orm";
-import { Block } from "./blocks";
 
 export async function getDocumentMainLayout(documentId: string) {
   const mainLayoutRows = await db
@@ -136,45 +141,69 @@ export async function getRetrieverContextData(documentId: string) {
       return acc;
     }, new Map<string, typeof _columnsBlockChildren>()),
   };
-  // const blockRows = await db
-  //   .select({
-  //     id: blocks.id,
-  //     type: blocks.type,
-  //     orderIndex: blocks.orderIndex,
-  //   })
-  //   .from(blocks)
-  //   .where(eq(blocks.documentId, documentId))
-  //   .orderBy(asc(blocks.orderIndex));
-  // return new Map(blockRows.map((row) => [row.id, row]));
 }
 
-// export type DocumentBlockRow =
-//   Awaited<ReturnType<typeof getDocumentBlockMappings>> extends Map<
-//     string,
-//     infer V
-//   >
-//     ? V
-//     : never;
+export async function mapBlocks(ctx: {
+  // mainLayout: Awaited<ReturnType<typeof getDocumentMainLayout>>;
+  data: Awaited<ReturnType<typeof getRetrieverContextData>>;
+}): Promise<Block[]> {
+  const blocks: Block[] = [];
+  ctx.data.textBlocks.forEach((block) => {
+    const parsed: z.infer<typeof TextBlockSchema> = {
+      id: block.blockId,
+      type: "text",
+      text: block.text,
+      align: block.align,
+      style: block.style,
+      ref: block.ref ?? undefined,
+    };
+    blocks.push(parsed);
+  });
+  ctx.data.sectionBlocks.forEach((block) => {
+    const parsed: z.infer<typeof SectionBlockSchema> = {
+      id: block.blockId,
+      type: "section",
+      blocks: ctx.data.sectionBlockChildren.get(block.blockId) ?? [],
+      ref: block.ref ?? undefined,
+    };
+    blocks.push(parsed);
+  });
+  ctx.data.columnsBlocks.forEach((block) => {
+    const parsed: z.infer<typeof ColumnsBlockSchema> = {
+      id: block.blockId,
+      type: "columns",
+      blocks: (ctx.data.columnsBlockChildren.get(block.blockId) ?? []).map(
+        (c) => ({
+          span: c.span,
+          blockId: c.childBlockId,
+        })
+      ),
+      ref: block.ref ?? undefined,
+    };
+    blocks.push(parsed);
+  });
+  ctx.data.listBlocks.forEach((block) => {
+    const bullet =
+      block.bulletType === "normal"
+        ? {
+            type: "normal" as const,
+            value: block.bulletValue ?? "-",
+          }
+        : ({
+            type: block.bulletType,
+          } as const);
 
-export type L1_DocumentBlockRetriever<T extends Block["type"]> = {
-  type: T;
-  get: (ctx: {
-    blockId: string;
-    data: Awaited<ReturnType<typeof getRetrieverContextData>>;
-  }) => Promise<
-    | {
-        ok: true;
-        value: Extract<Block, { type: T }>;
-        orderIndex: number;
-      }
-    | {
-        ok: false;
-        error: string;
-      }
-  >;
-};
+    const parsed: z.infer<typeof ListBlockSchema> = {
+      id: block.blockId,
+      type: "list",
+      blocks: ctx.data.listBlockChildren.get(block.blockId) ?? [],
+      bullet,
+      leftSpace: block.leftSpace ?? undefined,
+      rightSpace: block.rightSpace ?? undefined,
+      ref: block.ref ?? undefined,
+    };
 
-export type L1_DocumentBlockInserter<T extends Block["type"]> = {
-  type: T;
-  insert: (ctx: { block: Extract<Block, { type: T }> }) => Promise<void>;
-};
+    blocks.push(parsed);
+  });
+  return blocks;
+}
