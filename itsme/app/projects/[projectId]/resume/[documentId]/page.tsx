@@ -8,14 +8,14 @@ import {
 } from "@/components/project-documents-sidebar";
 import { Button } from "@/components/ui/button";
 import { eq } from "drizzle-orm";
-import { documents, projects } from "@/db/schema";
+import { projects } from "@/db/schema";
 import db from "@/db/db";
-import { SAMPLE_DOCUMENT } from "@/blocks/renderer";
 import {
-  getDocumentMainLayout,
   getRetrieverContextData,
   mapBlocks,
+  mapStyles,
 } from "@/blocks/retriever";
+import { PAGE_SIZE } from "@/blocks/blocks";
 
 export async function getProjectById(projectId: string) {
   return db
@@ -41,30 +41,17 @@ export default async function ProjectResumePage({
     notFound();
   }
 
-  const _documents = await db
-    .select({
-      id: documents.id,
-      name: documents.name,
-    })
-    .from(documents)
-    .where(eq(documents.id, documentId))
-    .limit(1);
-  const document = _documents[0];
-  if (!document) {
-    notFound();
-  }
-
-  // Benchmark
-  const [ctxData, mainLayout] = await Promise.all([
-    getRetrieverContextData(documentId),
-    getDocumentMainLayout(documentId),
-  ]);
+  const ctxData = await getRetrieverContextData(documentId);
   const pipelineBlocks = await mapBlocks({ data: ctxData });
+  const document = ctxData.document;
+  const mainLayout = ctxData.mainLayout;
+  const styleSheet = mapStyles({ data: ctxData });
 
   const renderedDocument = {
-    ...SAMPLE_DOCUMENT,
-    name: document.name ?? "Untitled Document",
+    name: document.name,
     blocks: pipelineBlocks,
+    styleSheet,
+    pageSize: PAGE_SIZE,
     layout: mainLayout
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .map((layoutItem) => layoutItem.blockId),

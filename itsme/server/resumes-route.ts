@@ -1,4 +1,4 @@
-import type { Block } from "@/blocks/blocks";
+import { DEFAULT_STYLE_SHEET, type Block } from "@/blocks/blocks";
 import db from "@/db/db";
 import {
   blocks,
@@ -108,26 +108,56 @@ export const resumesRouter = router({
           }),
           db.insert(documentPageStyles).values({
             documentId,
-            gap: 0.3,
-            marginTop: 0.3,
-            marginBottom: 0.3,
-            marginLeft: 0.3,
-            marginRight: 0.3,
+            gap: DEFAULT_STYLE_SHEET.page.gap,
+            marginTop: DEFAULT_STYLE_SHEET.page.margins.top,
+            marginBottom: DEFAULT_STYLE_SHEET.page.margins.bottom,
+            marginLeft: DEFAULT_STYLE_SHEET.page.margins.left,
+            marginRight: DEFAULT_STYLE_SHEET.page.margins.right,
           }),
           db.insert(documentTextStyles).values([
             {
               documentId,
               style: "default",
-              fontSize: 11,
+              fontSize: DEFAULT_STYLE_SHEET.text.default.fontSize,
               fontWeight: "normal",
-              fontFamily: "Times New Roman",
-              lineHeight: 1.2,
+              fontFamily: DEFAULT_STYLE_SHEET.text.default.fontFamily,
+              lineHeight: DEFAULT_STYLE_SHEET.text.default.lineHeight,
+            },
+          ]),
+          db.insert(documentTextStyles).values([
+            {
+              documentId,
+              style: "h1",
+              fontSize: DEFAULT_STYLE_SHEET.text.h1.fontSize,
+              fontWeight: "normal",
+              fontFamily: DEFAULT_STYLE_SHEET.text.h1.fontFamily,
+              lineHeight: DEFAULT_STYLE_SHEET.text.h1.lineHeight,
+            },
+          ]),
+          db.insert(documentTextStyles).values([
+            {
+              documentId,
+              style: "h2",
+              fontSize: DEFAULT_STYLE_SHEET.text.h2.fontSize,
+              fontWeight: "bold",
+              fontFamily: DEFAULT_STYLE_SHEET.text.h2.fontFamily,
+              lineHeight: DEFAULT_STYLE_SHEET.text.h2.lineHeight,
+            },
+          ]),
+          db.insert(documentTextStyles).values([
+            {
+              documentId,
+              style: "h3",
+              fontSize: DEFAULT_STYLE_SHEET.text.h3.fontSize,
+              fontWeight: "bold",
+              fontFamily: DEFAULT_STYLE_SHEET.text.h3.fontFamily,
+              lineHeight: DEFAULT_STYLE_SHEET.text.h3.lineHeight,
             },
           ]),
           db.insert(documentListStyles).values({
             documentId,
-            leftSpace: 0.35,
-            rightSpace: 0.12,
+            leftSpace: DEFAULT_STYLE_SHEET.list.leftSpace,
+            rightSpace: DEFAULT_STYLE_SHEET.list.rightSpace,
           }),
         ];
 

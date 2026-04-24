@@ -1,54 +1,15 @@
 import z from "zod";
-import { BlockSchema, StyleSheetSchema } from "./blocks";
+import {
+  BlockSchema,
+  DEFAULT_STYLE_SHEET,
+  PAGE_SIZE,
+  StyleSheetSchema,
+} from "./blocks";
 import { BlockRendererContext } from "./renderer-types";
 import { SectionBlockRenderer } from "./section/renderer";
 import { ColumnsBlockRenderer } from "./columns/renderer";
 import { TextBlockRenderer } from "./text/renderer";
 import { ListBlockRenderer } from "./list/renderer";
-
-const DEFAULT_STYLE_SHEET: z.infer<typeof StyleSheetSchema> = {
-  page: {
-    gap: 0.3,
-    margins: {
-      top: 0.3,
-      bottom: 0.3,
-      left: 0.3,
-      right: 0.3,
-    },
-  },
-  text: {
-    default: {
-      fontSize: 11,
-      fontWeight: "normal",
-      fontFamily: "Times New Roman",
-      lineHeight: 1.2,
-    },
-    h1: {
-      fontSize: 16,
-      fontWeight: "normal",
-      fontFamily: "Times New Roman",
-      lineHeight: 1.2,
-    },
-    h2: {
-      fontSize: 14,
-      fontWeight: "bold",
-      fontFamily: "Times New Roman",
-      lineHeight: 1.2,
-    },
-    h3: {
-      fontSize: 12,
-      fontWeight: "bold",
-      fontFamily: "Times New Roman",
-      lineHeight: 1.2,
-    },
-  },
-  list: {
-    /** Bullet column width (inches). */
-    leftSpace: 0.35,
-    /** Gap between bullet column and list body (inches). */
-    rightSpace: 0.12,
-  },
-};
 
 export const DocumentSchema = z.object({
   name: z.string().default("Untitled Document"),
@@ -63,10 +24,7 @@ export const DocumentSchema = z.object({
 
 export const SAMPLE_DOCUMENT: z.infer<typeof DocumentSchema> = {
   name: "Sample Document",
-  pageSize: {
-    width: 8.5,
-    height: 11,
-  },
+  pageSize: PAGE_SIZE,
   styleSheet: DEFAULT_STYLE_SHEET,
   blocks: [
     {
