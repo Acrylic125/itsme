@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Stage, Group } from "react-konva";
-import { DocumentRenderProvider } from "./document-render-context";
 import { DomPopupProvider } from "./dom-popup";
 import {
   DocumentSchema,
@@ -11,12 +10,16 @@ import {
   type RenderedLayoutBlock,
 } from "@/blocks/renderer";
 import { z } from "zod";
+import {
+  DocumentStoresProvider,
+  useDocumentStore,
+} from "@/blocks/document-context";
 
 export function PageCanvas({
   document,
   dpi = 300,
 }: {
-  document: z.infer<typeof DocumentSchema>;
+  document: z.infer<typeof DocumentSchema> & { id: string };
   dpi?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -57,53 +60,63 @@ export function PageCanvas({
   }, []);
 
   const { containerWidth, dpr } = measurements;
-  const resolvedDocument = useMemo(
-    () => DocumentSchema.parse(document),
-    [document]
+
+  return (
+    <div ref={containerRef} className="w-full bg-black">
+      {containerWidth !== null && (
+        <DocumentStoresProvider document={document}>
+          <PageCanvasKonva
+            containerWidth={containerWidth}
+            dpi={dpi}
+            dpr={dpr}
+          />
+        </DocumentStoresProvider>
+      )}
+    </div>
   );
+}
+
+function PageCanvasKonva({
+  containerWidth,
+  dpi,
+  dpr,
+}: {
+  containerWidth: number;
+  dpi: number;
+  dpr: number;
+}) {
+  const document = useDocumentStore((s) => s.document);
   const canMeasureText =
     typeof window !== "undefined" &&
     (typeof OffscreenCanvas !== "undefined" ||
       (!!window.document &&
         !!window.document.createElement("canvas").getContext("2d")));
   const blocks = useMemo(() => {
-    const r = canMeasureText
-      ? renderDocumentLayout({ document: resolvedDocument, dpi })
-      : [];
-    return r;
-  }, [resolvedDocument, dpi, canMeasureText]);
+    return canMeasureText ? renderDocumentLayout({ document, dpi }) : [];
+  }, [document, dpi, canMeasureText]);
 
   const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(
-    () => getPageLayoutMetrics(resolvedDocument, dpi),
-    [resolvedDocument, dpi]
+    () => getPageLayoutMetrics(document, dpi),
+    [document, dpi]
   );
   const pageWidth = pageWidthPx;
   const pageHeight = pageHeightPx;
 
-  const scale =
-    containerWidth != null && containerWidth > 0
-      ? containerWidth / pageWidth
-      : 1;
+  const scale = containerWidth > 0 ? containerWidth / pageWidth : 1;
 
   return (
-    <div ref={containerRef} className="w-full bg-black">
-      {containerWidth !== null && (
-        <DocumentRenderProvider document={resolvedDocument}>
-          <DomPopupProvider>
-            <DocumentStage
-              blocks={blocks}
-              pageWidth={pageWidth}
-              pageHeight={pageHeight}
-              pageStridePx={pageStridePx}
-              gapPx={gapPx}
-              scale={scale}
-              dpi={dpi}
-              dpr={dpr}
-            />
-          </DomPopupProvider>
-        </DocumentRenderProvider>
-      )}
-    </div>
+    <DomPopupProvider>
+      <DocumentStage
+        blocks={blocks}
+        pageWidth={pageWidth}
+        pageHeight={pageHeight}
+        pageStridePx={pageStridePx}
+        gapPx={gapPx}
+        scale={scale}
+        dpi={dpi}
+        dpr={dpr}
+      />
+    </DomPopupProvider>
   );
 }
 

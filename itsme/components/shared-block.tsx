@@ -13,14 +13,18 @@ export function HoverRegion({
   y,
   width,
   height,
+  dpi = 300,
   children,
   onContextMenu,
   onClick,
+  inFocus = false,
 }: {
   x: number;
   y: number;
   width: number;
   height: number;
+  dpi?: number;
+  inFocus?: boolean;
 } & {
   children: React.ReactNode;
   onContextMenu?: (args: {
@@ -84,6 +88,14 @@ export function HoverRegion({
     [onClick]
   );
 
+  const innerStroke = 0.01 * dpi;
+  const outerStroke = 0.01 * dpi;
+  /** Space between the outer edge of the inner stroke and the inner edge of the outer stroke. */
+  const ringGap = 0.005 * dpi;
+  const padding = innerStroke / 2 + ringGap + outerStroke / 2;
+  const innerRadius = 0.01 * dpi;
+  const outerRadius = innerRadius + padding;
+
   return (
     <Group
       ref={(n) => {
@@ -98,14 +110,30 @@ export function HoverRegion({
       onContextMenu={handleContextMenu}
       onClick={handleClick}
     >
-      {hovered && (
+      {(hovered || inFocus) && (
         <Rect
           x={0}
           y={0}
           width={width}
           height={height}
-          fill={HOVER_FILL}
-          cornerRadius={2}
+          fillEnabled={false}
+          stroke="#ffb86a"
+          strokeWidth={innerStroke}
+          cornerRadius={innerRadius}
+          perfectDrawEnabled={false}
+          listening={false}
+        />
+      )}
+      {hovered && (
+        <Rect
+          x={-padding}
+          y={-padding}
+          width={width + 2 * padding}
+          height={height + 2 * padding}
+          fillEnabled={false}
+          stroke="#ffb86a7f"
+          strokeWidth={outerStroke}
+          cornerRadius={outerRadius}
           perfectDrawEnabled={false}
           listening={false}
         />

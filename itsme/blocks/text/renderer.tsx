@@ -7,6 +7,77 @@ import { Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
 import { BlockRenderer } from "../renderer-types";
 import { HoverRegion } from "@/components/shared-block";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useDomPopup } from "@/components/dom-popup";
+import {
+  useDocumentStores,
+  useDocumentStore,
+} from "@/blocks/document-context";
+import { useCallback, useId, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
+
+export function EditTextModal({
+  closePopup,
+  block,
+}: {
+  closePopup: () => void;
+  block: z.infer<typeof TextBlockSchema>;
+}) {
+  const { documentId, patchDocument } = useDocumentStore(
+    useShallow((s) => ({
+      documentId: s.documentId,
+      patchDocument: s.update,
+    }))
+  );
+  const { updateQueueStore } = useDocumentStores();
+  const [text, setText] = useState(block.text);
+
+  const handleSave = useCallback(() => {
+    patchDocument(updateQueueStore, {
+      type: "text",
+      documentId,
+      blockId: block.id,
+      text,
+      align: block.align,
+      style: block.style,
+    });
+    closePopup();
+  }, [
+    patchDocument,
+    updateQueueStore,
+    documentId,
+    block.id,
+    block.align,
+    block.style,
+    text,
+    closePopup,
+  ]);
+
+  return (
+    <div className="flex flex-col gap-2 border border-border bg-card p-4 rounded-xl shadow-xl">
+      <Textarea
+        className="w-full"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={6}
+      />
+      <div className="flex gap-2">
+        <Button className="w-fit" type="button" onClick={handleSave}>
+          Save
+        </Button>
+        <Button
+          className="w-fit"
+          type="button"
+          variant="outline"
+          onClick={closePopup}
+        >
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function TextBlockComponent({
   block,
@@ -17,16 +88,42 @@ function TextBlockComponent({
 }: {
   block: z.infer<typeof TextBlockSchema>;
   dimensions: { width: number; height: number };
-  pos: { x: number; y: number };
+  pos: {
+    relativeTo: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+  };
   style: z.infer<typeof TextStyleSchema>;
   fontSizePx: number;
 }) {
+  const popup = useDomPopup();
+  const popupKey = useId();
+  const handleClick = useCallback(
+    (args: {
+      anchor: { left: number; top: number; width: number; height: number };
+    }) => {
+      popup.openPopup({
+        anchor: args.anchor,
+        popupKey,
+        content: ({ closePopup }) => (
+          <EditTextModal key={popupKey} block={block} closePopup={closePopup} />
+        ),
+      });
+    },
+    [popup, block, popupKey]
+  );
+
   return (
     <HoverRegion
-      x={pos.x}
-      y={pos.y}
+      x={pos.relativeTo.x}
+      y={pos.relativeTo.y}
       width={dimensions.width}
       height={dimensions.height}
+      onClick={handleClick}
+      inFocus={popup.isOpen && popup.popupKey === popupKey}
     >
       <Text
         x={0}
@@ -68,6 +165,8 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     const posRelativeTo = {
       x: pos.canvas.from.x - relativeTo.x,
       y: pos.canvas.from.y - relativeTo.y,
+      width: relativeTo.width,
+      height: dimensions.height,
     };
 
     return {
@@ -76,7 +175,9 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
         <TextBlockComponent
           block={block}
           dimensions={dimensions}
-          pos={posRelativeTo}
+          pos={{
+            relativeTo: posRelativeTo,
+          }}
           style={style}
           fontSizePx={fontSizePx}
         />

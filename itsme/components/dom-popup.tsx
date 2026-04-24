@@ -18,14 +18,23 @@ type AnchorRect = {
 
 type PopupState = {
   anchor: AnchorRect;
+  popupKey: string;
   content: ({ closePopup }: { closePopup: () => void }) => ReactNode;
 };
 
 type DomPopupApi = {
   openPopup: (args: PopupState) => void;
   closePopup: () => void;
-  isOpen: boolean;
-};
+} & (
+  | {
+      isOpen: true;
+      popupKey: string;
+    }
+  | {
+      isOpen: false;
+      popupKey: null;
+    }
+);
 
 const DomPopupContext = createContext<DomPopupApi | null>(null);
 
@@ -81,7 +90,9 @@ export function DomPopupProvider({ children }: { children: ReactNode }) {
       value={{
         openPopup,
         closePopup,
-        isOpen: popups.isOpen,
+        ...(popups.isOpen
+          ? { isOpen: true, popupKey: popups.state.popupKey }
+          : { isOpen: false, popupKey: null }),
       }}
     >
       <div className="relative w-full h-full">

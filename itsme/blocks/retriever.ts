@@ -14,29 +14,13 @@ import {
   sectionBlocks,
   textBlocks,
 } from "@/db/schema";
-import {
-  TextBlockSchema,
-  TextStyleSchema,
-  TextStyleSheetSchema,
-} from "./text/schema";
+import { TextBlockSchema, TextStyleSheetSchema } from "./text/schema";
 import { SectionBlockSchema } from "./section/schema";
 import { ColumnsBlockSchema } from "./columns/schema";
 import { ListBlockSchema } from "./list/schema";
 import z from "zod";
 import db from "@/db/db";
 import { asc, eq } from "drizzle-orm";
-
-// export async function getDocumentMainLayout(documentId: string) {
-//   const mainLayoutRows = await db
-//     .select({
-//       blockId: documentMainLayout.blockId,
-//       orderIndex: documentMainLayout.orderIndex,
-//     })
-//     .from(documentMainLayout)
-//     .where(eq(documentMainLayout.documentId, documentId))
-//     .orderBy(asc(documentMainLayout.orderIndex));
-//   return mainLayoutRows;
-// }
 
 export async function getRetrieverContextData(documentId: string) {
   const [

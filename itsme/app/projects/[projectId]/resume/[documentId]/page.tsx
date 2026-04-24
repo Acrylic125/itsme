@@ -48,6 +48,7 @@ export default async function ProjectResumePage({
   const styleSheet = mapStyles({ data: ctxData });
 
   const renderedDocument = {
+    id: documentId,
     name: document.name,
     blocks: pipelineBlocks,
     styleSheet,

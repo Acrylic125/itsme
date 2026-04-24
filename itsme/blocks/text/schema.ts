@@ -27,3 +27,17 @@ export const TextBlockSchema = z.object({
   ]),
   ref: z.string().optional(),
 });
+
+export const TextBlockUpdateSchema = z.object({
+  type: z.literal("text"),
+  documentId: z.string(),
+  blockId: z.string(),
+  text: z.string(),
+  align: z.enum(["left", "center", "right"]),
+  style: z.union([
+    z.literal("default"),
+    z.literal("h1"),
+    z.literal("h2"),
+    z.literal("h3"),
+  ]),
+});
