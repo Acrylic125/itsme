@@ -60,6 +60,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
     const childBlocks = block.blocks
       .map((id) => ctx.allBlocks.find((b) => b.id === id))
       .filter((b): b is z.infer<typeof BlockSchema> => b != null);
+    console.log(block.blocks, childBlocks, ctx.allBlocks, relativeTo);
 
     const listStartPosition = {
       ...ctx.getNextPosition(),

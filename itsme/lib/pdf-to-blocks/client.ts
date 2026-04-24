@@ -1,4 +1,3 @@
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import {
   CreateProjectFromPdfInput,
   CreateProjectFromPdfInputSchema,
@@ -27,11 +26,22 @@ const PageViewSchema = z.tuple([
 const MarkedTagSchema = PDFEndMarkedContentSchema.shape.tag;
 
 let workerInitialized = false;
+let pdfJsModulePromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
+  null;
 
-export function ensurePdfWorkerLoaded() {
+async function getPdfJsModule() {
+  if (typeof window === "undefined") {
+    throw new Error("PDF parsing is only available in the browser.");
+  }
+  pdfJsModulePromise ??= import("pdfjs-dist/legacy/build/pdf.mjs");
+  return pdfJsModulePromise;
+}
+
+export async function ensurePdfWorkerLoaded() {
   if (workerInitialized) return;
+  const { GlobalWorkerOptions } = await getPdfJsModule();
   GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
+    "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
     import.meta.url
   ).toString();
   workerInitialized = true;
@@ -54,7 +64,7 @@ function normalizeMarkedTag(rawTag: unknown): MarkedTag {
 }
 
 export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
-  ensurePdfWorkerLoaded();
+  await ensurePdfWorkerLoaded();
 
   if (file.type !== "application/pdf") {
     throw new Error("Only PDF files are supported.");
@@ -69,9 +79,10 @@ export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
     throw new Error("Invalid PDF file.");
   }
 
+  const { getDocument } = await getPdfJsModule();
   const loadingTask = getDocument({
     data: bytes,
-  } as unknown as Parameters<typeof getDocument>[0]);
+  } as never);
   const pdfDocument = await loadingTask.promise;
   const markInfo = await pdfDocument.getMarkInfo();
   const isMarked = Boolean(markInfo?.Marked);

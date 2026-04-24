@@ -1,16 +1,13 @@
 import db from "@/db/db";
 import { textBlocks } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  L1_DocumentBlockInserter,
-  L1_DocumentBlockRetriever,
-} from "../retriever-utils";
+import { L1_DocumentBlockRetriever } from "../retriever-utils";
 import { TextBlockSchema } from "./schema";
 
 export const TextBlockRetriever: L1_DocumentBlockRetriever<"text"> = {
   type: "text",
   async get({ block }) {
-    const row = await db
+    const rows = await db
       .select({
         text: textBlocks.text,
         align: textBlocks.align,
@@ -19,7 +16,8 @@ export const TextBlockRetriever: L1_DocumentBlockRetriever<"text"> = {
       })
       .from(textBlocks)
       .where(eq(textBlocks.blockId, block.id))
-      .get();
+      .limit(1);
+    const row = rows[0];
     if (!row) {
       return { ok: false, error: `text block data missing: ${block.id}` };
     }
@@ -44,18 +42,5 @@ export const TextBlockRetriever: L1_DocumentBlockRetriever<"text"> = {
       value: parsed.data,
       orderIndex: block.orderIndex,
     };
-  },
-};
-
-export const TextBlockInserter: L1_DocumentBlockInserter<"text"> = {
-  type: "text",
-  async insert({ block }) {
-    await db.insert(textBlocks).values({
-      blockId: block.id,
-      text: block.text,
-      align: block.align,
-      style: block.style,
-      ref: block.ref ?? null,
-    });
   },
 };

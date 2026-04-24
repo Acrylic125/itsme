@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { Group } from "react-konva";
 import { BlockRenderer } from "../renderer-types";
 
@@ -79,7 +80,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
       const componentTakesY = afterAddingPosition.y - cursor.y;
       maxOffsetY = Math.max(maxOffsetY, componentTakesY);
       cursor.x += spanWidth;
-      return result.component();
+      return <Fragment key={b.block.id}>{result.component()}</Fragment>;
     });
     ctx.setNextPosition({
       x: groupStartPosition.x,

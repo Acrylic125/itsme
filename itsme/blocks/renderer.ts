@@ -51,7 +51,7 @@ const DEFAULT_STYLE_SHEET: z.infer<typeof StyleSheetSchema> = {
 };
 
 export const DocumentSchema = z.object({
-  name: z.string(),
+  name: z.string().default("Untitled Document"),
   pageSize: z.object({
     width: z.number(),
     height: z.number(),
@@ -585,11 +585,19 @@ export function renderDocumentLayout(args: {
   const byId = new Map(document.blocks.map((block) => [block.id, block]));
   const rendered: RenderedLayoutBlock[] = [];
 
+  console.log(document, document.blocks);
+
   for (const blockId of document.layout) {
     const block = byId.get(blockId);
-    if (!block) continue;
+    if (!block) {
+      console.error(`block not found: ${blockId}`);
+      continue;
+    }
     const renderer = ctx.renderers[block.type];
-    if (!renderer) continue;
+    if (!renderer) {
+      console.error(`renderer not found: ${block.type}`);
+      continue;
+    }
     const start = ctx.getNextPosition();
     const result = (
       renderer.render as (

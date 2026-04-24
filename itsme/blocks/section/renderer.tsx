@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { z } from "zod";
 import { Group } from "react-konva";
 import { BlockRenderer } from "../renderer-types";
@@ -45,7 +46,7 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
       }
       // I hate this.
       const result = renderer.render(b as never, sectionStartPosition, ctx);
-      return result.component();
+      return <Fragment key={b.id}>{result.component()}</Fragment>;
     });
     const sectionEndPosition = ctx.getNextPosition();
 

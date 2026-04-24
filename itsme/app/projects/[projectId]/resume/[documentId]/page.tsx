@@ -11,6 +11,11 @@ import { eq } from "drizzle-orm";
 import { documents, projects } from "@/db/schema";
 import db from "@/db/db";
 import { SAMPLE_DOCUMENT } from "@/blocks/renderer";
+import { blockResolverPipeline } from "@/blocks/retriever-pipeline";
+import {
+  getDocumentBlockMappings,
+  getDocumentMainLayout,
+} from "@/blocks/retriever-utils";
 
 export async function getProjectById(projectId: string) {
   return db
@@ -36,25 +41,34 @@ export default async function ProjectResumePage({
     notFound();
   }
 
-  const document = await db
+  const _documents = await db
     .select({
       id: documents.id,
       name: documents.name,
     })
     .from(documents)
     .where(eq(documents.id, documentId))
-    .get();
+    .limit(1);
+  const document = _documents[0];
   if (!document) {
     notFound();
   }
 
-  // Temporarily bypass retriever pipeline while refactoring block retrieval.
+  const pipelineBlocks = await blockResolverPipeline({
+    blockMap: await getDocumentBlockMappings(documentId),
+    // mainLayout: await getDocumentMainLayout(documentId),
+  });
+  const mainLayout = await getDocumentMainLayout(documentId);
+
   const renderedDocument = {
     ...SAMPLE_DOCUMENT,
-    name: document.name,
+    name: document.name ?? "Untitled Document",
+    blocks: pipelineBlocks,
+    layout: mainLayout
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((layoutItem) => layoutItem.blockId),
   };
 
-  // console.log("blocks", JSON.stringify(blocks, null, 2));
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1400px] gap-6 px-6 py-10">
       <Suspense fallback={<ProjectDocumentsSidebarSkeleton />}>

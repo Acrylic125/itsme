@@ -1,7 +1,10 @@
 // https://gist.github.com/flopex/8ba626b2dc650947882d3f45769c4702
 // https://github.com/drizzle-team/drizzle-orm/issues/2086
 import { drizzle } from "drizzle-orm/sqlite-proxy";
-import type { AsyncRemoteCallback } from "drizzle-orm/sqlite-proxy";
+import type {
+  AsyncBatchRemoteCallback,
+  AsyncRemoteCallback,
+} from "drizzle-orm/sqlite-proxy";
 import * as schema from "./schema";
 
 const { CLOUDFLARE_TOKEN, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_DATABASE_ID } =
@@ -45,10 +48,9 @@ const d1HttpDriver = async (
 
   if (!qResult?.success) {
     throw new Error(
-      `Error from D1 HTTP API result: ${JSON.stringify(data, null, 2)}`
+      `Error from D1 HTTP API result: ${JSON.stringify(qResult, null, 2)}`
     );
   }
-
   // See https://orm.drizzle.team/docs/get-started-sqlite#http-proxy
   return {
     rows: qResult.results.map((row) => Object.values(row)),
@@ -69,6 +71,60 @@ const wrappedDriver: AsyncRemoteCallback = async (
   return d1HttpDriver(sql, params, method);
 };
 
-const db = drizzle(wrappedDriver, { schema });
+const wrappedBatchDriver: AsyncBatchRemoteCallback = async (batch) => {
+  const res = await fetch(`${D1_API_BASE_URL}/query`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${CLOUDFLARE_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      batch: batch.map((q) => ({
+        sql: q.sql,
+        params: q.params ?? [],
+      })),
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Error from D1 HTTP API: ${res.status} ${res.statusText}\n${text}`
+    );
+  }
+
+  const data = (await res.json()) as {
+    success: boolean;
+    errors?: unknown[];
+    result: Array<{
+      success: boolean;
+      results?: Array<Record<string, unknown>>;
+    }>;
+  };
+
+  if (!data.success || data.errors?.length) {
+    throw new Error(`D1 batch error: ${JSON.stringify(data, null, 2)}`);
+  }
+
+  return data.result.map((stmtResult, i) => {
+    if (!stmtResult.success) {
+      throw new Error(
+        `Statement failed: ${JSON.stringify(stmtResult, null, 2)}`
+      );
+    }
+
+    const method = batch[i].method;
+
+    if (method === "run") {
+      return { rows: [] };
+    }
+
+    const rows = stmtResult.results?.map((row) => Object.values(row)) ?? [];
+
+    return { rows };
+  });
+};
+
+const db = drizzle(wrappedDriver, wrappedBatchDriver, { schema });
 
 export default db;

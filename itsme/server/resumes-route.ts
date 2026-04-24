@@ -1,15 +1,25 @@
-import { insertBlocksForDocument } from "@/blocks/insert-utils";
+import type { Block } from "@/blocks/blocks";
 import db from "@/db/db";
 import {
+  blocks,
+  columnsBlockChildren,
+  columnsBlocks,
+  documentMainLayout,
   documentListStyles,
   documentPageStyles,
   documents,
   documentTextStyles,
+  listBlockChildren,
+  listBlocks,
   projectMasterDocuments,
   projects,
+  sectionBlockChildren,
+  sectionBlocks,
+  textBlocks,
 } from "@/db/schema";
 import { CreateProjectFromPdfInputSchema } from "@/lib/pdf-to-blocks/schema";
 import { pdfToBlocks } from "@/lib/pdf-to-blocks/server";
+import { splitInsert } from "@/lib/split-insert";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { publicProcedure, router } from "./trpc";
@@ -42,96 +52,227 @@ function getProjectNameFromBlocks(
   return titleBlock.text.slice(0, 80) || "Imported Resume";
 }
 
-async function insertDefaultDocumentStyles(documentId: string) {
-  await db.insert(documentPageStyles).values({
-    documentId,
-    gap: 0.3,
-    marginTop: 0.3,
-    marginBottom: 0.3,
-    marginLeft: 0.3,
-    marginRight: 0.3,
-  });
+function getChildBlockIds(block: Block): string[] {
+  switch (block.type) {
+    case "text":
+      return [];
+    case "section":
+    case "list":
+      return block.blocks;
+    case "columns":
+      return block.blocks.map((child) => child.blockId);
+  }
+}
 
-  await db.insert(documentTextStyles).values([
-    {
-      documentId,
-      style: "default",
-      fontSize: 11,
-      fontWeight: "normal",
-      fontFamily: "Times New Roman",
-      lineHeight: 1.2,
-    },
-    {
-      documentId,
-      style: "h1",
-      fontSize: 16,
-      fontWeight: "normal",
-      fontFamily: "Times New Roman",
-      lineHeight: 1.2,
-    },
-    {
-      documentId,
-      style: "h2",
-      fontSize: 14,
-      fontWeight: "bold",
-      fontFamily: "Times New Roman",
-      lineHeight: 1.2,
-    },
-    {
-      documentId,
-      style: "h3",
-      fontSize: 12,
-      fontWeight: "bold",
-      fontFamily: "Times New Roman",
-      lineHeight: 1.2,
-    },
-  ]);
+function getMainLayoutBlockIds(blockList: Block[]) {
+  const referencedBlockIds = new Set<string>();
 
-  await db.insert(documentListStyles).values({
-    documentId,
-    leftSpace: 0.35,
-    rightSpace: 0.12,
-  });
+  for (const block of blockList) {
+    for (const childBlockId of getChildBlockIds(block)) {
+      referencedBlockIds.add(childBlockId);
+    }
+  }
+
+  return blockList
+    .map((block) => block.id)
+    .filter((blockId) => !referencedBlockIds.has(blockId));
 }
 
 export const resumesRouter = router({
   createProjectFromPdf: publicProcedure
     .input(CreateProjectFromPdfInputSchema)
     .mutation(async ({ input }) => {
-      const blocks = await pdfToBlocks(input);
+      const docBlocks = await pdfToBlocks(input);
+      const mainLayoutBlockIds = getMainLayoutBlockIds(docBlocks);
       const projectId = createProjectId();
       const documentId = createDocumentId();
-      const projectName = getProjectNameFromBlocks(blocks);
+      const projectName = getProjectNameFromBlocks(docBlocks);
       const documentName = "Master Resume";
 
       try {
-        await db.insert(projects).values({
-          id: projectId,
-          name: projectName,
-          userId: USER_ID,
-        });
+        const statements: Parameters<typeof db.batch>[0][number][] = [
+          db.insert(projects).values({
+            id: projectId,
+            name: projectName,
+            userId: USER_ID,
+          }),
+          db.insert(documents).values({
+            id: documentId,
+            name: documentName,
+            projectId,
+          }),
+          db.insert(projectMasterDocuments).values({
+            projectId,
+            documentId,
+          }),
+          db.insert(documentPageStyles).values({
+            documentId,
+            gap: 0.3,
+            marginTop: 0.3,
+            marginBottom: 0.3,
+            marginLeft: 0.3,
+            marginRight: 0.3,
+          }),
+          db.insert(documentTextStyles).values([
+            {
+              documentId,
+              style: "default",
+              fontSize: 11,
+              fontWeight: "normal",
+              fontFamily: "Times New Roman",
+              lineHeight: 1.2,
+            },
+          ]),
+          db.insert(documentListStyles).values({
+            documentId,
+            leftSpace: 0.35,
+            rightSpace: 0.12,
+          }),
+        ];
 
-        await db.insert(documents).values({
-          id: documentId,
-          name: documentName,
-          projectId,
-        });
-
-        await db.insert(projectMasterDocuments).values({
-          projectId,
+        const blockRows = docBlocks.map((block, orderIndex) => ({
+          id: block.id,
           documentId,
-        });
+          type: block.type,
+          orderIndex,
+        }));
+        for (const batch of splitInsert(blockRows)) {
+          statements.push(db.insert(blocks).values(batch));
+        }
 
-        await insertDefaultDocumentStyles(documentId);
-        await insertBlocksForDocument({
-          documentId,
-          blocks,
-        });
+        const textBlockRows = docBlocks
+          .filter(
+            (block): block is Extract<Block, { type: "text" }> =>
+              block.type === "text"
+          )
+          .map((block) => ({
+            blockId: block.id,
+            text: block.text,
+            align: block.align,
+            style: block.style,
+            ref: block.ref ?? null,
+          }));
+        for (const batch of splitInsert(textBlockRows)) {
+          statements.push(db.insert(textBlocks).values(batch));
+        }
+
+        const sectionBlockRows = docBlocks
+          .filter(
+            (block): block is Extract<Block, { type: "section" }> =>
+              block.type === "section"
+          )
+          .map((block) => ({
+            blockId: block.id,
+            ref: block.ref ?? null,
+          }));
+        for (const batch of splitInsert(sectionBlockRows)) {
+          statements.push(db.insert(sectionBlocks).values(batch));
+        }
+
+        const sectionBlockChildrenRows = docBlocks
+          .filter(
+            (block): block is Extract<Block, { type: "section" }> =>
+              block.type === "section"
+          )
+          .flatMap((block) =>
+            block.blocks.map((childBlockId, orderIndex) => ({
+              sectionBlockId: block.id,
+              childBlockId,
+              orderIndex,
+            }))
+          );
+        for (const batch of splitInsert(sectionBlockChildrenRows)) {
+          statements.push(db.insert(sectionBlockChildren).values(batch));
+        }
+
+        const columnsBlockRows = docBlocks
+          .filter(
+            (block): block is Extract<Block, { type: "columns" }> =>
+              block.type === "columns"
+          )
+          .map((block) => ({
+            blockId: block.id,
+            ref: block.ref ?? null,
+          }));
+        for (const batch of splitInsert(columnsBlockRows)) {
+          statements.push(db.insert(columnsBlocks).values(batch));
+        }
+
+        const columnsBlockChildrenRows = docBlocks
+          .filter(
+            (block): block is Extract<Block, { type: "columns" }> =>
+              block.type === "columns"
+          )
+          .flatMap((block) =>
+            block.blocks.map((child, orderIndex) => ({
+              columnsBlockId: block.id,
+              childBlockId: child.blockId,
+              span: child.span,
+              orderIndex,
+            }))
+          );
+        for (const batch of splitInsert(columnsBlockChildrenRows)) {
+          statements.push(db.insert(columnsBlockChildren).values(batch));
+        }
+
+        const listBlockRows = docBlocks
+          .filter(
+            (block): block is Extract<Block, { type: "list" }> =>
+              block.type === "list"
+          )
+          .map((block) => ({
+            blockId: block.id,
+            bulletType: block.bullet.type,
+            bulletValue:
+              block.bullet.type === "normal" ? block.bullet.value : null,
+            leftSpace: block.leftSpace ?? null,
+            rightSpace: block.rightSpace ?? null,
+            ref: block.ref ?? null,
+          }));
+        for (const batch of splitInsert(listBlockRows)) {
+          statements.push(db.insert(listBlocks).values(batch));
+        }
+
+        const listBlockChildrenRows = docBlocks
+          .filter(
+            (block): block is Extract<Block, { type: "list" }> =>
+              block.type === "list"
+          )
+          .flatMap((block) =>
+            block.blocks.map((childBlockId, orderIndex) => ({
+              listBlockId: block.id,
+              childBlockId,
+              orderIndex,
+            }))
+          );
+        for (const batch of splitInsert(listBlockChildrenRows)) {
+          statements.push(db.insert(listBlockChildren).values(batch));
+        }
+
+        if (mainLayoutBlockIds.length > 0) {
+          const mainLayoutRows = mainLayoutBlockIds.map(
+            (blockId, orderIndex) => ({
+              documentId,
+              blockId,
+              orderIndex,
+            })
+          );
+          for (const batch of splitInsert(mainLayoutRows)) {
+            statements.push(db.insert(documentMainLayout).values(batch));
+          }
+        }
+
+        await db.batch(
+          statements as [
+            Parameters<typeof db.batch>[0][number],
+            ...Parameters<typeof db.batch>[0][number][],
+          ]
+        );
 
         return {
           projectId,
           documentId,
-          blockCount: blocks.length,
+          blockCount: docBlocks.length,
         };
       } catch (error) {
         await db.delete(projects).where(eq(projects.id, projectId));

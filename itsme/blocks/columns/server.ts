@@ -1,10 +1,7 @@
 import db from "@/db/db";
 import { columnsBlockChildren, columnsBlocks } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import {
-  L1_DocumentBlockInserter,
-  L1_DocumentBlockRetriever,
-} from "../retriever-utils";
+import { L1_DocumentBlockRetriever } from "../retriever-utils";
 import { ColumnsBlockSchema } from "./schema";
 
 export const ColumnsBlockRetriever: L1_DocumentBlockRetriever<"columns"> = {
@@ -16,8 +13,9 @@ export const ColumnsBlockRetriever: L1_DocumentBlockRetriever<"columns"> = {
       })
       .from(columnsBlocks)
       .where(eq(columnsBlocks.blockId, block.id))
-      .get();
-    if (!columns) {
+      .limit(1);
+    const column = columns[0];
+    if (!column) {
       return { ok: false, error: `columns block data missing: ${block.id}` };
     }
 
@@ -34,7 +32,7 @@ export const ColumnsBlockRetriever: L1_DocumentBlockRetriever<"columns"> = {
       id: block.id,
       type: "columns",
       blocks: children.map((c) => ({ span: c.span, blockId: c.childBlockId })),
-      ref: columns.ref ?? undefined,
+      ref: column.ref ?? undefined,
     });
     if (!parsed.success) {
       return {
@@ -48,26 +46,5 @@ export const ColumnsBlockRetriever: L1_DocumentBlockRetriever<"columns"> = {
       value: parsed.data,
       orderIndex: block.orderIndex,
     };
-  },
-};
-
-export const ColumnsBlockInserter: L1_DocumentBlockInserter<"columns"> = {
-  type: "columns",
-  async insert({ block }) {
-    await db.insert(columnsBlocks).values({
-      blockId: block.id,
-      ref: block.ref ?? null,
-    });
-
-    if (block.blocks.length === 0) return;
-
-    await db.insert(columnsBlockChildren).values(
-      block.blocks.map((child, orderIndex) => ({
-        columnsBlockId: block.id,
-        childBlockId: child.blockId,
-        span: child.span,
-        orderIndex,
-      }))
-    );
   },
 };

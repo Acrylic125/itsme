@@ -18,21 +18,22 @@ const L1_RETRIEVERS = [
 const retrieverByType = new Map(L1_RETRIEVERS.map((r) => [r.type, r]));
 
 export async function blockResolverPipeline(ctx: {
-  mainLayout: Awaited<ReturnType<typeof getDocumentMainLayout>>;
+  // mainLayout: Awaited<ReturnType<typeof getDocumentMainLayout>>;
   blockMap: Awaited<ReturnType<typeof getDocumentBlockMappings>>;
 }): Promise<Block[]> {
   const settled = await Promise.all(
-    ctx.mainLayout.map(async (layoutItem) => {
-      const block = ctx.blockMap.get(layoutItem.blockId);
-      if (!block) {
-        return null;
-      }
+    ctx.blockMap.values().map(async (block) => {
+      // const block = ctx.blockMap.get(layoutItem.blockId);
+      // if (!block) {
+      //   return null;
+      // }
       const retriever = retrieverByType.get(block.type);
       if (!retriever) {
         return null;
       }
       const resolved = await retriever.get({ block });
       if (!resolved.ok) {
+        console.error(resolved.error);
         return null;
       }
       return resolved;
@@ -40,11 +41,11 @@ export async function blockResolverPipeline(ctx: {
   );
 
   return settled
-    .flatMap((result) =>
-      result && result.ok
+    .flatMap((result) => {
+      return result && result.ok
         ? [{ value: result.value, orderIndex: result.orderIndex }]
-        : []
-    )
+        : [];
+    })
     .sort((a, b) => a.orderIndex - b.orderIndex)
     .map((result) => result.value);
 }
