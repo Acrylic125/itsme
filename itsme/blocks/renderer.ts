@@ -585,8 +585,6 @@ export function renderDocumentLayout(args: {
   const byId = new Map(document.blocks.map((block) => [block.id, block]));
   const rendered: RenderedLayoutBlock[] = [];
 
-  console.log(document, document.blocks);
-
   for (const blockId of document.layout) {
     const block = byId.get(blockId);
     if (!block) {

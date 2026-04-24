@@ -1,51 +1,72 @@
 import { Block } from "./blocks";
-import {
-  getDocumentBlockMappings,
-  getDocumentMainLayout,
-} from "./retriever-utils";
-import { TextBlockRetriever } from "./text/server";
-import { SectionBlockRetriever } from "./section/server";
-import { ColumnsBlockRetriever } from "./columns/server";
-import { ListBlockRetriever } from "./list/server";
-
-const L1_RETRIEVERS = [
-  TextBlockRetriever,
-  SectionBlockRetriever,
-  ColumnsBlockRetriever,
-  ListBlockRetriever,
-] as const;
-
-const retrieverByType = new Map(L1_RETRIEVERS.map((r) => [r.type, r]));
+import { getRetrieverContextData } from "./retriever-utils";
+import { TextBlockSchema } from "./text/schema";
+import { SectionBlockSchema } from "./section/schema";
+import { ColumnsBlockSchema } from "./columns/schema";
+import { ListBlockSchema } from "./list/schema";
+import z from "zod";
 
 export async function blockResolverPipeline(ctx: {
   // mainLayout: Awaited<ReturnType<typeof getDocumentMainLayout>>;
-  blockMap: Awaited<ReturnType<typeof getDocumentBlockMappings>>;
+  data: Awaited<ReturnType<typeof getRetrieverContextData>>;
 }): Promise<Block[]> {
-  const settled = await Promise.all(
-    ctx.blockMap.values().map(async (block) => {
-      // const block = ctx.blockMap.get(layoutItem.blockId);
-      // if (!block) {
-      //   return null;
-      // }
-      const retriever = retrieverByType.get(block.type);
-      if (!retriever) {
-        return null;
-      }
-      const resolved = await retriever.get({ block });
-      if (!resolved.ok) {
-        console.error(resolved.error);
-        return null;
-      }
-      return resolved;
-    })
-  );
+  const blocks: Block[] = [];
+  ctx.data.textBlocks.forEach((block) => {
+    const parsed: z.infer<typeof TextBlockSchema> = {
+      id: block.blockId,
+      type: "text",
+      text: block.text,
+      align: block.align,
+      style: block.style,
+      ref: block.ref ?? undefined,
+    };
+    blocks.push(parsed);
+  });
+  ctx.data.sectionBlocks.forEach((block) => {
+    const parsed: z.infer<typeof SectionBlockSchema> = {
+      id: block.blockId,
+      type: "section",
+      blocks: ctx.data.sectionBlockChildren.get(block.blockId) ?? [],
+      ref: block.ref ?? undefined,
+    };
+    blocks.push(parsed);
+  });
+  ctx.data.columnsBlocks.forEach((block) => {
+    const parsed: z.infer<typeof ColumnsBlockSchema> = {
+      id: block.blockId,
+      type: "columns",
+      blocks: (ctx.data.columnsBlockChildren.get(block.blockId) ?? []).map(
+        (c) => ({
+          span: c.span,
+          blockId: c.childBlockId,
+        })
+      ),
+      ref: block.ref ?? undefined,
+    };
+    blocks.push(parsed);
+  });
+  ctx.data.listBlocks.forEach((block) => {
+    const bullet =
+      block.bulletType === "normal"
+        ? {
+            type: "normal" as const,
+            value: block.bulletValue ?? "-",
+          }
+        : ({
+            type: block.bulletType,
+          } as const);
 
-  return settled
-    .flatMap((result) => {
-      return result && result.ok
-        ? [{ value: result.value, orderIndex: result.orderIndex }]
-        : [];
-    })
-    .sort((a, b) => a.orderIndex - b.orderIndex)
-    .map((result) => result.value);
+    const parsed: z.infer<typeof ListBlockSchema> = {
+      id: block.blockId,
+      type: "list",
+      blocks: ctx.data.listBlockChildren.get(block.blockId) ?? [],
+      bullet,
+      leftSpace: block.leftSpace ?? undefined,
+      rightSpace: block.rightSpace ?? undefined,
+      ref: block.ref ?? undefined,
+    };
+
+    blocks.push(parsed);
+  });
+  return blocks;
 }

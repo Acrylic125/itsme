@@ -83,6 +83,7 @@ export const resumesRouter = router({
     .input(CreateProjectFromPdfInputSchema)
     .mutation(async ({ input }) => {
       const docBlocks = await pdfToBlocks(input);
+
       const mainLayoutBlockIds = getMainLayoutBlockIds(docBlocks);
       const projectId = createProjectId();
       const documentId = createDocumentId();

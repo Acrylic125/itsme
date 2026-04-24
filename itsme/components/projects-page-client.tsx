@@ -55,6 +55,7 @@ export function ProjectsPageClient({
           onClick={async () => {
             if (!selectedFile) return;
             const parsedInput = await parsePdf(selectedFile);
+            console.log(parsedInput);
             createProjectMutation.mutate(parsedInput);
           }}
         >

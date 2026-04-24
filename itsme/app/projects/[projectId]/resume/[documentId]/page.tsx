@@ -13,9 +13,10 @@ import db from "@/db/db";
 import { SAMPLE_DOCUMENT } from "@/blocks/renderer";
 import { blockResolverPipeline } from "@/blocks/retriever-pipeline";
 import {
-  getDocumentBlockMappings,
+  getRetrieverContextData,
   getDocumentMainLayout,
 } from "@/blocks/retriever-utils";
+import { benchmarkAsync } from "@/lib/utils";
 
 export async function getProjectById(projectId: string) {
   return db
@@ -54,10 +55,18 @@ export default async function ProjectResumePage({
     notFound();
   }
 
-  const pipelineBlocks = await blockResolverPipeline({
-    blockMap: await getDocumentBlockMappings(documentId),
-    // mainLayout: await getDocumentMainLayout(documentId),
-  });
+  // Benchmark
+  const pipelineBlocks = await benchmarkAsync(
+    "blockResolverPipeline",
+    async () =>
+      blockResolverPipeline({
+        data: await benchmarkAsync(
+          "getDocumentBlockMappings",
+          async () => await getRetrieverContextData(documentId)
+        ),
+        // mainLayout: await getDocumentMainLayout(documentId),
+      })
+  );
   const mainLayout = await getDocumentMainLayout(documentId);
 
   const renderedDocument = {

@@ -53,6 +53,7 @@ type PendingListItem = {
 };
 
 type TextTag = "h1" | "h2" | "h3" | "p";
+type TextAlign = "left" | "center" | "right";
 
 function createBlockId() {
   return `b_${nanoid(22)}`;
@@ -80,6 +81,59 @@ function mapMarkedTagToTextStyle(
 
 function getChunkStyleKey(chunk: PageTextChunk): string {
   return `${chunk.fontSize}`;
+}
+
+function getPageMetrics(view: [number, number, number, number]) {
+  return {
+    pageLeft: view[0],
+    pageWidth: Math.max(1, view[2] - view[0]),
+    pageHeight: Math.max(1, view[3] - view[1]),
+  };
+}
+
+// function inferCenteredAlign(args: {
+//   left: number;
+//   width: number;
+//   pageLeft: number;
+//   pageWidth: number;
+// }): TextAlign {
+//   const leftGap = Math.max(0, args.left - args.pageLeft);
+//   const rightGap = Math.max(0, args.pageWidth - (leftGap + args.width));
+//   const balancedGapTolerance = Math.max(12, args.pageWidth * 0.03);
+//   const minOuterGap = Math.max(24, args.pageWidth * 0.08);
+//   const contentCenter = leftGap + args.width / 2;
+//   const pageCenter = args.pageWidth / 2;
+
+//   const isCentered =
+//     leftGap >= minOuterGap &&
+//     rightGap >= minOuterGap &&
+//     Math.abs(leftGap - rightGap) <= balancedGapTolerance &&
+//     Math.abs(contentCenter - pageCenter) <= balancedGapTolerance;
+
+//   return isCentered ? "center" : "left";
+// }
+function inferCenteredAlign(args: {
+  left: number;
+  width: number;
+  pageLeft: number;
+  pageWidth: number;
+}): TextAlign {
+  const leftGap = Math.max(0, args.left - args.pageLeft);
+  const rightGap = Math.max(0, args.pageWidth - (leftGap + args.width));
+  const balancedGapTolerance = Math.max(12, args.pageWidth * 0.03);
+  const minOuterGap = Math.max(24, args.pageWidth * 0.08);
+
+  const isCentered =
+    leftGap >= minOuterGap &&
+    rightGap >= minOuterGap &&
+    Math.abs(leftGap - rightGap) <= balancedGapTolerance;
+
+  if (isCentered) return "center";
+
+  const isRight = leftGap >= minOuterGap && rightGap < minOuterGap;
+  if (isRight) return "right";
+
+  return "left";
 }
 
 function getTagForRank(args: { rank: number; pairCount: number }): TextTag {
@@ -275,7 +329,7 @@ function createTextBlock(args: {
   blocks: Block[];
   text: string;
   style: "h1" | "h2" | "h3" | "default";
-  align?: "left" | "center" | "right";
+  align?: TextAlign;
 }): string | null {
   const content = normalizeText(args.text);
   if (!content) return null;
@@ -349,6 +403,8 @@ function createTextOrColumnsBlock(args: {
   blocks: Block[];
   textItems: PdfTextWithFont[];
   style: "h1" | "h2" | "h3" | "default";
+  pageLeft: number;
+  pageWidth: number;
 }): string | null {
   const segments: PdfTextWithFont[][] = [];
   let currentSegment: PdfTextWithFont[] = [];
@@ -374,10 +430,22 @@ function createTextOrColumnsBlock(args: {
   if (segments.length === 0) return null;
 
   if (segments.length === 1) {
+    const bounds = segments[0]!.map(getTextItemBounds);
+    const left = Math.min(...bounds.map((bound) => bound.left));
+    const right = Math.max(...bounds.map((bound) => bound.right));
+    const allowCentered = args.style !== "default";
     return createTextBlock({
       blocks: args.blocks,
       text: segments[0]!.map((item) => item.str).join(""),
       style: args.style,
+      align: allowCentered
+        ? inferCenteredAlign({
+            left,
+            width: Math.max(1, right - left),
+            pageLeft: args.pageLeft,
+            pageWidth: args.pageWidth,
+          })
+        : "left",
     });
   }
 
@@ -419,6 +487,8 @@ function emitFlowParts(args: {
   blocks: Block[];
   parts: FlowPart[];
   style: "h1" | "h2" | "h3" | "default";
+  pageLeft: number;
+  pageWidth: number;
 }): string[] {
   const emittedBlockIds: string[] = [];
   const pendingListItems: PendingListItem[] = [];
@@ -429,6 +499,8 @@ function emitFlowParts(args: {
       blocks: args.blocks,
       textItems: pendingTextItems,
       style: args.style,
+      pageLeft: args.pageLeft,
+      pageWidth: args.pageWidth,
     });
     if (blockId) {
       emittedBlockIds.push(blockId);
@@ -450,7 +522,9 @@ function emitFlowParts(args: {
   for (const part of args.parts) {
     if (part.type === "li") {
       flushTextItems();
-      pendingListItems.push(emitListItem(part.group, args.blocks));
+      pendingListItems.push(
+        emitListItem(part.group, args.blocks, args.pageLeft, args.pageWidth)
+      );
       continue;
     }
 
@@ -469,7 +543,9 @@ function emitFlowParts(args: {
 
 function emitTextLikeGroup(
   group: MarkedGroupNode,
-  blocks: Block[]
+  blocks: Block[],
+  pageLeft: number,
+  pageWidth: number
 ): string | null {
   if (group.tag === null || group.tag === "LI") {
     throw new Error("emitTextLikeGroup called with a non text-like group.");
@@ -480,6 +556,8 @@ function emitTextLikeGroup(
     blocks,
     parts: flowParts,
     style: mapMarkedTagToTextStyle(group.tag),
+    pageLeft,
+    pageWidth,
   });
 
   return createSectionBlock({
@@ -490,7 +568,9 @@ function emitTextLikeGroup(
 
 function emitListItem(
   group: MarkedGroupNode & { tag: "LI" },
-  blocks: Block[]
+  blocks: Block[],
+  pageLeft: number,
+  pageWidth: number
 ): PendingListItem {
   const flowParts = flattenTextLikeNodes(group.children);
   const bodyParts: FlowPart[] = [];
@@ -525,6 +605,8 @@ function emitListItem(
     blocks,
     parts: bodyParts,
     style: "default",
+    pageLeft,
+    pageWidth,
   });
 
   return {
@@ -536,7 +618,12 @@ function emitListItem(
   };
 }
 
-function emitMarkedNodes(nodes: MarkedNode[], blocks: Block[]) {
+function emitMarkedNodes(
+  nodes: MarkedNode[],
+  blocks: Block[],
+  pageLeft: number,
+  pageWidth: number
+) {
   const pendingListItems: PendingListItem[] = [];
   let pendingTextItems: PdfTextWithFont[] = [];
 
@@ -545,6 +632,8 @@ function emitMarkedNodes(nodes: MarkedNode[], blocks: Block[]) {
       blocks,
       textItems: pendingTextItems,
       style: "default",
+      pageLeft,
+      pageWidth,
     });
     if (blockId) {
       pendingTextItems = [];
@@ -573,7 +662,7 @@ function emitMarkedNodes(nodes: MarkedNode[], blocks: Block[]) {
 
     if (isListGroupNode(node)) {
       flushTextItems();
-      pendingListItems.push(emitListItem(node, blocks));
+      pendingListItems.push(emitListItem(node, blocks, pageLeft, pageWidth));
       continue;
     }
 
@@ -581,7 +670,7 @@ function emitMarkedNodes(nodes: MarkedNode[], blocks: Block[]) {
       flushListItems();
     }
     flushTextItems();
-    if (!emitTextLikeGroup(node, blocks)) {
+    if (!emitTextLikeGroup(node, blocks, pageLeft, pageWidth)) {
       continue;
     }
   }
@@ -595,7 +684,7 @@ function unmarkedToBlocks(
 ): Block[] {
   const blocks: Block[] = [];
   for (const page of input.pages) {
-    const pageHeight = page.view[3];
+    const { pageHeight, pageLeft, pageWidth } = getPageMetrics(page.view);
     const groupedItems = groupTextItemsIntoChunks({
       items: page.textItems,
       pageHeight,
@@ -606,12 +695,21 @@ function unmarkedToBlocks(
       const tag = tagMap.get(getChunkStyleKey(chunk)) ?? "p";
       const content = normalizeText(chunk.content);
       if (!content) continue;
+      const style = mapTagToStyle(tag);
       blocks.push({
         id: createBlockId(),
         type: "text",
         text: content,
-        style: mapTagToStyle(tag),
-        align: "left",
+        style,
+        align:
+          style === "default"
+            ? "left"
+            : inferCenteredAlign({
+                left: chunk.x,
+                width: chunk.width,
+                pageLeft,
+                pageWidth,
+              }),
       });
     }
   }
@@ -624,8 +722,9 @@ function markedToBlocks(
   const blocks: Block[] = [];
 
   for (const page of input.pages) {
+    const { pageLeft, pageWidth } = getPageMetrics(page.view);
     const root = buildMarkedTree(page.textItems as PdfMarkedItem[]);
-    emitMarkedNodes(root.children, blocks);
+    emitMarkedNodes(root.children, blocks, pageLeft, pageWidth);
   }
 
   return blocks;

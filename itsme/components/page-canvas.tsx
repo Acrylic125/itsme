@@ -66,13 +66,12 @@ export function PageCanvas({
     (typeof OffscreenCanvas !== "undefined" ||
       (!!window.document &&
         !!window.document.createElement("canvas").getContext("2d")));
-  const blocks = useMemo(
-    () =>
-      canMeasureText
-        ? renderDocumentLayout({ document: resolvedDocument, dpi })
-        : [],
-    [resolvedDocument, dpi, canMeasureText]
-  );
+  const blocks = useMemo(() => {
+    const r = canMeasureText
+      ? renderDocumentLayout({ document: resolvedDocument, dpi })
+      : [];
+    return r;
+  }, [resolvedDocument, dpi, canMeasureText]);
 
   const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(
     () => getPageLayoutMetrics(resolvedDocument, dpi),
@@ -130,10 +129,7 @@ function DocumentStage({
   dpi,
   dpr,
 }: DocumentStageProps) {
-  const maxEndY = blocks.reduce(
-    (m, b) => Math.max(m, b.y + b.height),
-    0
-  );
+  const maxEndY = blocks.reduce((m, b) => Math.max(m, b.y + b.height), 0);
   const pageCount = Math.max(1, Math.ceil(maxEndY / pageStridePx));
   const stageWidth = pageWidth * scale;
   const stageHeight =

@@ -26,8 +26,9 @@ const PageViewSchema = z.tuple([
 const MarkedTagSchema = PDFEndMarkedContentSchema.shape.tag;
 
 let workerInitialized = false;
-let pdfJsModulePromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
-  null;
+let pdfJsModulePromise: Promise<
+  typeof import("pdfjs-dist/legacy/build/pdf.mjs")
+> | null = null;
 
 async function getPdfJsModule() {
   if (typeof window === "undefined") {

@@ -75,4 +75,3 @@ export const CreateProjectFromPdfInputSchema = z.discriminatedUnion("type", [
 export type CreateProjectFromPdfInput = z.infer<
   typeof CreateProjectFromPdfInputSchema
 >;
-
