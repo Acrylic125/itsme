@@ -1,20 +1,82 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useLayoutEffect, useRef } from "react";
 import { Group } from "react-konva";
+import Konva from "konva";
 import { BlockRenderer } from "../renderer-types";
+import { useBlockDragContext } from "@/components/block-dnd-context";
 
 function ColumnsBlockComponent({
   dimensions,
   pos,
   nodes,
+  blockId,
+  totalSpan,
+  columnSpans,
+  childBlockIds,
 }: {
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   nodes: React.ReactNode[];
+  blockId: string;
+  totalSpan: number;
+  columnSpans: number[];
+  childBlockIds: string[];
 }) {
+  const groupRef = useRef<Konva.Group | null>(null);
+  const dragCtx = useBlockDragContext();
+  const {
+    registerColumnBlock,
+    unregisterColumnBlock,
+    scale: ctxScale,
+  } = dragCtx ?? {};
+
+  useLayoutEffect(() => {
+    if (!blockId || !registerColumnBlock || !unregisterColumnBlock || !ctxScale)
+      return;
+    const node = groupRef.current;
+    if (!node) return;
+    const stage = node.getStage();
+    if (!stage) return;
+
+    const cr = node.getClientRect();
+    if (cr.width === 0 && cr.height === 0) return;
+
+    registerColumnBlock(
+      blockId,
+      {
+        x: cr.x / ctxScale,
+        y: cr.y / ctxScale,
+        width: cr.width / ctxScale,
+        height: cr.height / ctxScale,
+      },
+      totalSpan,
+      columnSpans,
+      childBlockIds
+    );
+
+    return () => {
+      unregisterColumnBlock(blockId);
+    };
+  }, [
+    blockId,
+    pos.x,
+    pos.y,
+    dimensions.width,
+    dimensions.height,
+    totalSpan,
+    columnSpans,
+    childBlockIds,
+    registerColumnBlock,
+    unregisterColumnBlock,
+    ctxScale,
+  ]);
+
   return (
     <Group
+      ref={(n) => {
+        groupRef.current = n;
+      }}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
@@ -92,11 +154,14 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
       height: maxOffsetY,
     };
 
-    // Groups are relative the their parent, so we need to adjust the position to be relative to the parent.
+    // Groups are relative to their parent, so adjust to be relative to the parent.
     const sectionPosRelativeTo = {
       x: groupStartPosition.x - relativeTo.x,
       y: groupStartPosition.y - relativeTo.y,
     };
+
+    const columnSpans = childBlocks.map((b) => b.span);
+    const childBlockIds = childBlocks.map((b) => b.block.id);
 
     return {
       estimatedDimensions: dimensions,
@@ -105,6 +170,10 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
           nodes={children}
+          blockId={block.id}
+          totalSpan={tallySpans}
+          columnSpans={columnSpans}
+          childBlockIds={childBlockIds}
         />
       ),
     };

@@ -19,6 +19,7 @@ import z from "zod";
 import { DocumentSchema } from "./renderer";
 import type { Block } from "./blocks";
 import { BlockUpdateSchema } from "./updater";
+import { applyBlockMove } from "./apply-block-move";
 
 export type DocumentId = string;
 
@@ -32,6 +33,7 @@ export type BlockUpdate = z.infer<typeof BlockUpdateSchema>;
 export function documentBlockUpdateKey(update: BlockUpdate): string {
   switch (update.type) {
     case "text":
+    case "move":
       return `${update.documentId}:${update.blockId}`;
     default: {
       const u: { type: string } = update;
@@ -79,8 +81,11 @@ function normalizePersistedUpdates(raw: unknown): Record<string, BlockUpdate> {
 }
 
 function applyBlockUpdate(doc: Document, update: BlockUpdate): Document {
-  if (update.type !== "text") {
-    return doc;
+  switch (update.type) {
+    case "move":
+      return applyBlockMove(doc, update);
+    case "text":
+      break;
   }
 
   let changed = false;

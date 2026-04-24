@@ -10,10 +10,7 @@ import { HoverRegion } from "@/components/shared-block";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useDomPopup } from "@/components/dom-popup";
-import {
-  useDocumentStores,
-  useDocumentStore,
-} from "@/blocks/document-context";
+import { useDocumentStores, useDocumentStore } from "@/blocks/document-context";
 import { useCallback, useId, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -124,6 +121,7 @@ function TextBlockComponent({
       height={dimensions.height}
       onClick={handleClick}
       inFocus={popup.isOpen && popup.popupKey === popupKey}
+      blockId={block.id}
     >
       <Text
         x={0}

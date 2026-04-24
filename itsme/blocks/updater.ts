@@ -1,4 +1,8 @@
 import z from "zod";
+import { MoveBlockUpdateSchema } from "./apply-block-move";
 import { TextBlockUpdateSchema } from "./text/schema";
 
-export const BlockUpdateSchema = z.union([TextBlockUpdateSchema]);
+export const BlockUpdateSchema = z.union([
+  TextBlockUpdateSchema,
+  MoveBlockUpdateSchema,
+]);
