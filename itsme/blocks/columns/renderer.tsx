@@ -5,6 +5,7 @@ import { Group } from "react-konva";
 import Konva from "konva";
 import { BlockRenderer } from "../renderer-types";
 import { useBlockDragContext } from "@/components/block-dnd-context";
+import { HoverRegion, ReorderRegion } from "@/components/shared-block";
 
 function ColumnsBlockComponent({
   dimensions,
@@ -58,32 +59,32 @@ function ColumnsBlockComponent({
     return () => {
       unregisterColumnBlock(blockId);
     };
-  }, [
-    blockId,
-    pos.x,
-    pos.y,
-    dimensions.width,
-    dimensions.height,
-    totalSpan,
-    columnSpans,
-    childBlockIds,
-    registerColumnBlock,
-    unregisterColumnBlock,
-    ctxScale,
-  ]);
+  });
 
   return (
-    <Group
-      ref={(n) => {
-        groupRef.current = n;
-      }}
+    <HoverRegion
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
+      blockId={blockId}
     >
-      {nodes}
-    </Group>
+      <ReorderRegion
+        blockId={blockId}
+        width={dimensions.width}
+        height={dimensions.height}
+      >
+        <Group
+          ref={(n) => {
+            groupRef.current = n;
+          }}
+          width={dimensions.width}
+          height={dimensions.height}
+        >
+          {nodes}
+        </Group>
+      </ReorderRegion>
+    </HoverRegion>
   );
 }
 

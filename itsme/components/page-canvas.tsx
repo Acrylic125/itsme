@@ -25,6 +25,7 @@ import {
 } from "@/blocks/document-context";
 import { createMoveBlockUpdateFromDropZone } from "@/blocks/apply-block-move";
 import { BlockDragProvider, useBlockDragContext } from "./block-dnd-context";
+import { BlockFocusProvider } from "./block-focus-context";
 
 export function PageCanvas({
   document,
@@ -117,18 +118,20 @@ function PageCanvasKonva({
 
   return (
     <DomPopupProvider>
-      <BlockDragProvider scale={scale} dpi={dpi}>
-        <DocumentStage
-          blocks={blocks}
-          pageWidth={pageWidth}
-          pageHeight={pageHeight}
-          pageStridePx={pageStridePx}
-          gapPx={gapPx}
-          scale={scale}
-          dpi={dpi}
-          dpr={dpr}
-        />
-      </BlockDragProvider>
+      <BlockFocusProvider blocks={document.blocks} layout={document.layout}>
+        <BlockDragProvider scale={scale} dpi={dpi}>
+          <DocumentStage
+            blocks={blocks}
+            pageWidth={pageWidth}
+            pageHeight={pageHeight}
+            pageStridePx={pageStridePx}
+            gapPx={gapPx}
+            scale={scale}
+            dpi={dpi}
+            dpr={dpr}
+          />
+        </BlockDragProvider>
+      </BlockFocusProvider>
     </DomPopupProvider>
   );
 }
@@ -331,7 +334,7 @@ function DocumentStage(props: DocumentStageProps) {
             />
           )}
 
-          {/* All rendered blocks (dragged block is hidden via opacity:0 in HoverRegion) */}
+          {/* All rendered blocks (dragged block is hidden via opacity:0 in ReorderRegion) */}
           {blocks.map((block) => (
             <Group key={block.id}>{block.component()}</Group>
           ))}

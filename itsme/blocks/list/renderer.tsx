@@ -6,25 +6,37 @@ import { BlockRenderer } from "../renderer-types";
 import { BlockSchema } from "../blocks";
 import { ListBulletSchema } from "./schema";
 import { TextBlockSchema } from "../text/schema";
+import { HoverRegion, ReorderRegion } from "@/components/shared-block";
 
 function ListBlockComponent({
+  blockId,
   dimensions,
   pos,
   nodes,
 }: {
+  blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   nodes: React.ReactNode[];
 }) {
   return (
-    <Group
+    <HoverRegion
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
+      blockId={blockId}
     >
-      {nodes}
-    </Group>
+      <ReorderRegion
+        blockId={blockId}
+        width={dimensions.width}
+        height={dimensions.height}
+      >
+        <Group width={dimensions.width} height={dimensions.height}>
+          {nodes}
+        </Group>
+      </ReorderRegion>
+    </HoverRegion>
   );
 }
 
@@ -153,6 +165,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       estimatedDimensions: dimensions,
       component: () => (
         <ListBlockComponent
+          blockId={block.id}
           dimensions={dimensions}
           pos={listPosRelativeTo}
           nodes={children}

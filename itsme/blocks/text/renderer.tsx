@@ -1,12 +1,11 @@
 "use client";
 
-// import { HoverRegion } from "@/components/blocks-shared";
 import { TextBlockSchema, TextStyleSchema } from "./schema";
 import { z } from "zod";
 import { Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
 import { BlockRenderer } from "../renderer-types";
-import { HoverRegion } from "@/components/shared-block";
+import { HoverRegion, ReorderRegion } from "@/components/shared-block";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useDomPopup } from "@/components/dom-popup";
@@ -119,24 +118,30 @@ function TextBlockComponent({
       y={pos.relativeTo.y}
       width={dimensions.width}
       height={dimensions.height}
+      blockId={block.id}
       onClick={handleClick}
       inFocus={popup.isOpen && popup.popupKey === popupKey}
-      blockId={block.id}
     >
-      <Text
-        x={0}
-        y={0}
+      <ReorderRegion
+        blockId={block.id}
         width={dimensions.width}
         height={dimensions.height}
-        text={block.text}
-        fontFamily={style.fontFamily}
-        fontSize={fontSizePx}
-        lineHeight={style.lineHeight}
-        fontStyle={style.fontWeight === "bold" ? "bold" : "normal"}
-        align={block.align}
-        fill="#000000"
-        perfectDrawEnabled={false}
-      />
+      >
+        <Text
+          x={0}
+          y={0}
+          width={dimensions.width}
+          height={dimensions.height}
+          text={block.text}
+          fontFamily={style.fontFamily}
+          fontSize={fontSizePx}
+          lineHeight={style.lineHeight}
+          fontStyle={style.fontWeight === "bold" ? "bold" : "normal"}
+          align={block.align}
+          fill="#000000"
+          perfectDrawEnabled={false}
+        />
+      </ReorderRegion>
     </HoverRegion>
   );
 }

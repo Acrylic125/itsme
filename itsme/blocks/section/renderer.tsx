@@ -5,25 +5,37 @@ import { z } from "zod";
 import { Group } from "react-konva";
 import { BlockRenderer } from "../renderer-types";
 import { BlockSchema } from "../blocks";
+import { HoverRegion, ReorderRegion } from "@/components/shared-block";
 
 function SectionBlockComponent({
+  blockId,
   dimensions,
   pos,
   nodes,
 }: {
+  blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   nodes: React.ReactNode[];
 }) {
   return (
-    <Group
+    <HoverRegion
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
+      blockId={blockId}
     >
-      {nodes}
-    </Group>
+      <ReorderRegion
+        blockId={blockId}
+        width={dimensions.width}
+        height={dimensions.height}
+      >
+        <Group width={dimensions.width} height={dimensions.height}>
+          {nodes}
+        </Group>
+      </ReorderRegion>
+    </HoverRegion>
   );
 }
 
@@ -65,6 +77,7 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
       estimatedDimensions: dimensions,
       component: () => (
         <SectionBlockComponent
+          blockId={block.id}
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
           nodes={children}

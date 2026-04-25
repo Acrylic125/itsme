@@ -83,7 +83,9 @@ function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
         break;
       }
       case "columns": {
-        const index = block.blocks.findIndex((child) => child.blockId === childBlockId);
+        const index = block.blocks.findIndex(
+          (child) => child.blockId === childBlockId
+        );
         if (index >= 0) {
           return {
             container: "columns",
@@ -102,7 +104,53 @@ function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
   return null;
 }
 
-function sameContainer(a: ParentRef, b: MoveBlockUpdate["destination"]): boolean {
+function getChildBlockIds(block: Document["blocks"][number]): string[] {
+  switch (block.type) {
+    case "section":
+    case "list":
+      return block.blocks;
+    case "columns":
+      return block.blocks.map((child) => child.blockId);
+    case "text":
+      return [];
+  }
+}
+
+function isDescendantOf(
+  doc: Document,
+  possibleDescendantId: string,
+  ancestorId: string
+): boolean {
+  const blockById = new Map(doc.blocks.map((block) => [block.id, block]));
+  const visit = (blockId: string): boolean => {
+    const block = blockById.get(blockId);
+    if (!block) return false;
+    for (const childBlockId of getChildBlockIds(block)) {
+      if (childBlockId === possibleDescendantId) return true;
+      if (visit(childBlockId)) return true;
+    }
+    return false;
+  };
+
+  return visit(ancestorId);
+}
+
+function isInvalidNestedDestination(
+  doc: Document,
+  blockId: string,
+  destinationParentBlockId: string | null
+): boolean {
+  if (destinationParentBlockId === null) return false;
+  return (
+    destinationParentBlockId === blockId ||
+    isDescendantOf(doc, destinationParentBlockId, blockId)
+  );
+}
+
+function sameContainer(
+  a: ParentRef,
+  b: MoveBlockUpdate["destination"]
+): boolean {
   if (a.container !== b.container) return false;
   if (a.container === "document") return true;
   return a.parentBlockId === b.parentBlockId;
@@ -120,16 +168,19 @@ export function createMoveBlockUpdateFromDropZone(args: {
 }): MoveBlockUpdate | null {
   const { document, documentId, blockId, dropZone } = args;
 
-  if (
-    dropZone.type !== "column-insert" &&
-    dropZone.targetBlockId === blockId
-  ) {
+  if (dropZone.type !== "column-insert" && dropZone.targetBlockId === blockId) {
     return null;
   }
 
   if (dropZone.type === "column-insert") {
+    if (isInvalidNestedDestination(document, blockId, dropZone.targetBlockId)) {
+      return null;
+    }
+
     const columnsBlock = document.blocks.find(
-      (block): block is Extract<Document["blocks"][number], { type: "columns" }> =>
+      (
+        block
+      ): block is Extract<Document["blocks"][number], { type: "columns" }> =>
         block.id === dropZone.targetBlockId && block.type === "columns"
     );
     if (!columnsBlock) return null;
@@ -137,7 +188,8 @@ export function createMoveBlockUpdateFromDropZone(args: {
     const insertIndex = Number(dropZone.id.split(":").at(-1));
     if (!Number.isFinite(insertIndex)) return null;
 
-    const span = columnsBlock.blocks.reduce((sum, child) => sum + child.span, 0) || 1;
+    const span =
+      columnsBlock.blocks.reduce((sum, child) => sum + child.span, 0) || 1;
 
     return {
       type: "move",
@@ -154,6 +206,12 @@ export function createMoveBlockUpdateFromDropZone(args: {
 
   const targetParent = findParentRef(document, dropZone.targetBlockId);
   if (!targetParent) return null;
+
+  const destinationParentBlockId =
+    targetParent.container === "document" ? null : targetParent.parentBlockId;
+  if (isInvalidNestedDestination(document, blockId, destinationParentBlockId)) {
+    return null;
+  }
 
   const offset = dropZone.type === "after" ? 1 : 0;
 
@@ -195,7 +253,10 @@ export function createMoveBlockUpdateFromDropZone(args: {
   }
 }
 
-export function applyBlockMove(doc: Document, update: MoveBlockUpdate): Document {
+export function applyBlockMove(
+  doc: Document,
+  update: MoveBlockUpdate
+): Document {
   const source = findParentRef(doc, update.blockId);
   if (!source) return doc;
 
@@ -247,7 +308,10 @@ export function applyBlockMove(doc: Document, update: MoveBlockUpdate): Document
   };
 
   let destinationIndex = update.destination.index;
-  if (sameContainer(source, update.destination) && source.index < destinationIndex) {
+  if (
+    sameContainer(source, update.destination) &&
+    source.index < destinationIndex
+  ) {
     destinationIndex -= 1;
   }
 

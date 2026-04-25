@@ -117,7 +117,8 @@ export async function getRetrieverContextData(documentId: string) {
       })
       .from(sectionBlockChildren)
       .innerJoin(blocks, eq(sectionBlockChildren.sectionBlockId, blocks.id))
-      .where(eq(blocks.documentId, documentId)),
+      .where(eq(blocks.documentId, documentId))
+      .orderBy(asc(sectionBlockChildren.orderIndex)),
     db
       .select({
         blockId: blocks.id,
@@ -140,7 +141,8 @@ export async function getRetrieverContextData(documentId: string) {
       })
       .from(listBlockChildren)
       .innerJoin(blocks, eq(listBlockChildren.listBlockId, blocks.id))
-      .where(eq(blocks.documentId, documentId)),
+      .where(eq(blocks.documentId, documentId))
+      .orderBy(asc(listBlockChildren.orderIndex)),
     db
       .select({
         blockId: blocks.id,
@@ -160,7 +162,8 @@ export async function getRetrieverContextData(documentId: string) {
       })
       .from(columnsBlockChildren)
       .innerJoin(blocks, eq(columnsBlockChildren.columnsBlockId, blocks.id))
-      .where(eq(blocks.documentId, documentId)),
+      .where(eq(blocks.documentId, documentId))
+      .orderBy(asc(columnsBlockChildren.orderIndex)),
   ]);
 
   if (_document.length === 0) {
