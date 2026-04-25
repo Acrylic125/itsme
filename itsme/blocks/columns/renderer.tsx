@@ -4,7 +4,6 @@ import { Fragment, useLayoutEffect, useRef } from "react";
 import { Group } from "react-konva";
 import Konva from "konva";
 import { BlockRenderer } from "../renderer-types";
-import { useBlockDragContext } from "@/components/block-dnd-context";
 import { HoverRegion, ReorderRegion } from "@/components/shared-block";
 
 function ColumnsBlockComponent({
@@ -25,41 +24,6 @@ function ColumnsBlockComponent({
   childBlockIds: string[];
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
-  const dragCtx = useBlockDragContext();
-  const {
-    registerColumnBlock,
-    unregisterColumnBlock,
-    scale: ctxScale,
-  } = dragCtx ?? {};
-
-  useLayoutEffect(() => {
-    if (!blockId || !registerColumnBlock || !unregisterColumnBlock || !ctxScale)
-      return;
-    const node = groupRef.current;
-    if (!node) return;
-    const stage = node.getStage();
-    if (!stage) return;
-
-    const cr = node.getClientRect();
-    if (cr.width === 0 && cr.height === 0) return;
-
-    registerColumnBlock(
-      blockId,
-      {
-        x: cr.x / ctxScale,
-        y: cr.y / ctxScale,
-        width: cr.width / ctxScale,
-        height: cr.height / ctxScale,
-      },
-      totalSpan,
-      columnSpans,
-      childBlockIds
-    );
-
-    return () => {
-      unregisterColumnBlock(blockId);
-    };
-  });
 
   return (
     <HoverRegion

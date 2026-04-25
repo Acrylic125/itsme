@@ -9,8 +9,8 @@ import {
 } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
-import { useBlockDragContext } from "./block-dnd-context";
-import { useBlockFocusContext } from "./block-focus-context";
+// import { useBlockDragContext } from "./block-dnd-context";
+// import { useBlockFocusContext } from "./block-focus-context";
 
 const DRAG_INTENT_THRESHOLD_PX = 6;
 
@@ -46,23 +46,10 @@ export function HoverRegion({
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
   const [hovered, setHovered] = useState(false);
-  const dragCtx = useBlockDragContext();
-  const focusCtx = useBlockFocusContext();
-  const isAnyDrag = !!dragCtx?.dragState;
-  const isFocusedByContext = blockId
-    ? (focusCtx?.isBlockFocused(blockId) ?? false)
-    : false;
-  const canFocusBlock = blockId
-    ? (focusCtx?.canFocusBlock(blockId) ?? true)
-    : true;
-  const isTopLevelBlock = blockId
-    ? (focusCtx?.getParentBlockId(blockId) ?? null) === null
-    : false;
-  const canReceivePointer = !blockId || canFocusBlock || isFocusedByContext;
+  // const canReceivePointer = !blockId;
 
   const handleContextMenu = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
-      if (blockId && !isFocusedByContext) return;
       event.evt.preventDefault();
       if (!onContextMenu) return;
       const node = groupRef.current;
@@ -82,25 +69,13 @@ export function HoverRegion({
         },
       });
     },
-    [blockId, isFocusedByContext, onContextMenu]
+    [onContextMenu]
   );
 
   const handleClick = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
       if (event.evt.button !== 0) return;
       event.evt.preventDefault();
-      if (blockId) {
-        if (!isFocusedByContext) {
-          if (!canFocusBlock) return;
-          // Top-level editable blocks should act immediately; focus is for
-          // entering nested content.
-          if (!isTopLevelBlock || !onClick) {
-            focusCtx?.focusBlock(blockId);
-            event.cancelBubble = true;
-            return;
-          }
-        }
-      }
       if (!onClick) return;
       const node = groupRef.current;
       const stage = node?.getStage();
@@ -119,21 +94,13 @@ export function HoverRegion({
         },
       });
     },
-    [
-      blockId,
-      canFocusBlock,
-      focusCtx,
-      isFocusedByContext,
-      isTopLevelBlock,
-      onClick,
-    ]
+    [onClick]
   );
 
   const handleMouseEnter = useCallback(() => {
-    if (dragCtx?.dragState) return;
-    if (!canReceivePointer) return;
+    // if (!canReceivePointer) return;
     setHovered(true);
-  }, [canReceivePointer, dragCtx]);
+  }, []);
 
   const handleMouseLeave = useCallback(() => {
     setHovered(false);
@@ -147,9 +114,8 @@ export function HoverRegion({
   const innerRadius = 0.01 * dpi;
   const outerRadius = innerRadius + padding;
 
-  const showInnerRing =
-    (hovered && !isAnyDrag) || inFocus || isFocusedByContext;
-  const showOuterHoverRing = hovered && !isAnyDrag;
+  const showInnerRing = hovered || inFocus;
+  const showOuterHoverRing = hovered;
 
   return (
     <Group
@@ -164,7 +130,7 @@ export function HoverRegion({
       onMouseLeave={handleMouseLeave}
       onContextMenu={handleContextMenu}
       onClick={handleClick}
-      listening={canReceivePointer ? undefined : false}
+      // listening={canReceivePointer ? undefined : false}
     >
       <Rect
         x={0}
@@ -224,151 +190,151 @@ export function ReorderRegion({
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
   /** Set to true on mousedown; cleared on mouseup. Prevents click firing after drag. */
-  const hasDraggedRef = useRef(false);
-  const pendingDragCleanupRef = useRef<(() => void) | null>(null);
+  // const hasDraggedRef = useRef(false);
+  // const pendingDragCleanupRef = useRef<(() => void) | null>(null);
 
-  const dragCtx = useBlockDragContext();
-  const focusCtx = useBlockFocusContext();
-  const isDraggingThisBlock = dragCtx?.dragState?.draggingBlockId === blockId;
-  const canReorderBlock = focusCtx?.canDragBlock(blockId) ?? true;
+  // const dragCtx = useBlockDragContext();
+  // const focusCtx = useBlockFocusContext();
+  // const isDraggingThisBlock = dragCtx?.dragState?.draggingBlockId === blockId;
+  // const canReorderBlock = focusCtx?.canDragBlock(blockId) ?? true;
 
-  const {
-    registerBlock,
-    unregisterBlock,
-    startDrag,
-    scale: ctxScale,
-  } = dragCtx ?? {};
+  // const {
+  //   registerBlock,
+  //   unregisterBlock,
+  //   startDrag,
+  //   scale: ctxScale,
+  // } = dragCtx ?? {};
 
-  useEffect(() => {
-    return () => {
-      pendingDragCleanupRef.current?.();
-      pendingDragCleanupRef.current = null;
-    };
-  }, []);
+  // useEffect(() => {
+  //   return () => {
+  //     pendingDragCleanupRef.current?.();
+  //     pendingDragCleanupRef.current = null;
+  //   };
+  // }, []);
 
   // Register / update absolute block bounds after each layout commit. Ancestor
   // groups can move after a reorder even when this component's direct props do not.
-  useLayoutEffect(() => {
-    if (!registerBlock || !unregisterBlock || !ctxScale) return;
-    const node = groupRef.current;
-    if (!node) return;
-    const stage = node.getStage();
-    if (!stage) return;
+  // useLayoutEffect(() => {
+  //   if (!registerBlock || !unregisterBlock || !ctxScale) return;
+  //   const node = groupRef.current;
+  //   if (!node) return;
+  //   const stage = node.getStage();
+  //   if (!stage) return;
 
-    const cr = node.getClientRect();
-    if (cr.width === 0 && cr.height === 0) return;
+  //   const cr = node.getClientRect();
+  //   if (cr.width === 0 && cr.height === 0) return;
 
-    registerBlock(blockId, {
-      x: cr.x / ctxScale,
-      y: cr.y / ctxScale,
-      width: cr.width / ctxScale,
-      height: cr.height / ctxScale,
-    });
+  //   registerBlock(blockId, {
+  //     x: cr.x / ctxScale,
+  //     y: cr.y / ctxScale,
+  //     width: cr.width / ctxScale,
+  //     height: cr.height / ctxScale,
+  //   });
 
-    return () => {
-      unregisterBlock(blockId);
-    };
-  });
+  //   return () => {
+  //     unregisterBlock(blockId);
+  //   };
+  // });
 
-  const handleMouseDown = useCallback(
-    (event: Konva.KonvaEventObject<MouseEvent>) => {
-      if (!startDrag || !ctxScale) return;
-      if (!canReorderBlock) return;
-      if (event.evt.button !== 0) return;
-      event.cancelBubble = true;
+  // const handleMouseDown = useCallback(
+  //   // (event: Konva.KonvaEventObject<MouseEvent>) => {
+  //   //   if (!startDrag || !ctxScale) return;
+  //   //   if (!canReorderBlock) return;
+  //   //   if (event.evt.button !== 0) return;
+  //   //   event.cancelBubble = true;
 
-      const node = groupRef.current;
-      if (!node) return;
-      const stage = node.getStage();
-      if (!stage) return;
-      const pos = stage.getPointerPosition();
-      if (!pos) return;
+  //   //   const node = groupRef.current;
+  //   //   if (!node) return;
+  //   //   const stage = node.getStage();
+  //   //   if (!stage) return;
+  //   //   const pos = stage.getPointerPosition();
+  //   //   if (!pos) return;
 
-      hasDraggedRef.current = false;
-      const cr = node.getClientRect();
+  //   //   hasDraggedRef.current = false;
+  //   //   const cr = node.getClientRect();
 
-      pendingDragCleanupRef.current?.();
-      const startClientX = event.evt.clientX;
-      const startClientY = event.evt.clientY;
-      const blockBounds = {
-        x: cr.x / ctxScale,
-        y: cr.y / ctxScale,
-        width: cr.width / ctxScale,
-        height: cr.height / ctxScale,
-      };
+  //   //   pendingDragCleanupRef.current?.();
+  //   //   const startClientX = event.evt.clientX;
+  //   //   const startClientY = event.evt.clientY;
+  //   //   const blockBounds = {
+  //   //     x: cr.x / ctxScale,
+  //   //     y: cr.y / ctxScale,
+  //   //     width: cr.width / ctxScale,
+  //   //     height: cr.height / ctxScale,
+  //   //   };
 
-      const cleanup = () => {
-        window.removeEventListener("mousemove", handleWindowMouseMove);
-        window.removeEventListener("mouseup", handleWindowMouseUp);
-        pendingDragCleanupRef.current = null;
-      };
+  //   //   const cleanup = () => {
+  //   //     window.removeEventListener("mousemove", handleWindowMouseMove);
+  //   //     window.removeEventListener("mouseup", handleWindowMouseUp);
+  //   //     pendingDragCleanupRef.current = null;
+  //   //   };
 
-      const handleWindowMouseMove = (moveEvent: MouseEvent) => {
-        const dx = moveEvent.clientX - startClientX;
-        const dy = moveEvent.clientY - startClientY;
-        if (Math.hypot(dx, dy) < DRAG_INTENT_THRESHOLD_PX) {
-          return;
-        }
+  //   //   const handleWindowMouseMove = (moveEvent: MouseEvent) => {
+  //   //     const dx = moveEvent.clientX - startClientX;
+  //   //     const dy = moveEvent.clientY - startClientY;
+  //   //     if (Math.hypot(dx, dy) < DRAG_INTENT_THRESHOLD_PX) {
+  //   //       return;
+  //   //     }
 
-        cleanup();
+  //   //     cleanup();
 
-        const container = stage.container();
-        const rect = container.getBoundingClientRect();
-        const mouseDocX = (moveEvent.clientX - rect.left) / ctxScale;
-        const mouseDocY = (moveEvent.clientY - rect.top) / ctxScale;
+  //   //     const container = stage.container();
+  //   //     const rect = container.getBoundingClientRect();
+  //   //     const mouseDocX = (moveEvent.clientX - rect.left) / ctxScale;
+  //   //     const mouseDocY = (moveEvent.clientY - rect.top) / ctxScale;
 
-        // Capture a snapshot of the reorderable content for the ghost.
-        let ghostImageSrc: string | null = null;
-        try {
-          ghostImageSrc = node.toDataURL({
-            pixelRatio:
-              typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
-          });
-        } catch {
-          // Non-critical — ghost falls back to a plain rect.
-        }
+  //   //     // Capture a snapshot of the reorderable content for the ghost.
+  //   //     let ghostImageSrc: string | null = null;
+  //   //     try {
+  //   //       ghostImageSrc = node.toDataURL({
+  //   //         pixelRatio:
+  //   //           typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+  //   //       });
+  //   //     } catch {
+  //   //       // Non-critical — ghost falls back to a plain rect.
+  //   //     }
 
-        startDrag(blockId, blockBounds, mouseDocX, mouseDocY, ghostImageSrc);
-        stage.container().style.cursor = "grabbing";
-        hasDraggedRef.current = true;
-      };
+  //   //     startDrag(blockId, blockBounds, mouseDocX, mouseDocY, ghostImageSrc);
+  //   //     stage.container().style.cursor = "grabbing";
+  //   //     hasDraggedRef.current = true;
+  //   //   };
 
-      const handleWindowMouseUp = () => {
-        cleanup();
-      };
+  //   //   const handleWindowMouseUp = () => {
+  //   //     cleanup();
+  //   //   };
 
-      window.addEventListener("mousemove", handleWindowMouseMove);
-      window.addEventListener("mouseup", handleWindowMouseUp);
-      pendingDragCleanupRef.current = cleanup;
-      event.evt.preventDefault();
-    },
-    [blockId, canReorderBlock, startDrag, ctxScale]
-  );
+  //   //   window.addEventListener("mousemove", handleWindowMouseMove);
+  //   //   window.addEventListener("mouseup", handleWindowMouseUp);
+  //   //   pendingDragCleanupRef.current = cleanup;
+  //   //   event.evt.preventDefault();
+  //   // },
+  //   // [blockId, canReorderBlock, startDrag, ctxScale]
+  // );
 
-  const handleClick = useCallback(
-    (event: Konva.KonvaEventObject<MouseEvent>) => {
-      if (!hasDraggedRef.current) return;
-      event.cancelBubble = true;
-    },
-    []
-  );
+  // const handleClick = useCallback(
+  //   (event: Konva.KonvaEventObject<MouseEvent>) => {
+  //     if (!hasDraggedRef.current) return;
+  //     event.cancelBubble = true;
+  //   },
+  //   []
+  // );
 
-  const handleMouseEnter = useCallback(() => {
-    if (dragCtx?.dragState) return;
-    if (!canReorderBlock) return;
-    groupRef.current
-      ?.getStage()
-      ?.container()
-      .style.setProperty("cursor", "grab");
-  }, [canReorderBlock, dragCtx]);
+  // const handleMouseEnter = useCallback(() => {
+  //   if (dragCtx?.dragState) return;
+  //   if (!canReorderBlock) return;
+  //   groupRef.current
+  //     ?.getStage()
+  //     ?.container()
+  //     .style.setProperty("cursor", "grab");
+  // }, [canReorderBlock, dragCtx]);
 
-  const handleMouseLeave = useCallback(() => {
-    if (dragCtx?.dragState) return;
-    groupRef.current
-      ?.getStage()
-      ?.container()
-      .style.setProperty("cursor", "default");
-  }, [dragCtx]);
+  // const handleMouseLeave = useCallback(() => {
+  //   if (dragCtx?.dragState) return;
+  //   groupRef.current
+  //     ?.getStage()
+  //     ?.container()
+  //     .style.setProperty("cursor", "default");
+  // }, [dragCtx]);
 
   return (
     <Group
@@ -379,12 +345,12 @@ export function ReorderRegion({
       y={y}
       width={width}
       height={height}
-      opacity={isDraggingThisBlock ? 0 : 1}
-      listening={isDraggingThisBlock ? false : undefined}
-      onMouseDown={handleMouseDown}
-      onClick={handleClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      // opacity={isDraggingThisBlock ? 0 : 1}
+      // listening={isDraggingThisBlock ? false : undefined}
+      // onMouseDown={handleMouseDown}
+      // onClick={handleClick}
+      // onMouseEnter={handleMouseEnter}
+      // onMouseLeave={handleMouseLeave}
     >
       {children}
     </Group>
