@@ -19,6 +19,7 @@ type AnchorRect = {
 type PopupState = {
   anchor: AnchorRect;
   popupKey: string;
+  onClose?: () => void;
   content: ({ closePopup }: { closePopup: () => void }) => ReactNode;
 };
 
@@ -61,10 +62,13 @@ export function DomPopupProvider({ children }: { children: ReactNode }) {
     isOpen: false,
   });
   const closePopup = useCallback(() => {
-    setPopups((prev) => ({
-      ...prev,
-      isOpen: false,
-    }));
+    setPopups((prev) => {
+      prev.state?.onClose?.();
+      return {
+        ...prev,
+        isOpen: false,
+      };
+    });
   }, []);
   const openPopup = useCallback((state: PopupState) => {
     setPopups((prev) => ({

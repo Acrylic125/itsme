@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
 // import { useBlockDragContext } from "./block-dnd-context";
@@ -99,11 +99,38 @@ export function HoverRegion({
     setHovered(false);
   }, []);
 
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const node = groupRef.current;
+      const stage = node?.getStage();
+      const pointerPosition = stage?.getPointerPosition();
+      if (!node || !stage || !pointerPosition || disabled) {
+        setHovered(false);
+        return;
+      }
+
+      const localPointerPosition = node
+        .getAbsoluteTransform()
+        .copy()
+        .invert()
+        .point(pointerPosition);
+      const isPointerInside =
+        localPointerPosition.x >= 0 &&
+        localPointerPosition.x <= width &&
+        localPointerPosition.y >= 0 &&
+        localPointerPosition.y <= height;
+
+      setHovered(isPointerInside);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [disabled, height, inFocus, width]);
+
   const isHoverActive = hovered && !disabled;
 
   // const innerStroke = 0.2 * dpi;
   const innerStroke = 0.01 * dpi;
-  const outerStroke = 0.01 * dpi;
+  const outerStroke = 0.03 * dpi;
   /** Space between the outer edge of the inner stroke and the inner edge of the outer stroke. */
   const ringGap = 0.005 * dpi;
   const padding = innerStroke / 2 + ringGap + outerStroke / 2;
@@ -157,7 +184,7 @@ export function HoverRegion({
           width={width + 2 * padding}
           height={height + 2 * padding}
           fillEnabled={false}
-          stroke="#ffb86a7f"
+          stroke="#ffb86a3f"
           strokeWidth={outerStroke}
           cornerRadius={outerRadius}
           perfectDrawEnabled={false}

@@ -118,8 +118,28 @@ function TextBlockComponent({
       popup.openPopup({
         anchor: args.anchor,
         popupKey,
+        onClose: () => {
+          focusBlock((cur) => {
+            if (cur === block.id) {
+              return null;
+            }
+            return cur;
+          });
+        },
         content: ({ closePopup }) => (
-          <EditTextModal key={popupKey} block={block} closePopup={closePopup} />
+          <EditTextModal
+            key={popupKey}
+            block={block}
+            closePopup={() => {
+              closePopup();
+              focusBlock((cur) => {
+                if (cur === block.id) {
+                  return null;
+                }
+                return cur;
+              });
+            }}
+          />
         ),
       });
     },
