@@ -12,6 +12,7 @@ import { useDomPopup } from "@/components/dom-popup";
 import { useDocumentStores, useDocumentStore } from "@/blocks/document-context";
 import { useCallback, useId, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand/react";
 
 export function EditTextModal({
   closePopup,
@@ -79,11 +80,13 @@ function TextBlockComponent({
   block,
   dimensions,
   pos,
+  parents,
   style,
   fontSizePx,
 }: {
   block: z.infer<typeof TextBlockSchema>;
   dimensions: { width: number; height: number };
+  parents: string[];
   pos: {
     relativeTo: {
       x: number;
@@ -97,10 +100,26 @@ function TextBlockComponent({
 }) {
   const popup = useDomPopup();
   const popupKey = useId();
+  const { documentStore } = useDocumentStores();
+  const { focusedBlockId, focusBlock } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      focusedBlockId: s.focusBlockId,
+      focusBlock: s.focusBlock,
+    }))
+  );
+  const relativeTo = parents.length > 0 ? parents[parents.length - 1] : null;
   const handleClick = useCallback(
     (args: {
       anchor: { left: number; top: number; width: number; height: number };
     }) => {
+      focusBlock((cur) => {
+        // Set if parent is focused
+        if (cur === relativeTo) {
+          return block.id;
+        }
+        return cur;
+      });
       popup.openPopup({
         anchor: args.anchor,
         popupKey,
@@ -109,8 +128,19 @@ function TextBlockComponent({
         ),
       });
     },
-    [popup, block, popupKey]
+    [popup, block, popupKey, focusBlock, relativeTo]
   );
+
+  let isDisabled;
+  if (focusedBlockId !== null) {
+    if (parents.length === 0) {
+      isDisabled = parents.includes(focusedBlockId);
+    } else {
+      isDisabled = parents[parents.length - 1] !== focusedBlockId;
+    }
+  } else {
+    isDisabled = parents.length > 0;
+  }
 
   return (
     <HoverRegion
@@ -118,9 +148,11 @@ function TextBlockComponent({
       y={pos.relativeTo.y}
       width={dimensions.width}
       height={dimensions.height}
-      blockId={block.id}
+      // Only enable if focused OR parent block is focused
+      disabled={isDisabled}
+      // disabled={focusedBlockId !== block.id && pos.relativeTo.blockId !== null}
+      inFocus={focusedBlockId === block.id}
       onClick={handleClick}
-      inFocus={popup.isOpen && popup.popupKey === popupKey}
     >
       <ReorderRegion
         blockId={block.id}
@@ -166,6 +198,7 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     const pos = ctx.claimBlockSpace(dimensions.height);
 
     const posRelativeTo = {
+      parents: [...relativeTo.parents, block.id],
       x: pos.canvas.from.x - relativeTo.x,
       y: pos.canvas.from.y - relativeTo.y,
       width: relativeTo.width,
@@ -178,6 +211,7 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
         <TextBlockComponent
           block={block}
           dimensions={dimensions}
+          parents={relativeTo.parents}
           pos={{
             relativeTo: posRelativeTo,
           }}

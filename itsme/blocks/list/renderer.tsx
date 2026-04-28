@@ -7,25 +7,53 @@ import { BlockSchema } from "../blocks";
 import { ListBulletSchema } from "./schema";
 import { TextBlockSchema } from "../text/schema";
 import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import { useStore } from "zustand/react";
+import { useShallow } from "zustand/react/shallow";
+import { useDocumentStores } from "../document-context";
 
 function ListBlockComponent({
   blockId,
   dimensions,
   pos,
+  parents,
   nodes,
 }: {
   blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
+  parents: string[];
   nodes: React.ReactNode[];
 }) {
+  const { documentStore } = useDocumentStores();
+  const { focusedBlockId, focusBlock } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      focusedBlockId: s.focusBlockId,
+      focusBlock: s.focusBlock,
+    }))
+  );
+
+  let isDisabled;
+  if (focusedBlockId !== null) {
+    if (parents.length === 0) {
+      isDisabled = parents.includes(focusedBlockId);
+    } else {
+      isDisabled = parents[parents.length - 1] !== focusedBlockId;
+    }
+  } else {
+    isDisabled = parents.length > 0;
+  }
+
   return (
     <HoverRegion
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      blockId={blockId}
+      disabled={isDisabled}
+      // disabled={focusedBlockId !== blockId && relativeTo.blockId !== null}
+      inFocus={focusedBlockId === blockId}
+      onClick={() => focusBlock(blockId)}
     >
       <ReorderRegion
         blockId={blockId}
@@ -75,6 +103,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
 
     const listStartPosition = {
       ...ctx.getNextPosition(),
+      blockId: block.id,
       width: relativeTo.width,
     };
     const listSheet = ctx.styleSheet.list;
@@ -104,6 +133,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       const bulletResult = ctx.renderers.text.render(
         bulletBlock,
         {
+          parents: [...relativeTo.parents, block.id],
           x: listStartPosition.x,
           y: listStartPosition.y,
           width: bulletWidth,
@@ -125,6 +155,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       const childResult = childRenderer.render(
         childBlock as never,
         {
+          parents: [...relativeTo.parents, block.id],
           x: listStartPosition.x,
           y: listStartPosition.y,
           width: contentWidth,
@@ -168,6 +199,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
           blockId={block.id}
           dimensions={dimensions}
           pos={listPosRelativeTo}
+          parents={relativeTo.parents}
           nodes={children}
         />
       ),

@@ -1,37 +1,56 @@
 "use client";
 
-import { Fragment, useLayoutEffect, useRef } from "react";
+import { Fragment, useRef } from "react";
 import { Group } from "react-konva";
 import Konva from "konva";
 import { BlockRenderer } from "../renderer-types";
 import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand/react";
+import { useDocumentStores } from "../document-context";
 
 function ColumnsBlockComponent({
   dimensions,
   pos,
+  parents,
   nodes,
   blockId,
-  totalSpan,
-  columnSpans,
-  childBlockIds,
 }: {
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
+  parents: string[];
   nodes: React.ReactNode[];
   blockId: string;
-  totalSpan: number;
-  columnSpans: number[];
-  childBlockIds: string[];
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
+  const { documentStore } = useDocumentStores();
+  const { focusedBlockId, focusBlock } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      focusedBlockId: s.focusBlockId,
+      focusBlock: s.focusBlock,
+    }))
+  );
 
+  let isDisabled;
+  if (focusedBlockId !== null) {
+    if (parents.length === 0) {
+      isDisabled = parents.includes(focusedBlockId);
+    } else {
+      isDisabled = parents[parents.length - 1] !== focusedBlockId;
+    }
+  } else {
+    isDisabled = parents.length > 0;
+  }
   return (
     <HoverRegion
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      blockId={blockId}
+      disabled={isDisabled}
+      inFocus={focusedBlockId === blockId}
+      onClick={() => focusBlock(blockId)}
     >
       <ReorderRegion
         blockId={blockId}
@@ -70,6 +89,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
 
     const groupStartPosition = {
       ...ctx.getNextPosition(),
+      parents: [...relativeTo.parents, block.id],
       width: relativeTo.width,
     };
 
@@ -100,6 +120,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
           x: groupStartPosition.x,
           y: groupStartPosition.y,
           width: spanWidth,
+          parents: [...relativeTo.parents, block.id],
         },
         ctx
       );
@@ -125,8 +146,8 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
       y: groupStartPosition.y - relativeTo.y,
     };
 
-    const columnSpans = childBlocks.map((b) => b.span);
-    const childBlockIds = childBlocks.map((b) => b.block.id);
+    // const columnSpans = childBlocks.map((b) => b.span);
+    // const childBlockIds = childBlocks.map((b) => b.block.id);
 
     return {
       estimatedDimensions: dimensions,
@@ -134,11 +155,9 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
         <ColumnsBlockComponent
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
+          parents={relativeTo.parents}
           nodes={children}
           blockId={block.id}
-          totalSpan={tallySpans}
-          columnSpans={columnSpans}
-          childBlockIds={childBlockIds}
         />
       ),
     };

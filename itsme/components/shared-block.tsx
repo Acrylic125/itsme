@@ -24,7 +24,7 @@ export function HoverRegion({
   onContextMenu,
   onClick,
   inFocus = false,
-  blockId,
+  disabled = false,
 }: {
   x: number;
   y: number;
@@ -32,7 +32,7 @@ export function HoverRegion({
   height: number;
   dpi?: number;
   inFocus?: boolean;
-  blockId?: string;
+  disabled?: boolean;
 } & {
   children: React.ReactNode;
   onContextMenu?: (args: {
@@ -75,6 +75,7 @@ export function HoverRegion({
   const handleClick = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
       if (event.evt.button !== 0) return;
+      if (disabled) return;
       event.evt.preventDefault();
       if (!onClick) return;
       const node = groupRef.current;
@@ -94,17 +95,18 @@ export function HoverRegion({
         },
       });
     },
-    [onClick]
+    [onClick, disabled]
   );
 
   const handleMouseEnter = useCallback(() => {
-    // if (!canReceivePointer) return;
+    if (disabled) return;
     setHovered(true);
-  }, []);
+  }, [disabled]);
 
   const handleMouseLeave = useCallback(() => {
+    if (disabled) return;
     setHovered(false);
-  }, []);
+  }, [disabled]);
 
   const innerStroke = 0.01 * dpi;
   const outerStroke = 0.01 * dpi;

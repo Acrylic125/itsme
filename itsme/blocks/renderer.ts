@@ -555,16 +555,22 @@ export function renderDocumentLayout(args: {
       continue;
     }
     const start = ctx.getNextPosition();
-    const result = (
-      renderer.render as (
-        block: z.infer<typeof BlockSchema>,
-        relativeTo: { x: number; y: number; width: number },
-        ctx: BlockRendererContext
-      ) => {
-        estimatedDimensions: { width: number; height: number };
-        component: () => React.ReactNode;
-      }
-    )(block, { x: 0, y: 0, width: contentWidthPx }, ctx);
+    const result = renderer.render(
+      // Hate this, but whatever.
+      block as never,
+      { x: 0, y: 0, width: contentWidthPx, parents: [] },
+      ctx
+    );
+    // const result = (
+    //   renderer.render as (
+    //     block: z.infer<typeof BlockSchema>,
+    //     relativeTo: { x: number; y: number; width: number },
+    //     ctx: BlockRendererContext
+    //   ) => {
+    //     estimatedDimensions: { width: number; height: number };
+    //     component: () => React.ReactNode;
+    //   }
+    // )(block, { x: 0, y: 0, width: contentWidthPx }, ctx);
     rendered.push({
       id: block.id,
       y: start.y,

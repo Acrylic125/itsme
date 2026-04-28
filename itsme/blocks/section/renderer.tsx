@@ -6,25 +6,52 @@ import { Group } from "react-konva";
 import { BlockRenderer } from "../renderer-types";
 import { BlockSchema } from "../blocks";
 import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import { useDocumentStores } from "../document-context";
+import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand/react";
 
 function SectionBlockComponent({
   blockId,
   dimensions,
   pos,
+  parents,
   nodes,
 }: {
   blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
+  parents: string[];
   nodes: React.ReactNode[];
 }) {
+  const { documentStore } = useDocumentStores();
+  const { focusedBlockId, focusBlock } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      focusedBlockId: s.focusBlockId,
+      focusBlock: s.focusBlock,
+    }))
+  );
+
+  let isDisabled;
+  if (focusedBlockId !== null) {
+    if (parents.length === 0) {
+      isDisabled = parents.includes(focusedBlockId);
+    } else {
+      isDisabled = parents[parents.length - 1] !== focusedBlockId;
+    }
+  } else {
+    isDisabled = parents.length > 0;
+  }
+
   return (
     <HoverRegion
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      blockId={blockId}
+      disabled={isDisabled}
+      inFocus={focusedBlockId === blockId}
+      onClick={() => focusBlock(blockId)}
     >
       <ReorderRegion
         blockId={blockId}
@@ -48,6 +75,7 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
 
     const sectionStartPosition = {
       ...ctx.getNextPosition(),
+      parents: [...relativeTo.parents, block.id],
       width: relativeTo.width,
     };
     // Child components will do the space claiming.
@@ -80,6 +108,7 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
           blockId={block.id}
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
+          parents={relativeTo.parents}
           nodes={children}
         />
       ),

@@ -173,10 +173,15 @@ export function createDocumentUpdateQueueStore(options?: {
 export type DocumentStoreState = {
   documentId: DocumentId;
   document: Document;
+
+  focusBlockId: string | null;
 };
 
 export type DocumentStoreActions = {
   update: (queue: DocumentUpdateQueueStore, update: BlockUpdate) => void;
+  focusBlock: (
+    blockId: string | ((current: string | null) => string | null) | null
+  ) => void;
 };
 
 export type DocumentStore = ReturnType<typeof createDocumentStore>;
@@ -188,6 +193,14 @@ export function createDocumentStore(
   return createStore<DocumentStoreState & DocumentStoreActions>((set, get) => ({
     documentId,
     document: initialDocument,
+    focusBlockId: null,
+    focusBlock: (blockId) => {
+      if (typeof blockId === "function") {
+        set({ focusBlockId: blockId(get().focusBlockId) });
+      } else {
+        set({ focusBlockId: blockId });
+      }
+    },
     update: (queue, update) => {
       const parsed = BlockUpdateSchema.safeParse(update);
       if (!parsed.success) {

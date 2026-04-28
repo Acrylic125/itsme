@@ -1,7 +1,7 @@
 import z from "zod";
 import { BlockSchema, StyleSheetSchema } from "./blocks";
 
-type Pos = {
+export type Pos = {
   x: number;
   y: number;
 };
@@ -9,6 +9,18 @@ type Pos = {
 type BlockRendererMap = {
   [T in z.infer<typeof BlockSchema>["type"]]: BlockRenderer<T>;
 };
+
+export type BlockTree = {
+  id: string;
+  children: BlockTree[];
+};
+
+export function isBlockInTree(blockId: string, tree: BlockTree): boolean {
+  if (tree.id === blockId) {
+    return true;
+  }
+  return tree.children.some((child) => isBlockInTree(blockId, child));
+}
 
 export type BlockRendererContext = {
   styleSheet: z.infer<typeof StyleSheetSchema>;
@@ -31,6 +43,8 @@ export type BlockRenderer<T extends z.infer<typeof BlockSchema>["type"]> = {
   render: (
     block: Extract<z.infer<typeof BlockSchema>, { type: T }>,
     relativeTo: Pos & {
+      // blockId: string | null;
+      parents: string[]; // Last element is the direct parent.
       width: number;
     },
     ctx: BlockRendererContext
