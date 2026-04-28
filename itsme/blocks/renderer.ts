@@ -5,7 +5,7 @@ import {
   PAGE_SIZE,
   StyleSheetSchema,
 } from "./blocks";
-import { BlockRendererContext } from "./renderer-types";
+import { BlockRendererContext, BlockTree } from "./renderer-types";
 import { SectionBlockRenderer } from "./section/renderer";
 import { ColumnsBlockRenderer } from "./columns/renderer";
 import { TextBlockRenderer } from "./text/renderer";
@@ -455,6 +455,33 @@ export function createContext(
     y: marginTopPx,
   };
   const usableHeightPerPage = pageHeightPx - marginTopPx - marginBottomPx;
+  const parentHasChild: Record<string, string[]> = {};
+  const childHasParent: Record<string, string> = {};
+  for (const block of document.blocks) {
+    switch (block.type) {
+      case "section":
+      case "list": {
+        const children = [...block.blocks];
+        parentHasChild[block.id] = children;
+        for (const childId of children) {
+          childHasParent[childId] = block.id;
+        }
+        break;
+      }
+      case "columns": {
+        const children = block.blocks.map((child) => child.blockId);
+        parentHasChild[block.id] = children;
+        for (const childId of children) {
+          childHasParent[childId] = block.id;
+        }
+        break;
+      }
+      case "text":
+        parentHasChild[block.id] = [];
+        break;
+    }
+  }
+  const blockTree = new BlockTree({ parentHasChild, childHasParent });
   //   const renderers = [
   //     SectionBlockRenderer,
   //     TextBlockRenderer,
@@ -511,6 +538,7 @@ export function createContext(
       };
     },
     allBlocks: document.blocks,
+    blockTree,
     renderers: {
       section: SectionBlockRenderer,
       text: TextBlockRenderer,

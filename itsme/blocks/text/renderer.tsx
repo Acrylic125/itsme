@@ -4,7 +4,7 @@ import { TextBlockSchema, TextStyleSchema } from "./schema";
 import { z } from "zod";
 import { Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
-import { BlockRenderer } from "../renderer-types";
+import { BlockRenderer, BlockTree } from "../renderer-types";
 import { HoverRegion, ReorderRegion } from "@/components/shared-block";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -81,12 +81,14 @@ function TextBlockComponent({
   dimensions,
   pos,
   parents,
+  blockTree,
   style,
   fontSizePx,
 }: {
   block: z.infer<typeof TextBlockSchema>;
   dimensions: { width: number; height: number };
   parents: string[];
+  blockTree: BlockTree;
   pos: {
     relativeTo: {
       x: number;
@@ -101,25 +103,18 @@ function TextBlockComponent({
   const popup = useDomPopup();
   const popupKey = useId();
   const { documentStore } = useDocumentStores();
-  const { focusedBlockId, focusBlock } = useStore(
+  const { focusBlock } = useStore(
     documentStore,
     useShallow((s) => ({
-      focusedBlockId: s.focusBlockId,
       focusBlock: s.focusBlock,
     }))
   );
-  const relativeTo = parents.length > 0 ? parents[parents.length - 1] : null;
+  const focusedBlockId = useStore(documentStore, (s) => s.focusBlockId);
   const handleClick = useCallback(
     (args: {
       anchor: { left: number; top: number; width: number; height: number };
     }) => {
-      focusBlock((cur) => {
-        // Set if parent is focused
-        if (cur === relativeTo) {
-          return block.id;
-        }
-        return cur;
-      });
+      focusBlock(block.id);
       popup.openPopup({
         anchor: args.anchor,
         popupKey,
@@ -128,15 +123,25 @@ function TextBlockComponent({
         ),
       });
     },
-    [popup, block, popupKey, focusBlock, relativeTo]
+    [popup, block, popupKey, focusBlock]
   );
 
   let isDisabled;
   if (focusedBlockId !== null) {
+    // Top level, can still focus. But not if it's child is focused.
     if (parents.length === 0) {
-      isDisabled = parents.includes(focusedBlockId);
+      isDisabled = blockTree.isNodeParentOf({
+        parent: block.id,
+        child: focusedBlockId,
+      });
     } else {
       isDisabled = parents[parents.length - 1] !== focusedBlockId;
+      // If parent block is not focused, we try to see if the current block
+      if (isDisabled) {
+        isDisabled =
+          parents[parents.length - 1] !==
+          blockTree.getDirectParentOf(focusedBlockId);
+      }
     }
   } else {
     isDisabled = parents.length > 0;
@@ -148,9 +153,7 @@ function TextBlockComponent({
       y={pos.relativeTo.y}
       width={dimensions.width}
       height={dimensions.height}
-      // Only enable if focused OR parent block is focused
       disabled={isDisabled}
-      // disabled={focusedBlockId !== block.id && pos.relativeTo.blockId !== null}
       inFocus={focusedBlockId === block.id}
       onClick={handleClick}
     >
@@ -212,6 +215,7 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
           block={block}
           dimensions={dimensions}
           parents={relativeTo.parents}
+          blockTree={ctx.blockTree}
           pos={{
             relativeTo: posRelativeTo,
           }}

@@ -1,18 +1,10 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
 // import { useBlockDragContext } from "./block-dnd-context";
 // import { useBlockFocusContext } from "./block-focus-context";
-
-const DRAG_INTENT_THRESHOLD_PX = 6;
 
 export function HoverRegion({
   x,
@@ -104,10 +96,12 @@ export function HoverRegion({
   }, [disabled]);
 
   const handleMouseLeave = useCallback(() => {
-    if (disabled) return;
     setHovered(false);
-  }, [disabled]);
+  }, []);
 
+  const isHoverActive = hovered && !disabled;
+
+  // const innerStroke = 0.2 * dpi;
   const innerStroke = 0.01 * dpi;
   const outerStroke = 0.01 * dpi;
   /** Space between the outer edge of the inner stroke and the inner edge of the outer stroke. */
@@ -116,8 +110,8 @@ export function HoverRegion({
   const innerRadius = 0.01 * dpi;
   const outerRadius = innerRadius + padding;
 
-  const showInnerRing = hovered || inFocus;
-  const showOuterHoverRing = hovered;
+  const showInnerRing = isHoverActive || inFocus;
+  const showOuterHoverRing = isHoverActive;
 
   return (
     <Group
@@ -181,7 +175,7 @@ export function ReorderRegion({
   width,
   height,
   children,
-  blockId,
+  blockId: _blockId,
 }: {
   x?: number;
   y?: number;
@@ -190,6 +184,7 @@ export function ReorderRegion({
   blockId: string;
   children: React.ReactNode;
 }) {
+  void _blockId;
   const groupRef = useRef<Konva.Group | null>(null);
   /** Set to true on mousedown; cleared on mouseup. Prevents click firing after drag. */
   // const hasDraggedRef = useRef(false);

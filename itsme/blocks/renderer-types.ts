@@ -10,16 +10,32 @@ type BlockRendererMap = {
   [T in z.infer<typeof BlockSchema>["type"]]: BlockRenderer<T>;
 };
 
-export type BlockTree = {
-  id: string;
-  children: BlockTree[];
-};
+export class BlockTree {
+  private parentHasChild: Record<string, string[]>;
+  private childHasParent: Record<string, string>;
 
-export function isBlockInTree(blockId: string, tree: BlockTree): boolean {
-  if (tree.id === blockId) {
-    return true;
+  constructor(args?: {
+    parentHasChild?: Record<string, string[]>;
+    childHasParent?: Record<string, string>;
+  }) {
+    this.parentHasChild = args?.parentHasChild ?? {};
+    this.childHasParent = args?.childHasParent ?? {};
   }
-  return tree.children.some((child) => isBlockInTree(blockId, child));
+
+  isNodeChildOf(nodes: { parent: string; child: string }): boolean {
+    const { parent, child } = nodes;
+    const directChildren = this.parentHasChild[parent] ?? [];
+    return directChildren.includes(child);
+  }
+
+  isNodeParentOf(nodes: { parent: string; child: string }): boolean {
+    const { parent, child } = nodes;
+    return this.childHasParent[child] === parent;
+  }
+
+  getDirectParentOf(node: string): string | null {
+    return this.childHasParent[node] ?? null;
+  }
 }
 
 export type BlockRendererContext = {
@@ -34,6 +50,7 @@ export type BlockRendererContext = {
     };
   };
   allBlocks: z.infer<typeof BlockSchema>[];
+  blockTree: BlockTree;
   renderers: BlockRendererMap;
   //   renderers: BlockRenderer<z.infer<typeof BlockSchema>["type"]>[];
 };

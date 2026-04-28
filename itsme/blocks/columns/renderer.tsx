@@ -3,7 +3,7 @@
 import { Fragment, useRef } from "react";
 import { Group } from "react-konva";
 import Konva from "konva";
-import { BlockRenderer } from "../renderer-types";
+import { BlockRenderer, BlockTree } from "../renderer-types";
 import { HoverRegion, ReorderRegion } from "@/components/shared-block";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
@@ -15,29 +15,41 @@ function ColumnsBlockComponent({
   parents,
   nodes,
   blockId,
+  blockTree,
 }: {
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   parents: string[];
   nodes: React.ReactNode[];
   blockId: string;
+  blockTree: BlockTree;
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
   const { documentStore } = useDocumentStores();
-  const { focusedBlockId, focusBlock } = useStore(
+  const { focusBlock } = useStore(
     documentStore,
     useShallow((s) => ({
-      focusedBlockId: s.focusBlockId,
       focusBlock: s.focusBlock,
     }))
   );
+  const focusedBlockId = useStore(documentStore, (s) => s.focusBlockId);
 
   let isDisabled;
   if (focusedBlockId !== null) {
+    // Top level, can still focus. But not if it's child is focused.
     if (parents.length === 0) {
-      isDisabled = parents.includes(focusedBlockId);
+      isDisabled = blockTree.isNodeParentOf({
+        parent: blockId,
+        child: focusedBlockId,
+      });
     } else {
       isDisabled = parents[parents.length - 1] !== focusedBlockId;
+      // If parent block is not focused, we try to see if the current block
+      if (isDisabled) {
+        isDisabled =
+          parents[parents.length - 1] !==
+          blockTree.getDirectParentOf(focusedBlockId);
+      }
     }
   } else {
     isDisabled = parents.length > 0;
@@ -158,6 +170,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
           parents={relativeTo.parents}
           nodes={children}
           blockId={block.id}
+          blockTree={ctx.blockTree}
         />
       ),
     };
