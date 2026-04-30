@@ -6,13 +6,13 @@ import { DomPopupProvider } from "./dom-popup";
 import {
   DocumentSchema,
   getPageLayoutMetrics,
-  renderDocumentLayout,
   type RenderedLayoutBlock,
 } from "@/blocks/renderer";
 import { z } from "zod";
 import {
   DocumentStoresProvider,
   useDocumentStore,
+  useDocument,
 } from "@/blocks/document-context";
 
 export function PageCanvas({
@@ -64,7 +64,7 @@ export function PageCanvas({
   return (
     <div ref={containerRef} className="w-full bg-black">
       {containerWidth !== null && (
-        <DocumentStoresProvider document={document}>
+        <DocumentStoresProvider document={document} dpi={dpi}>
           <PageCanvasKonva
             containerWidth={containerWidth}
             dpi={dpi}
@@ -86,15 +86,7 @@ function PageCanvasKonva({
   dpr: number;
 }) {
   const document = useDocumentStore((s) => s.document);
-  const canMeasureText =
-    typeof window !== "undefined" &&
-    (typeof OffscreenCanvas !== "undefined" ||
-      (!!window.document &&
-        !!window.document.createElement("canvas").getContext("2d")));
-  const blocks = useMemo(() => {
-    return canMeasureText ? renderDocumentLayout({ document, dpi }) : [];
-  }, [document, dpi, canMeasureText]);
-
+  const { blocks } = useDocument();
   const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(
     () => getPageLayoutMetrics(document, dpi),
     [document, dpi]

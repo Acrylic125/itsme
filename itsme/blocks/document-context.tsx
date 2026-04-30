@@ -3,7 +3,6 @@
 import {
   createContext,
   useContext,
-  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -16,10 +15,15 @@ import {
 } from "zustand/middleware";
 import { useStore } from "zustand/react";
 import z from "zod";
-import { DocumentSchema } from "./renderer";
+import {
+  DocumentSchema,
+  renderDocumentLayout,
+  RenderedLayoutBlock,
+} from "./renderer";
 import type { Block } from "./blocks";
 import { BlockUpdateSchema } from "./updater";
 import { applyBlockMove } from "./apply-block-move";
+import { BlockTree } from "./renderer-types";
 
 export type DocumentId = string;
 
@@ -111,9 +115,6 @@ function applyBlockUpdate(doc: Document, update: BlockUpdate): Document {
 
 export type DocumentUpdateQueueState = {
   updates: Record<string, BlockUpdate>;
-};
-
-export type DocumentUpdateQueueActions = {
   enqueue: (update: BlockUpdate) => void;
   setUpdates: (updates: Record<string, BlockUpdate>) => void;
 };
@@ -127,10 +128,13 @@ export function createDocumentUpdateQueueStore(options?: {
 }) {
   const name = options?.storageKey ?? DEFAULT_QUEUE_STORAGE_KEY;
 
-  type QueueStore = DocumentUpdateQueueState & DocumentUpdateQueueActions;
-
   return createStore(
-    persist<QueueStore, [], [], Pick<DocumentUpdateQueueState, "updates">>(
+    persist<
+      DocumentUpdateQueueState,
+      [],
+      [],
+      Pick<DocumentUpdateQueueState, "updates">
+    >(
       (set, get) => ({
         updates: {},
         enqueue: (update) => {
@@ -173,11 +177,7 @@ export function createDocumentUpdateQueueStore(options?: {
 export type DocumentStoreState = {
   documentId: DocumentId;
   document: Document;
-
   focusBlockId: string | null;
-};
-
-export type DocumentStoreActions = {
   update: (queue: DocumentUpdateQueueStore, update: BlockUpdate) => void;
   focusBlock: (
     blockId: string | ((current: string | null) => string | null) | null
@@ -190,7 +190,7 @@ export function createDocumentStore(
   documentId: DocumentId,
   initialDocument: Document
 ) {
-  return createStore<DocumentStoreState & DocumentStoreActions>((set, get) => ({
+  return createStore<DocumentStoreState>((set, get) => ({
     documentId,
     document: initialDocument,
     focusBlockId: null,
@@ -230,74 +230,83 @@ function documentPayloadFromWithId(doc: DocumentWithId): Document {
   return DocumentSchema.parse(rest);
 }
 
-type DocumentStoresContextValue = {
+type DocumentContextValue = {
+  blocks: RenderedLayoutBlock[];
+  blockTree: BlockTree;
   documentStore: DocumentStore;
   updateQueueStore: DocumentUpdateQueueStore;
 };
 
-const DocumentStoresContext = createContext<DocumentStoresContextValue | null>(
-  null
-);
+const DocumentContext = createContext<DocumentContextValue | null>(null);
 
 export function DocumentStoresProvider({
   document,
   children,
+  dpi,
 }: {
   document: DocumentWithId;
   children: ReactNode;
+  dpi: number;
 }) {
-  const [stores] = useState(() => ({
-    documentStore: createDocumentStore(
+  const [stores] = useState(() => {
+    const documentStore = createDocumentStore(
       document.id,
       documentPayloadFromWithId(document)
-    ),
-    updateQueueStore: createDocumentUpdateQueueStore(),
-  }));
+    );
+    return {
+      documentStore,
+      updateQueueStore: createDocumentUpdateQueueStore(),
+    };
+  });
 
-  useLayoutEffect(() => {
-    const payload = documentPayloadFromWithId(document);
-    stores.documentStore.setState({
-      documentId: document.id,
-      document: payload,
-    });
-  }, [document, stores.documentStore]);
+  const canMeasureText =
+    typeof window !== "undefined" &&
+    (typeof OffscreenCanvas !== "undefined" ||
+      (!!window.document &&
+        !!window.document.createElement("canvas").getContext("2d")));
+  const rendered = useMemo(() => {
+    if (canMeasureText) {
+      return renderDocumentLayout({ document, dpi });
+    }
+    return {
+      rendered: [],
+      blockTree: new BlockTree(),
+    };
+  }, [document, dpi, canMeasureText]);
 
-  const value = useMemo<DocumentStoresContextValue>(
-    () => ({
+  const value = useMemo<DocumentContextValue>(() => {
+    return {
+      blocks: rendered.rendered,
+      blockTree: rendered.blockTree,
       documentStore: stores.documentStore,
       updateQueueStore: stores.updateQueueStore,
-    }),
-    [stores]
-  );
+    };
+  }, [stores, rendered]);
 
   return (
-    <DocumentStoresContext.Provider value={value}>
+    <DocumentContext.Provider value={value}>
       {children}
-    </DocumentStoresContext.Provider>
+    </DocumentContext.Provider>
   );
   //   return createElement(DocumentStoresContext.Provider, { value }, children);
 }
 
-export function useDocumentStores(): DocumentStoresContextValue {
-  const ctx = useContext(DocumentStoresContext);
+export function useDocument(): DocumentContextValue {
+  const ctx = useContext(DocumentContext);
   if (!ctx) {
-    throw new Error(
-      "useDocumentStores must be used within DocumentStoresProvider"
-    );
+    throw new Error("useDocument must be used within DocumentStoresProvider");
   }
   return ctx;
 }
 
-export function useDocumentStore<T>(
-  selector: (s: DocumentStoreState & DocumentStoreActions) => T
-): T {
-  const { documentStore } = useDocumentStores();
+export function useDocumentStore<T>(selector: (s: DocumentStoreState) => T): T {
+  const { documentStore } = useDocument();
   return useStore(documentStore, selector);
 }
 
 export function useDocumentUpdateQueueStore<T>(
-  selector: (s: DocumentUpdateQueueState & DocumentUpdateQueueActions) => T
+  selector: (s: DocumentUpdateQueueState) => T
 ): T {
-  const { updateQueueStore } = useDocumentStores();
+  const { updateQueueStore } = useDocument();
   return useStore(updateQueueStore, selector);
 }

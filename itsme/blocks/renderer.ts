@@ -455,33 +455,33 @@ export function createContext(
     y: marginTopPx,
   };
   const usableHeightPerPage = pageHeightPx - marginTopPx - marginBottomPx;
-  const parentHasChild: Record<string, string[]> = {};
-  const childHasParent: Record<string, string> = {};
-  for (const block of document.blocks) {
-    switch (block.type) {
-      case "section":
-      case "list": {
-        const children = [...block.blocks];
-        parentHasChild[block.id] = children;
-        for (const childId of children) {
-          childHasParent[childId] = block.id;
-        }
-        break;
-      }
-      case "columns": {
-        const children = block.blocks.map((child) => child.blockId);
-        parentHasChild[block.id] = children;
-        for (const childId of children) {
-          childHasParent[childId] = block.id;
-        }
-        break;
-      }
-      case "text":
-        parentHasChild[block.id] = [];
-        break;
-    }
-  }
-  const blockTree = new BlockTree({ parentHasChild, childHasParent });
+  // const parentHasChild: Record<string, string[]> = {};
+  // const childHasParent: Record<string, string> = {};
+  // for (const block of document.blocks) {
+  //   switch (block.type) {
+  //     case "section":
+  //     case "list": {
+  //       const children = [...block.blocks];
+  //       parentHasChild[block.id] = children;
+  //       for (const childId of children) {
+  //         childHasParent[childId] = block.id;
+  //       }
+  //       break;
+  //     }
+  //     case "columns": {
+  //       const children = block.blocks.map((child) => child.blockId);
+  //       parentHasChild[block.id] = children;
+  //       for (const childId of children) {
+  //         childHasParent[childId] = block.id;
+  //       }
+  //       break;
+  //     }
+  //     case "text":
+  //       parentHasChild[block.id] = [];
+  //       break;
+  //   }
+  // }
+  // const blockTree = new BlockTree({ parentHasChild, childHasParent });
   //   const renderers = [
   //     SectionBlockRenderer,
   //     TextBlockRenderer,
@@ -538,7 +538,6 @@ export function createContext(
       };
     },
     allBlocks: document.blocks,
-    blockTree,
     renderers: {
       section: SectionBlockRenderer,
       text: TextBlockRenderer,
@@ -564,7 +563,7 @@ export type RenderedLayoutBlock = {
 export function renderDocumentLayout(args: {
   document: z.infer<typeof DocumentSchema>;
   dpi: number;
-}): RenderedLayoutBlock[] {
+}) {
   const { document, dpi } = args;
   const ctx = createContext(document, dpi);
   const { contentWidthPx } = getPageLayoutMetrics(document, dpi);
@@ -589,23 +588,27 @@ export function renderDocumentLayout(args: {
       { x: 0, y: 0, width: contentWidthPx, parents: [] },
       ctx
     );
-    // const result = (
-    //   renderer.render as (
-    //     block: z.infer<typeof BlockSchema>,
-    //     relativeTo: { x: number; y: number; width: number },
-    //     ctx: BlockRendererContext
-    //   ) => {
-    //     estimatedDimensions: { width: number; height: number };
-    //     component: () => React.ReactNode;
-    //   }
-    // )(block, { x: 0, y: 0, width: contentWidthPx }, ctx);
     rendered.push({
       id: block.id,
       y: start.y,
       height: result.estimatedDimensions.height,
       component: result.component,
     });
+    // const children = renderer.getChildren(block as never);
+    // for (const childId of children) {
+    //   parentHasChild[block.id].push(childId);
+    //   childHasParent[childId] = block.id;
+    // }
   }
 
-  return rendered;
+  // Block tree.
+  const parentHasChild: Record<string, string[]> = {};
+  const childHasParent: Record<string, string> = {};
+
+  const blockTree = new BlockTree({ parentHasChild, childHasParent });
+
+  return {
+    rendered,
+    blockTree,
+  };
 }

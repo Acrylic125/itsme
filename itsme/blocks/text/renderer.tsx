@@ -4,12 +4,15 @@ import { TextBlockSchema, TextStyleSchema } from "./schema";
 import { z } from "zod";
 import { Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
-import { BlockRenderer, BlockTree } from "../renderer-types";
-import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import { BlockRenderer } from "../renderer-types";
+import {
+  InteractableBlock,
+  useInteractableBlock,
+} from "@/components/shared-block";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useDomPopup } from "@/components/dom-popup";
-import { useDocumentStores, useDocumentStore } from "@/blocks/document-context";
+import { useDocument, useDocumentStore } from "@/blocks/document-context";
 import { useCallback, useId, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
@@ -27,7 +30,7 @@ export function EditTextModal({
       patchDocument: s.update,
     }))
   );
-  const { updateQueueStore } = useDocumentStores();
+  const { updateQueueStore } = useDocument();
   const [text, setText] = useState(block.text);
 
   const handleSave = useCallback(() => {
@@ -81,14 +84,12 @@ function TextBlockComponent({
   dimensions,
   pos,
   parents,
-  blockTree,
   style,
   fontSizePx,
 }: {
   block: z.infer<typeof TextBlockSchema>;
   dimensions: { width: number; height: number };
   parents: string[];
-  blockTree: BlockTree;
   pos: {
     relativeTo: {
       x: number;
@@ -102,14 +103,14 @@ function TextBlockComponent({
 }) {
   const popup = useDomPopup();
   const popupKey = useId();
-  const { documentStore } = useDocumentStores();
-  const { focusBlock } = useStore(
+  const { documentStore, blockTree } = useDocument();
+  const { focusBlock, focusBlockId } = useStore(
     documentStore,
     useShallow((s) => ({
       focusBlock: s.focusBlock,
+      focusBlockId: s.focusBlockId,
     }))
   );
-  const focusedBlockId = useStore(documentStore, (s) => s.focusBlockId);
   const handleClick = useCallback(
     (args: {
       anchor: { left: number; top: number; width: number; height: number };
@@ -146,58 +147,38 @@ function TextBlockComponent({
     [popup, block, popupKey, focusBlock]
   );
 
-  let isDisabled;
-  if (focusedBlockId !== null) {
-    // Top level, can still focus. But not if it's child is focused.
-    if (parents.length === 0) {
-      isDisabled = blockTree.isNodeParentOf({
-        parent: block.id,
-        child: focusedBlockId,
-      });
-    } else {
-      isDisabled = parents[parents.length - 1] !== focusedBlockId;
-      // If parent block is not focused, we try to see if the current block
-      if (isDisabled) {
-        isDisabled =
-          parents[parents.length - 1] !==
-          blockTree.getDirectParentOf(focusedBlockId);
-      }
-    }
-  } else {
-    isDisabled = parents.length > 0;
-  }
+  const isDisabled = useInteractableBlock({
+    focusBlockId,
+    parents,
+    blockId: block.id,
+    blockTree,
+  });
 
   return (
-    <HoverRegion
+    <InteractableBlock
       x={pos.relativeTo.x}
       y={pos.relativeTo.y}
       width={dimensions.width}
       height={dimensions.height}
       disabled={isDisabled}
-      inFocus={focusedBlockId === block.id}
+      inFocus={focusBlockId === block.id}
       onClick={handleClick}
     >
-      <ReorderRegion
-        blockId={block.id}
+      <Text
+        x={0}
+        y={0}
         width={dimensions.width}
         height={dimensions.height}
-      >
-        <Text
-          x={0}
-          y={0}
-          width={dimensions.width}
-          height={dimensions.height}
-          text={block.text}
-          fontFamily={style.fontFamily}
-          fontSize={fontSizePx}
-          lineHeight={style.lineHeight}
-          fontStyle={style.fontWeight === "bold" ? "bold" : "normal"}
-          align={block.align}
-          fill="#000000"
-          perfectDrawEnabled={false}
-        />
-      </ReorderRegion>
-    </HoverRegion>
+        text={block.text}
+        fontFamily={style.fontFamily}
+        fontSize={fontSizePx}
+        lineHeight={style.lineHeight}
+        fontStyle={style.fontWeight === "bold" ? "bold" : "normal"}
+        align={block.align}
+        fill="#000000"
+        perfectDrawEnabled={false}
+      />
+    </InteractableBlock>
   );
 }
 
@@ -229,13 +210,15 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     };
 
     return {
+      blockId: block.id,
       estimatedDimensions: dimensions,
+      boundingBoxes: [],
+      children: [],
       component: () => (
         <TextBlockComponent
           block={block}
           dimensions={dimensions}
           parents={relativeTo.parents}
-          blockTree={ctx.blockTree}
           pos={{
             relativeTo: posRelativeTo,
           }}

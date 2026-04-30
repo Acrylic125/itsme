@@ -1,13 +1,14 @@
 "use client";
 
-import { Fragment, useRef } from "react";
-import { Group } from "react-konva";
-import Konva from "konva";
-import { BlockRenderer, BlockTree } from "../renderer-types";
-import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import { Fragment } from "react";
+import { BlockRenderer } from "../renderer-types";
+import {
+  InteractableBlock,
+  useInteractableBlock,
+} from "@/components/shared-block";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
-import { useDocumentStores } from "../document-context";
+import { useDocument } from "../document-context";
 
 function ColumnsBlockComponent({
   dimensions,
@@ -15,71 +16,41 @@ function ColumnsBlockComponent({
   parents,
   nodes,
   blockId,
-  blockTree,
 }: {
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   parents: string[];
   nodes: React.ReactNode[];
   blockId: string;
-  blockTree: BlockTree;
 }) {
-  const groupRef = useRef<Konva.Group | null>(null);
-  const { documentStore } = useDocumentStores();
-  const { focusBlock } = useStore(
+  const { documentStore, blockTree } = useDocument();
+  const { focusBlock, focusBlockId } = useStore(
     documentStore,
     useShallow((s) => ({
       focusBlock: s.focusBlock,
+      focusBlockId: s.focusBlockId,
     }))
   );
-  const focusedBlockId = useStore(documentStore, (s) => s.focusBlockId);
 
-  let isDisabled;
-  if (focusedBlockId !== null) {
-    // Top level, can still focus. But not if it's child is focused.
-    if (parents.length === 0) {
-      isDisabled = blockTree.isNodeParentOf({
-        parent: blockId,
-        child: focusedBlockId,
-      });
-    } else {
-      isDisabled = parents[parents.length - 1] !== focusedBlockId;
-      // If parent block is not focused, we try to see if the current block
-      if (isDisabled) {
-        isDisabled =
-          parents[parents.length - 1] !==
-          blockTree.getDirectParentOf(focusedBlockId);
-      }
-    }
-  } else {
-    isDisabled = parents.length > 0;
-  }
+  const isDisabled = useInteractableBlock({
+    focusBlockId,
+    parents,
+    blockId,
+    blockTree,
+  });
+
   return (
-    <HoverRegion
+    <InteractableBlock
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
       disabled={isDisabled}
-      inFocus={focusedBlockId === blockId}
+      inFocus={focusBlockId === blockId}
       onClick={() => focusBlock(blockId)}
     >
-      <ReorderRegion
-        blockId={blockId}
-        width={dimensions.width}
-        height={dimensions.height}
-      >
-        <Group
-          ref={(n) => {
-            groupRef.current = n;
-          }}
-          width={dimensions.width}
-          height={dimensions.height}
-        >
-          {nodes}
-        </Group>
-      </ReorderRegion>
-    </HoverRegion>
+      {nodes}
+    </InteractableBlock>
   );
 }
 
@@ -140,7 +111,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
       const componentTakesY = afterAddingPosition.y - cursor.y;
       maxOffsetY = Math.max(maxOffsetY, componentTakesY);
       cursor.x += spanWidth;
-      return <Fragment key={b.block.id}>{result.component()}</Fragment>;
+      return result;
     });
     ctx.setNextPosition({
       x: groupStartPosition.x,
@@ -162,15 +133,19 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
     // const childBlockIds = childBlocks.map((b) => b.block.id);
 
     return {
+      blockId: block.id,
       estimatedDimensions: dimensions,
+      boundingBoxes: [],
+      children: children,
       component: () => (
         <ColumnsBlockComponent
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
           parents={relativeTo.parents}
-          nodes={children}
+          nodes={children.map((c) => (
+            <Fragment key={c.blockId}>{c.component()}</Fragment>
+          ))}
           blockId={block.id}
-          blockTree={ctx.blockTree}
         />
       ),
     };

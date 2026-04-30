@@ -2,11 +2,13 @@
 
 import { Fragment } from "react";
 import { z } from "zod";
-import { Group } from "react-konva";
-import { BlockRenderer, BlockTree } from "../renderer-types";
+import { BlockRenderer } from "../renderer-types";
 import { BlockSchema } from "../blocks";
-import { HoverRegion, ReorderRegion } from "@/components/shared-block";
-import { useDocumentStores } from "../document-context";
+import {
+  InteractableBlock,
+  useInteractableBlock,
+} from "@/components/shared-block";
+import { useDocument } from "../document-context";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 
@@ -15,66 +17,42 @@ function SectionBlockComponent({
   dimensions,
   pos,
   parents,
-  blockTree,
   nodes,
 }: {
   blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   parents: string[];
-  blockTree: BlockTree;
   nodes: React.ReactNode[];
 }) {
-  const { documentStore } = useDocumentStores();
-  const { focusBlock } = useStore(
+  const { documentStore, blockTree } = useDocument();
+  const { focusBlock, focusBlockId } = useStore(
     documentStore,
     useShallow((s) => ({
       focusBlock: s.focusBlock,
+      focusBlockId: s.focusBlockId,
     }))
   );
-  const focusedBlockId = useStore(documentStore, (s) => s.focusBlockId);
 
-  let isDisabled;
-  if (focusedBlockId !== null) {
-    // Top level, can still focus. But not if it's child is focused.
-    if (parents.length === 0) {
-      isDisabled = blockTree.isNodeParentOf({
-        parent: blockId,
-        child: focusedBlockId,
-      });
-    } else {
-      isDisabled = parents[parents.length - 1] !== focusedBlockId;
-      // If parent block is not focused, we try to see if the current block
-      if (isDisabled) {
-        isDisabled =
-          parents[parents.length - 1] !==
-          blockTree.getDirectParentOf(focusedBlockId);
-      }
-    }
-  } else {
-    isDisabled = parents.length > 0;
-  }
+  const isDisabled = useInteractableBlock({
+    focusBlockId,
+    parents,
+    blockId,
+    blockTree,
+  });
 
   return (
-    <HoverRegion
+    <InteractableBlock
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
       disabled={isDisabled}
-      inFocus={focusedBlockId === blockId}
+      inFocus={focusBlockId === blockId}
       onClick={() => focusBlock(blockId)}
     >
-      <ReorderRegion
-        blockId={blockId}
-        width={dimensions.width}
-        height={dimensions.height}
-      >
-        <Group width={dimensions.width} height={dimensions.height}>
-          {nodes}
-        </Group>
-      </ReorderRegion>
-    </HoverRegion>
+      {nodes}
+    </InteractableBlock>
   );
 }
 
@@ -96,9 +74,9 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
       if (!renderer) {
         throw new Error(`Renderer not found for block type: ${b.type}`);
       }
-      // I hate this.
       const result = renderer.render(b as never, sectionStartPosition, ctx);
-      return <Fragment key={b.id}>{result.component()}</Fragment>;
+      return result;
+      // return <Fragment key={b.id}>{result.component()}</Fragment>;
     });
     const sectionEndPosition = ctx.getNextPosition();
 
@@ -114,15 +92,19 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
     };
 
     return {
+      blockId: block.id,
       estimatedDimensions: dimensions,
+      boundingBoxes: [],
+      children: children,
       component: () => (
         <SectionBlockComponent
           blockId={block.id}
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
           parents={relativeTo.parents}
-          blockTree={ctx.blockTree}
-          nodes={children}
+          nodes={children.map((c) => (
+            <Fragment key={c.blockId}>{c.component()}</Fragment>
+          ))}
         />
       ),
     };

@@ -2,81 +2,59 @@
 
 import { z } from "zod";
 import { Group } from "react-konva";
-import { BlockRenderer, BlockTree } from "../renderer-types";
+import { BlockRenderer } from "../renderer-types";
 import { BlockSchema } from "../blocks";
 import { ListBulletSchema } from "./schema";
 import { TextBlockSchema } from "../text/schema";
-import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import {
+  InteractableBlock,
+  useInteractableBlock,
+} from "@/components/shared-block";
 import { useStore } from "zustand/react";
 import { useShallow } from "zustand/react/shallow";
-import { useDocumentStores } from "../document-context";
+import { useDocument } from "../document-context";
 
 function ListBlockComponent({
   blockId,
   dimensions,
   pos,
   parents,
-  blockTree,
   nodes,
 }: {
   blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   parents: string[];
-  blockTree: BlockTree;
   nodes: React.ReactNode[];
 }) {
-  const { documentStore } = useDocumentStores();
-  const { focusBlock } = useStore(
+  const { documentStore, blockTree } = useDocument();
+  const { focusBlock, focusBlockId } = useStore(
     documentStore,
     useShallow((s) => ({
       focusBlock: s.focusBlock,
+      focusBlockId: s.focusBlockId,
     }))
   );
-  const focusedBlockId = useStore(documentStore, (s) => s.focusBlockId);
 
-  let isDisabled;
-  if (focusedBlockId !== null) {
-    // Top level, can still focus. But not if it's child is focused.
-    if (parents.length === 0) {
-      isDisabled = blockTree.isNodeParentOf({
-        parent: blockId,
-        child: focusedBlockId,
-      });
-    } else {
-      isDisabled = parents[parents.length - 1] !== focusedBlockId;
-      // If parent block is not focused, we try to see if the current block
-      if (isDisabled) {
-        isDisabled =
-          parents[parents.length - 1] !==
-          blockTree.getDirectParentOf(focusedBlockId);
-      }
-    }
-  } else {
-    isDisabled = parents.length > 0;
-  }
+  const isDisabled = useInteractableBlock({
+    focusBlockId,
+    parents,
+    blockId,
+    blockTree,
+  });
 
   return (
-    <HoverRegion
+    <InteractableBlock
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
       disabled={isDisabled}
-      // disabled={focusedBlockId !== blockId && relativeTo.blockId !== null}
-      inFocus={focusedBlockId === blockId}
+      inFocus={focusBlockId === blockId}
       onClick={() => focusBlock(blockId)}
     >
-      <ReorderRegion
-        blockId={blockId}
-        width={dimensions.width}
-        height={dimensions.height}
-      >
-        <Group width={dimensions.width} height={dimensions.height}>
-          {nodes}
-        </Group>
-      </ReorderRegion>
-    </HoverRegion>
+      {nodes}
+    </InteractableBlock>
   );
 }
 
@@ -128,7 +106,11 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       relativeTo.width - bulletWidth - betweenPx
     );
 
-    const children = childBlocks.map((childBlock, index) => {
+    const children: ReturnType<
+      BlockRenderer<z.infer<typeof BlockSchema>["type"]>["render"]
+    >[] = [];
+    const nodes: React.ReactNode[] = [];
+    childBlocks.forEach((childBlock, index) => {
       const rowStartPosition = ctx.getNextPosition();
       const bulletBlock: z.infer<typeof TextBlockSchema> = {
         id: `${block.id}-bullet-${index}`,
@@ -186,7 +168,9 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
         y: rowStartPosition.y + rowHeight,
       });
 
-      return (
+      children.push(bulletResult);
+      children.push(childResult);
+      nodes.push(
         <Group key={childBlock.id}>
           {bulletResult.component()}
           {childResult.component()}
@@ -205,15 +189,17 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
     };
 
     return {
+      blockId: block.id,
       estimatedDimensions: dimensions,
+      boundingBoxes: [],
+      children: children,
       component: () => (
         <ListBlockComponent
           blockId={block.id}
           dimensions={dimensions}
           pos={listPosRelativeTo}
           parents={relativeTo.parents}
-          blockTree={ctx.blockTree}
-          nodes={children}
+          nodes={nodes}
         />
       ),
     };
