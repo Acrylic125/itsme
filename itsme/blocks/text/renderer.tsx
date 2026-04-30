@@ -4,7 +4,12 @@ import { TextBlockSchema, TextStyleSchema } from "./schema";
 import { z } from "zod";
 import { Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
-import { BlockRenderer } from "../renderer-types";
+import {
+  BlockRenderer,
+  getEdgeReorderBoundingBoxes,
+  REORDER_BOUNDING_BOX_TARGET_SIZE,
+  REORDER_BOUNDING_BOX_VISUAL_SIZE,
+} from "../renderer-types";
 import {
   InteractableBlock,
   useInteractableBlock,
@@ -156,6 +161,7 @@ function TextBlockComponent({
 
   return (
     <InteractableBlock
+      blockId={block.id}
       x={pos.relativeTo.x}
       y={pos.relativeTo.y}
       width={dimensions.width}
@@ -212,7 +218,16 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     return {
       blockId: block.id,
       estimatedDimensions: dimensions,
-      boundingBoxes: [],
+      boundingBoxes: getEdgeReorderBoundingBoxes({
+        blockId: block.id,
+        from: pos.canvas.from,
+        to: {
+          x: pos.canvas.from.x + dimensions.width,
+          y: pos.canvas.from.y + dimensions.height,
+        },
+        visualSize: REORDER_BOUNDING_BOX_VISUAL_SIZE,
+        targetSize: REORDER_BOUNDING_BOX_TARGET_SIZE,
+      }),
       children: [],
       component: () => (
         <TextBlockComponent

@@ -14,6 +14,8 @@ import {
   useDocumentStore,
   useDocument,
 } from "@/blocks/document-context";
+import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand/react";
 
 export function PageCanvas({
   document,
@@ -112,18 +114,6 @@ function PageCanvasKonva({
   );
 }
 
-type DocumentStageProps = {
-  blocks: RenderedLayoutBlock[];
-  pageWidth: number;
-  pageHeight: number;
-  /** Layout stride in px: page height plus inter-page gap (matches renderer `createContext`). */
-  pageStridePx: number;
-  gapPx: number;
-  scale: number;
-  dpi: number;
-  dpr: number;
-};
-
 function DocumentStage({
   blocks,
   pageWidth,
@@ -133,7 +123,17 @@ function DocumentStage({
   scale,
   dpi,
   dpr,
-}: DocumentStageProps) {
+}: {
+  blocks: RenderedLayoutBlock[];
+  pageWidth: number;
+  pageHeight: number;
+  /** Layout stride in px: page height plus inter-page gap (matches renderer `createContext`). */
+  pageStridePx: number;
+  gapPx: number;
+  scale: number;
+  dpi: number;
+  dpr: number;
+}) {
   const maxEndY = blocks.reduce((m, b) => Math.max(m, b.y + b.height), 0);
   const pageCount = Math.max(1, Math.ceil(maxEndY / pageStridePx));
   const stageWidth = pageWidth * scale;
@@ -185,8 +185,59 @@ function DocumentStage({
           {blocks.map((block) => (
             <Group key={block.id}>{block.component()}</Group>
           ))}
+          <ReorderLayer />
         </Group>
       </Layer>
     </Stage>
+  );
+}
+
+function ReorderLayer() {
+  const { blockTree, documentStore } = useDocument();
+  const { reorder } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      reorder: s.reorder,
+    }))
+  );
+  const boxes = blockTree.getReorderBoundingBoxes();
+
+  let reorderTarget: (typeof boxes)[number] | null = null;
+  if (reorder !== null) {
+    for (let i = boxes.length - 1; i >= 0; i -= 1) {
+      const box = boxes[i];
+      if (
+        reorder.position.x >= box.target.from.x &&
+        reorder.position.x <= box.target.to.x &&
+        reorder.position.y >= box.target.from.y &&
+        reorder.position.y <= box.target.to.y
+      ) {
+        reorderTarget = box;
+        break;
+      }
+    }
+  }
+
+  return (
+    <>
+      {boxes.map((box, index) => {
+        const isTarget = reorderTarget === box;
+        if (!isTarget) return null;
+        return (
+          <Rect
+            key={`${box.blockId}-${box.type}-${index}`}
+            x={box.visual.from.x}
+            y={box.visual.from.y}
+            width={box.visual.to.x - box.visual.from.x}
+            height={box.visual.to.y - box.visual.from.y}
+            // stroke={isTarget ? "#ff0000" : "#000000"}
+            // fill={isTarget ? "#ff0000" : "#00000020"}
+            fill="#2B7FFF"
+            perfectDrawEnabled={false}
+            listening={false}
+          />
+        );
+      })}
+    </>
   );
 }

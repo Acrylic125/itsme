@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
 import { BlockTree } from "@/blocks/renderer-types";
+import { useDocument } from "@/blocks/document-context";
+import { useStore } from "zustand/react";
+import { useShallow } from "zustand/react/shallow";
 // import { useBlockDragContext } from "./block-dnd-context";
 // import { useBlockFocusContext } from "./block-focus-context";
 
@@ -46,6 +49,7 @@ export function useInteractableBlock({
 }
 
 export function InteractableBlock({
+  blockId,
   x,
   y,
   width,
@@ -57,6 +61,7 @@ export function InteractableBlock({
   inFocus = false,
   disabled = false,
 }: {
+  blockId: string;
   x: number;
   y: number;
   width: number;
@@ -76,6 +81,13 @@ export function InteractableBlock({
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
   const [hovered, setHovered] = useState(false);
+  const { documentStore } = useDocument();
+  const { setReorder } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      setReorder: s.setReorder,
+    }))
+  );
 
   const handleContextMenu = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
@@ -168,25 +180,66 @@ export function InteractableBlock({
 
   const isHoverActive = hovered && !disabled && !isDragging;
 
+  const getPointerCanvasPosition = useCallback((node: Konva.Node) => {
+    const stage = node.getStage();
+    const pointerPosition = stage?.getPointerPosition();
+    if (!pointerPosition) {
+      return null;
+    }
+
+    const absoluteScale = node.getAbsoluteScale();
+    if (absoluteScale.x === 0 || absoluteScale.y === 0) {
+      return null;
+    }
+
+    return {
+      x: pointerPosition.x / absoluteScale.x,
+      y: pointerPosition.y / absoluteScale.y,
+    };
+  }, []);
+
   const handleDragStart = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
       dragStartPosition.current = event.target.getPosition();
       if (disabled) return;
+      const pointerCanvasPosition = getPointerCanvasPosition(event.target);
+      if (pointerCanvasPosition) {
+        setReorder({
+          position: pointerCanvasPosition,
+          blockIds: [blockId],
+        });
+      }
       setIsDragging(true);
     },
-    [disabled]
+    [disabled, setReorder, blockId, getPointerCanvasPosition]
+  );
+
+  const handleDragMove = useCallback(
+    (event: Konva.KonvaEventObject<DragEvent>) => {
+      if (disabled) return;
+      const pointerCanvasPosition = getPointerCanvasPosition(event.target);
+      if (!pointerCanvasPosition) {
+        return;
+      }
+      setReorder({
+        position: pointerCanvasPosition,
+        blockIds: [blockId],
+      });
+    },
+    [disabled, setReorder, blockId, getPointerCanvasPosition]
   );
 
   const handleDragEnd = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
       setIsDragging(false);
+      setReorder(null);
       event.target.position({
         x: dragStartPosition.current.x,
         y: dragStartPosition.current.y,
       });
       event.target.getLayer()?.batchDraw();
     },
-    []
+    [setReorder]
   );
 
   // const innerStroke = 0.2 * dpi;
@@ -228,6 +281,7 @@ export function InteractableBlock({
         height={height}
         draggable={!disabled}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragEnd}
         onMouseEnter={handleMouseEnter}

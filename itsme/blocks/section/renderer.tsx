@@ -2,7 +2,12 @@
 
 import { Fragment } from "react";
 import { z } from "zod";
-import { BlockRenderer } from "../renderer-types";
+import {
+  BlockRenderer,
+  getEdgeReorderBoundingBoxes,
+  REORDER_BOUNDING_BOX_TARGET_SIZE,
+  REORDER_BOUNDING_BOX_VISUAL_SIZE,
+} from "../renderer-types";
 import { BlockSchema } from "../blocks";
 import {
   InteractableBlock,
@@ -43,6 +48,7 @@ function SectionBlockComponent({
 
   return (
     <InteractableBlock
+      blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
@@ -94,7 +100,16 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
     return {
       blockId: block.id,
       estimatedDimensions: dimensions,
-      boundingBoxes: [],
+      boundingBoxes: getEdgeReorderBoundingBoxes({
+        blockId: block.id,
+        from: { x: sectionStartPosition.x, y: sectionStartPosition.y },
+        to: {
+          x: sectionStartPosition.x + dimensions.width,
+          y: sectionStartPosition.y + dimensions.height,
+        },
+        visualSize: REORDER_BOUNDING_BOX_VISUAL_SIZE,
+        targetSize: REORDER_BOUNDING_BOX_TARGET_SIZE,
+      }),
       children: children,
       component: () => (
         <SectionBlockComponent

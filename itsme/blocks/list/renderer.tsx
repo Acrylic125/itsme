@@ -2,7 +2,12 @@
 
 import { z } from "zod";
 import { Group } from "react-konva";
-import { BlockRenderer } from "../renderer-types";
+import {
+  BlockRenderer,
+  getEdgeReorderBoundingBoxes,
+  REORDER_BOUNDING_BOX_TARGET_SIZE,
+  REORDER_BOUNDING_BOX_VISUAL_SIZE,
+} from "../renderer-types";
 import { BlockSchema } from "../blocks";
 import { ListBulletSchema } from "./schema";
 import { TextBlockSchema } from "../text/schema";
@@ -45,6 +50,7 @@ function ListBlockComponent({
 
   return (
     <InteractableBlock
+      blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
@@ -191,7 +197,16 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
     return {
       blockId: block.id,
       estimatedDimensions: dimensions,
-      boundingBoxes: [],
+      boundingBoxes: getEdgeReorderBoundingBoxes({
+        blockId: block.id,
+        from: { x: listStartPosition.x, y: listStartPosition.y },
+        to: {
+          x: listStartPosition.x + dimensions.width,
+          y: listStartPosition.y + dimensions.height,
+        },
+        visualSize: REORDER_BOUNDING_BOX_VISUAL_SIZE,
+        targetSize: REORDER_BOUNDING_BOX_TARGET_SIZE,
+      }),
       children: children,
       component: () => (
         <ListBlockComponent

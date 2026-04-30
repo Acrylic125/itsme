@@ -23,16 +23,83 @@ export type BlockTreeReorderBoundingBox = {
   blockId: string;
 };
 
+export const REORDER_BOUNDING_BOX_VISUAL_SIZE = 8; // px
+export const REORDER_BOUNDING_BOX_TARGET_SIZE = 24; // px
+
+export function getEdgeReorderBoundingBoxes(args: {
+  blockId: string;
+  from: Pos;
+  to: Pos;
+  visualSize: number;
+  targetSize: number;
+}): BlockTreeReorderBoundingBox[] {
+  const { blockId, from, to, visualSize, targetSize } = args;
+
+  return [
+    {
+      type: "top",
+      blockId,
+      visual: {
+        from: { x: from.x, y: from.y },
+        to: { x: to.x, y: from.y + visualSize },
+      },
+      target: {
+        from: { x: from.x, y: from.y },
+        to: { x: to.x, y: from.y + targetSize },
+      },
+    },
+    {
+      type: "right",
+      blockId,
+      visual: {
+        from: { x: to.x - visualSize, y: from.y },
+        to: { x: to.x, y: to.y },
+      },
+      target: {
+        from: { x: to.x - targetSize, y: from.y },
+        to: { x: to.x, y: to.y },
+      },
+    },
+    {
+      type: "bottom",
+      blockId,
+      visual: {
+        from: { x: from.x, y: to.y - visualSize },
+        to: { x: to.x, y: to.y },
+      },
+      target: {
+        from: { x: from.x, y: to.y - targetSize },
+        to: { x: to.x, y: to.y },
+      },
+    },
+    {
+      type: "left",
+      blockId,
+      visual: {
+        from: { x: from.x, y: from.y },
+        to: { x: from.x + visualSize, y: to.y },
+      },
+      target: {
+        from: { x: from.x, y: from.y },
+        to: { x: from.x + targetSize, y: to.y },
+      },
+    },
+  ];
+}
+
 export class BlockTree {
   private parentHasChild: Record<string, string[]>;
   private childHasParent: Record<string, string>;
+  private reorderBoundingBoxes: BlockTreeReorderBoundingBox[];
 
   constructor(args?: {
     parentHasChild?: Record<string, string[]>;
     childHasParent?: Record<string, string>;
+    reorderBoundingBoxes?: BlockTreeReorderBoundingBox[];
   }) {
     this.parentHasChild = args?.parentHasChild ?? {};
     this.childHasParent = args?.childHasParent ?? {};
+    this.reorderBoundingBoxes = args?.reorderBoundingBoxes ?? [];
   }
 
   isNodeChildOf(nodes: { parent: string; child: string }): boolean {
@@ -48,6 +115,10 @@ export class BlockTree {
 
   getDirectParentOf(node: string): string | null {
     return this.childHasParent[node] ?? null;
+  }
+
+  getReorderBoundingBoxes(): BlockTreeReorderBoundingBox[] {
+    return this.reorderBoundingBoxes;
   }
 }
 

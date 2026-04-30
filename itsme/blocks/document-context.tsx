@@ -23,7 +23,7 @@ import {
 import type { Block } from "./blocks";
 import { BlockUpdateSchema } from "./updater";
 import { applyBlockMove } from "./apply-block-move";
-import { BlockTree } from "./renderer-types";
+import { BlockTree, Pos } from "./renderer-types";
 
 export type DocumentId = string;
 
@@ -178,9 +178,19 @@ export type DocumentStoreState = {
   documentId: DocumentId;
   document: Document;
   focusBlockId: string | null;
+  reorder: {
+    position: Pos;
+    blockIds: string[];
+  } | null;
   update: (queue: DocumentUpdateQueueStore, update: BlockUpdate) => void;
   focusBlock: (
     blockId: string | ((current: string | null) => string | null) | null
+  ) => void;
+  setReorder: (
+    reorder: {
+      position: Pos;
+      blockIds: string[];
+    } | null
   ) => void;
 };
 
@@ -194,12 +204,16 @@ export function createDocumentStore(
     documentId,
     document: initialDocument,
     focusBlockId: null,
+    reorder: null,
     focusBlock: (blockId) => {
       if (typeof blockId === "function") {
         set({ focusBlockId: blockId(get().focusBlockId) });
       } else {
         set({ focusBlockId: blockId });
       }
+    },
+    setReorder: (reorder) => {
+      set({ reorder });
     },
     update: (queue, update) => {
       const parsed = BlockUpdateSchema.safeParse(update);
