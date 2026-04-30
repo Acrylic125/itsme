@@ -201,9 +201,14 @@ function ReorderLayer() {
     }))
   );
   const boxes = blockTree.getReorderBoundingBoxes();
+  const [targetIndex, setTargetIndex] = useState(0);
 
-  let reorderTarget: (typeof boxes)[number] | null = null;
-  if (reorder !== null) {
+  const intersectionTargets = useMemo(() => {
+    const targets: (typeof boxes)[number][] = [];
+    if (reorder === null) {
+      return targets;
+    }
+
     for (let i = boxes.length - 1; i >= 0; i -= 1) {
       const box = boxes[i];
       if (
@@ -212,11 +217,49 @@ function ReorderLayer() {
         reorder.position.y >= box.target.from.y &&
         reorder.position.y <= box.target.to.y
       ) {
-        reorderTarget = box;
-        break;
+        targets.push(box);
       }
     }
-  }
+    return targets;
+  }, [boxes, reorder]);
+
+  const intersectionSignature = useMemo(
+    () =>
+      intersectionTargets
+        .map(
+          (box) =>
+            `${box.blockId}:${box.type}:${box.target.from.x}:${box.target.from.y}:${box.target.to.x}:${box.target.to.y}`
+        )
+        .join("|"),
+    [intersectionTargets]
+  );
+
+  useEffect(() => {
+    const resetTimer = window.setTimeout(() => {
+      setTargetIndex(0);
+    }, 0);
+    if (intersectionTargets.length <= 1) {
+      return () => window.clearTimeout(resetTimer);
+    }
+    const timer = window.setInterval(() => {
+      setTargetIndex((prev) => {
+        if (prev >= intersectionTargets.length - 1) {
+          window.clearInterval(timer);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 600);
+    return () => {
+      window.clearTimeout(resetTimer);
+      window.clearInterval(timer);
+    };
+  }, [intersectionSignature, intersectionTargets.length]);
+
+  const reorderTarget =
+    intersectionTargets[
+      Math.min(targetIndex, intersectionTargets.length - 1)
+    ] ?? null;
 
   return (
     <>
