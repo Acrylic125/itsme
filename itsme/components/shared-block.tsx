@@ -81,11 +81,12 @@ export function InteractableBlock({
 }) {
   const groupRef = useRef<Konva.Group | null>(null);
   const [hovered, setHovered] = useState(false);
-  const { documentStore } = useDocument();
-  const { setReorder } = useStore(
+  const { documentStore, updateQueueStore, blockTree } = useDocument();
+  const { setReorder, commitReorder } = useStore(
     documentStore,
     useShallow((s) => ({
       setReorder: s.setReorder,
+      commitReorder: s.commitReorder,
     }))
   );
 
@@ -232,14 +233,14 @@ export function InteractableBlock({
   const handleDragEnd = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
       setIsDragging(false);
-      setReorder(null);
+      commitReorder(updateQueueStore, blockTree);
       event.target.position({
         x: dragStartPosition.current.x,
         y: dragStartPosition.current.y,
       });
       event.target.getLayer()?.batchDraw();
     },
-    [setReorder]
+    [commitReorder, updateQueueStore, blockTree]
   );
 
   // const innerStroke = 0.2 * dpi;

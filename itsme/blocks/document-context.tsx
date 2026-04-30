@@ -24,6 +24,7 @@ import type { Block } from "./blocks";
 import { BlockUpdateSchema } from "./updater";
 import { applyBlockMove } from "./apply-block-move";
 import { BlockTree, Pos } from "./renderer-types";
+import { MoveBlockUpdate } from "./apply-block-move";
 
 export type DocumentId = string;
 
@@ -113,6 +114,302 @@ function applyBlockUpdate(doc: Document, update: BlockUpdate): Document {
   return { ...doc, blocks };
 }
 
+type ParentRef =
+  | { container: "document"; index: number }
+  | {
+      container: "section" | "list";
+      parentBlockId: string;
+      index: number;
+    }
+  | {
+      container: "columns";
+      parentBlockId: string;
+      index: number;
+      span: number;
+    };
+
+function cloneDocument(doc: Document): Document {
+  return {
+    ...doc,
+    layout: [...doc.layout],
+    blocks: doc.blocks.map((block) => {
+      switch (block.type) {
+        case "section":
+        case "list":
+          return { ...block, blocks: [...block.blocks] };
+        case "columns":
+          return {
+            ...block,
+            blocks: block.blocks.map((child) => ({ ...child })),
+          };
+        case "text":
+          return block;
+      }
+    }),
+  };
+}
+
+function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
+  const documentIndex = doc.layout.indexOf(childBlockId);
+  if (documentIndex >= 0) {
+    return { container: "document", index: documentIndex };
+  }
+  for (const block of doc.blocks) {
+    switch (block.type) {
+      case "section": {
+        const index = block.blocks.indexOf(childBlockId);
+        if (index >= 0) {
+          return {
+            container: "section",
+            parentBlockId: block.id,
+            index,
+          };
+        }
+        break;
+      }
+      case "list": {
+        const index = block.blocks.indexOf(childBlockId);
+        if (index >= 0) {
+          return {
+            container: "list",
+            parentBlockId: block.id,
+            index,
+          };
+        }
+        break;
+      }
+      case "columns": {
+        const index = block.blocks.findIndex((child) => child.blockId === childBlockId);
+        if (index >= 0) {
+          return {
+            container: "columns",
+            parentBlockId: block.id,
+            index,
+            span: block.blocks[index].span,
+          };
+        }
+        break;
+      }
+      case "text":
+        break;
+    }
+  }
+  return null;
+}
+
+function getBlockWidthPx(blockTree: BlockTree, blockId: string): number {
+  const topBox = blockTree
+    .getReorderBoundingBoxes()
+    .find((box) => box.blockId === blockId && box.type === "top");
+  if (!topBox) {
+    return 1;
+  }
+  return Math.max(1, topBox.target.to.x - topBox.target.from.x);
+}
+
+function applyMoveUpdates(doc: Document, updates: MoveBlockUpdate[]): Document {
+  return updates.reduce((acc, update) => applyBlockMove(acc, update), doc);
+}
+
+function buildMoveUpdatesForReorder(args: {
+  document: Document;
+  documentId: string;
+  reorder: NonNullable<DocumentStoreState["reorder"]>;
+  blockTree: BlockTree;
+}): { updates: MoveBlockUpdate[]; nextDocument: Document } | null {
+  const { document, documentId, reorder, blockTree } = args;
+  const movingBlockId = reorder.blockIds[0];
+  if (!movingBlockId) {
+    return null;
+  }
+  const boxes = blockTree.getReorderBoundingBoxes();
+  let targetBox: (typeof boxes)[number] | null = null;
+  for (let i = boxes.length - 1; i >= 0; i -= 1) {
+    const box = boxes[i];
+    if (reorder.blockIds.includes(box.blockId)) {
+      continue;
+    }
+    if (
+      reorder.position.x >= box.target.from.x &&
+      reorder.position.x <= box.target.to.x &&
+      reorder.position.y >= box.target.from.y &&
+      reorder.position.y <= box.target.to.y
+    ) {
+      targetBox = box;
+      break;
+    }
+  }
+  if (!targetBox) {
+    return null;
+  }
+
+  const targetParent = findParentRef(document, targetBox.blockId);
+  if (!targetParent) {
+    return null;
+  }
+
+  // Top/Bottom: before/after target inside the same container.
+  if (targetBox.type === "top" || targetBox.type === "bottom") {
+    const offset = targetBox.type === "bottom" ? 1 : 0;
+    let update: MoveBlockUpdate | null = null;
+    switch (targetParent.container) {
+      case "document":
+        update = {
+          type: "move",
+          documentId,
+          blockId: movingBlockId,
+          destination: { container: "document", index: targetParent.index + offset },
+        };
+        break;
+      case "section":
+      case "list":
+        update = {
+          type: "move",
+          documentId,
+          blockId: movingBlockId,
+          destination: {
+            container: targetParent.container,
+            parentBlockId: targetParent.parentBlockId,
+            index: targetParent.index + offset,
+          },
+        };
+        break;
+      case "columns":
+        update = {
+          type: "move",
+          documentId,
+          blockId: movingBlockId,
+          destination: {
+            container: "columns",
+            parentBlockId: targetParent.parentBlockId,
+            index: targetParent.index + offset,
+            span: targetParent.span,
+          },
+        };
+        break;
+    }
+    if (!update) {
+      return null;
+    }
+    return {
+      updates: [update],
+      nextDocument: applyMoveUpdates(document, [update]),
+    };
+  }
+
+  // Left/Right: insert into columns or wrap into new columns.
+  if (targetParent.container === "columns") {
+    const columnsBlock = document.blocks.find(
+      (b): b is Extract<Document["blocks"][number], { type: "columns" }> =>
+        b.id === targetParent.parentBlockId && b.type === "columns"
+    );
+    if (!columnsBlock) {
+      return null;
+    }
+    const sourceWidth = getBlockWidthPx(blockTree, movingBlockId);
+    const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
+    const currentTotalSpan =
+      columnsBlock.blocks.reduce((sum, child) => sum + child.span, 0) || 1;
+    const sourceSpan = Math.max(
+      0.1,
+      currentTotalSpan * (sourceWidth / Math.max(1, targetWidth))
+    );
+    const update: MoveBlockUpdate = {
+      type: "move",
+      documentId,
+      blockId: movingBlockId,
+      destination: {
+        container: "columns",
+        parentBlockId: targetParent.parentBlockId,
+        index: targetParent.index + (targetBox.type === "right" ? 1 : 0),
+        span: sourceSpan,
+      },
+    };
+    return {
+      updates: [update],
+      nextDocument: applyMoveUpdates(document, [update]),
+    };
+  }
+
+  const next = cloneDocument(document);
+  const sourceParent = findParentRef(next, movingBlockId);
+  let targetParentMutable = findParentRef(next, targetBox.blockId);
+  if (!sourceParent || !targetParentMutable) {
+    return null;
+  }
+
+  const removeFromParent = (parent: ParentRef, blockId: string) => {
+    if (parent.container === "document") {
+      next.layout = next.layout.filter((id) => id !== blockId);
+      return;
+    }
+    const parentBlock = next.blocks.find((b) => b.id === parent.parentBlockId);
+    if (!parentBlock) return;
+    if (parent.container === "columns" && parentBlock.type === "columns") {
+      parentBlock.blocks = parentBlock.blocks.filter((child) => child.blockId !== blockId);
+      return;
+    }
+    if (
+      (parent.container === "section" && parentBlock.type === "section") ||
+      (parent.container === "list" && parentBlock.type === "list")
+    ) {
+      parentBlock.blocks = parentBlock.blocks.filter((id) => id !== blockId);
+    }
+  };
+
+  removeFromParent(sourceParent, movingBlockId);
+  targetParentMutable = findParentRef(next, targetBox.blockId);
+  if (!targetParentMutable) {
+    return null;
+  }
+
+  const newColumnsId =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? `columns-${crypto.randomUUID()}`
+      : `columns-${Date.now()}`;
+  const movingWidth = getBlockWidthPx(blockTree, movingBlockId);
+  const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
+  const movingSpan = Math.max(0.1, movingWidth / Math.max(1, targetWidth));
+  const targetSpan = 1;
+  const orderedChildren =
+    targetBox.type === "left"
+      ? [
+          { blockId: movingBlockId, span: movingSpan },
+          { blockId: targetBox.blockId, span: targetSpan },
+        ]
+      : [
+          { blockId: targetBox.blockId, span: targetSpan },
+          { blockId: movingBlockId, span: movingSpan },
+        ];
+
+  const newColumnsBlock: Extract<Document["blocks"][number], { type: "columns" }> = {
+    type: "columns",
+    id: newColumnsId,
+    blocks: orderedChildren,
+  };
+  next.blocks.push(newColumnsBlock);
+
+  if (targetParentMutable.container === "document") {
+    next.layout[targetParentMutable.index] = newColumnsId;
+  } else {
+    const parentBlock = next.blocks.find((b) => b.id === targetParentMutable.parentBlockId);
+    if (!parentBlock) {
+      return null;
+    }
+    if (targetParentMutable.container === "section" && parentBlock.type === "section") {
+      parentBlock.blocks[targetParentMutable.index] = newColumnsId;
+    } else if (targetParentMutable.container === "list" && parentBlock.type === "list") {
+      parentBlock.blocks[targetParentMutable.index] = newColumnsId;
+    } else {
+      return null;
+    }
+  }
+
+  // Wrapping requires creating a new columns block and cannot be represented
+  // by existing MoveBlockUpdate alone; keep queue updates empty for now.
+  return { updates: [], nextDocument: next };
+}
+
 export type DocumentUpdateQueueState = {
   updates: Record<string, BlockUpdate>;
   enqueue: (update: BlockUpdate) => void;
@@ -192,6 +489,10 @@ export type DocumentStoreState = {
       blockIds: string[];
     } | null
   ) => void;
+  commitReorder: (
+    queue: DocumentUpdateQueueStore,
+    blockTree: BlockTree
+  ) => BlockUpdate[];
 };
 
 export type DocumentStore = ReturnType<typeof createDocumentStore>;
@@ -214,6 +515,32 @@ export function createDocumentStore(
     },
     setReorder: (reorder) => {
       set({ reorder });
+    },
+    commitReorder: (queue, blockTree) => {
+      const { documentId: activeId, document: doc, reorder } = get();
+      if (!reorder) {
+        return [];
+      }
+      const result = buildMoveUpdatesForReorder({
+        document: doc,
+        documentId: activeId,
+        reorder,
+        blockTree,
+      });
+      set({ reorder: null });
+      if (!result) {
+        return [];
+      }
+      if (result.nextDocument !== doc) {
+        set({
+          documentId: activeId,
+          document: result.nextDocument,
+        });
+      }
+      for (const update of result.updates) {
+        queue.getState().enqueue(update);
+      }
+      return result.updates;
     },
     update: (queue, update) => {
       const parsed = BlockUpdateSchema.safeParse(update);
@@ -278,15 +605,16 @@ export function DocumentStoresProvider({
     (typeof OffscreenCanvas !== "undefined" ||
       (!!window.document &&
         !!window.document.createElement("canvas").getContext("2d")));
+  const renderedDocument = useStore(stores.documentStore, (s) => s.document);
   const rendered = useMemo(() => {
     if (canMeasureText) {
-      return renderDocumentLayout({ document, dpi });
+      return renderDocumentLayout({ document: renderedDocument, dpi });
     }
     return {
       rendered: [],
       blockTree: new BlockTree(),
     };
-  }, [document, dpi, canMeasureText]);
+  }, [renderedDocument, dpi, canMeasureText]);
 
   const value = useMemo<DocumentContextValue>(() => {
     return {

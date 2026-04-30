@@ -273,8 +273,6 @@ function ReorderLayer() {
             y={box.visual.from.y}
             width={box.visual.to.x - box.visual.from.x}
             height={box.visual.to.y - box.visual.from.y}
-            // stroke={isTarget ? "#ff0000" : "#000000"}
-            // fill={isTarget ? "#ff0000" : "#00000020"}
             fill="#2B7FFF"
             perfectDrawEnabled={false}
             listening={false}
