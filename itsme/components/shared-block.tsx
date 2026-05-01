@@ -85,7 +85,7 @@ export function InteractableBlock({
   const { setReorder, commitReorder } = useStore(
     documentStore,
     useShallow((s) => ({
-      setReorder: s.setReorder,
+      setReorder: s.setReorderCurrent,
       commitReorder: s.commitReorder,
     }))
   );

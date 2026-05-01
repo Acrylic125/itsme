@@ -23,8 +23,9 @@ import {
 import type { Block } from "./blocks";
 import { BlockUpdateSchema } from "./updater";
 import { applyBlockMove } from "./apply-block-move";
-import { BlockTree, Pos } from "./renderer-types";
+import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
 import { MoveBlockUpdate } from "./apply-block-move";
+import { nanoid } from "nanoid";
 
 export type DocumentId = string;
 
@@ -179,7 +180,9 @@ function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
         break;
       }
       case "columns": {
-        const index = block.blocks.findIndex((child) => child.blockId === childBlockId);
+        const index = block.blocks.findIndex(
+          (child) => child.blockId === childBlockId
+        );
         if (index >= 0) {
           return {
             container: "columns",
@@ -218,27 +221,12 @@ function buildMoveUpdatesForReorder(args: {
   blockTree: BlockTree;
 }): { updates: MoveBlockUpdate[]; nextDocument: Document } | null {
   const { document, documentId, reorder, blockTree } = args;
-  const movingBlockId = reorder.blockIds[0];
+  const movingBlockId = reorder.current?.blockIds[0];
   if (!movingBlockId) {
     return null;
   }
-  const boxes = blockTree.getReorderBoundingBoxes();
-  let targetBox: (typeof boxes)[number] | null = null;
-  for (let i = boxes.length - 1; i >= 0; i -= 1) {
-    const box = boxes[i];
-    if (reorder.blockIds.includes(box.blockId)) {
-      continue;
-    }
-    if (
-      reorder.position.x >= box.target.from.x &&
-      reorder.position.x <= box.target.to.x &&
-      reorder.position.y >= box.target.from.y &&
-      reorder.position.y <= box.target.to.y
-    ) {
-      targetBox = box;
-      break;
-    }
-  }
+
+  const targetBox = reorder.targetBlock;
   if (!targetBox) {
     return null;
   }
@@ -258,7 +246,10 @@ function buildMoveUpdatesForReorder(args: {
           type: "move",
           documentId,
           blockId: movingBlockId,
-          destination: { container: "document", index: targetParent.index + offset },
+          destination: {
+            container: "document",
+            index: targetParent.index + offset,
+          },
         };
         break;
       case "section":
@@ -346,7 +337,9 @@ function buildMoveUpdatesForReorder(args: {
     const parentBlock = next.blocks.find((b) => b.id === parent.parentBlockId);
     if (!parentBlock) return;
     if (parent.container === "columns" && parentBlock.type === "columns") {
-      parentBlock.blocks = parentBlock.blocks.filter((child) => child.blockId !== blockId);
+      parentBlock.blocks = parentBlock.blocks.filter(
+        (child) => child.blockId !== blockId
+      );
       return;
     }
     if (
@@ -364,9 +357,7 @@ function buildMoveUpdatesForReorder(args: {
   }
 
   const newColumnsId =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? `columns-${crypto.randomUUID()}`
-      : `columns-${Date.now()}`;
+    typeof nanoid === "function" ? `columns-${nanoid()}` : `columns-${Date.now()}`;
   const movingWidth = getBlockWidthPx(blockTree, movingBlockId);
   const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
   const movingSpan = Math.max(0.1, movingWidth / Math.max(1, targetWidth));
@@ -382,7 +373,10 @@ function buildMoveUpdatesForReorder(args: {
           { blockId: movingBlockId, span: movingSpan },
         ];
 
-  const newColumnsBlock: Extract<Document["blocks"][number], { type: "columns" }> = {
+  const newColumnsBlock: Extract<
+    Document["blocks"][number],
+    { type: "columns" }
+  > = {
     type: "columns",
     id: newColumnsId,
     blocks: orderedChildren,
@@ -392,13 +386,21 @@ function buildMoveUpdatesForReorder(args: {
   if (targetParentMutable.container === "document") {
     next.layout[targetParentMutable.index] = newColumnsId;
   } else {
-    const parentBlock = next.blocks.find((b) => b.id === targetParentMutable.parentBlockId);
+    const parentBlock = next.blocks.find(
+      (b) => b.id === targetParentMutable.parentBlockId
+    );
     if (!parentBlock) {
       return null;
     }
-    if (targetParentMutable.container === "section" && parentBlock.type === "section") {
+    if (
+      targetParentMutable.container === "section" &&
+      parentBlock.type === "section"
+    ) {
       parentBlock.blocks[targetParentMutable.index] = newColumnsId;
-    } else if (targetParentMutable.container === "list" && parentBlock.type === "list") {
+    } else if (
+      targetParentMutable.container === "list" &&
+      parentBlock.type === "list"
+    ) {
       parentBlock.blocks[targetParentMutable.index] = newColumnsId;
     } else {
       return null;
@@ -476,19 +478,23 @@ export type DocumentStoreState = {
   document: Document;
   focusBlockId: string | null;
   reorder: {
-    position: Pos;
-    blockIds: string[];
-  } | null;
+    current: {
+      position: Pos;
+      blockIds: string[];
+    } | null;
+    targetBlock: BlockTreeReorderBoundingBox | null;
+  };
   update: (queue: DocumentUpdateQueueStore, update: BlockUpdate) => void;
   focusBlock: (
     blockId: string | ((current: string | null) => string | null) | null
   ) => void;
-  setReorder: (
-    reorder: {
+  setReorderCurrent: (
+    current: {
       position: Pos;
       blockIds: string[];
     } | null
   ) => void;
+  setReorderTarget: (targetBlock: BlockTreeReorderBoundingBox | null) => void;
   commitReorder: (
     queue: DocumentUpdateQueueStore,
     blockTree: BlockTree
@@ -505,7 +511,10 @@ export function createDocumentStore(
     documentId,
     document: initialDocument,
     focusBlockId: null,
-    reorder: null,
+    reorder: {
+      current: null,
+      targetBlock: null,
+    },
     focusBlock: (blockId) => {
       if (typeof blockId === "function") {
         set({ focusBlockId: blockId(get().focusBlockId) });
@@ -513,8 +522,32 @@ export function createDocumentStore(
         set({ focusBlockId: blockId });
       }
     },
-    setReorder: (reorder) => {
-      set({ reorder });
+    setReorderCurrent: (reorder) => {
+      const current = get().reorder;
+      set({
+        reorder: {
+          ...current,
+          current:
+            reorder == null
+              ? null
+              : {
+                  ...current.current,
+                  ...reorder,
+                },
+        },
+      });
+    },
+    setReorderTarget: (targetBlock) => {
+      const current = get().reorder;
+      if (!current) {
+        return;
+      }
+      set({
+        reorder: {
+          ...current,
+          targetBlock: targetBlock == null ? null : targetBlock,
+        },
+      });
     },
     commitReorder: (queue, blockTree) => {
       const { documentId: activeId, document: doc, reorder } = get();
@@ -527,7 +560,12 @@ export function createDocumentStore(
         reorder,
         blockTree,
       });
-      set({ reorder: null });
+      set({
+        reorder: {
+          current: null,
+          targetBlock: null,
+        },
+      });
       if (!result) {
         return [];
       }

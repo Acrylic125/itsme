@@ -194,10 +194,12 @@ function DocumentStage({
 
 function ReorderLayer() {
   const { blockTree, documentStore } = useDocument();
-  const { reorder } = useStore(
+  const { reorderCurrent, reorderTarget, setReorderTarget } = useStore(
     documentStore,
     useShallow((s) => ({
-      reorder: s.reorder,
+      reorderCurrent: s.reorder.current,
+      reorderTarget: s.reorder.targetBlock,
+      setReorderTarget: s.setReorderTarget,
     }))
   );
   const boxes = blockTree.getReorderBoundingBoxes();
@@ -205,23 +207,23 @@ function ReorderLayer() {
 
   const intersectionTargets = useMemo(() => {
     const targets: (typeof boxes)[number][] = [];
-    if (reorder === null) {
+    if (reorderCurrent === null) {
       return targets;
     }
 
     for (let i = boxes.length - 1; i >= 0; i -= 1) {
       const box = boxes[i];
       if (
-        reorder.position.x >= box.target.from.x &&
-        reorder.position.x <= box.target.to.x &&
-        reorder.position.y >= box.target.from.y &&
-        reorder.position.y <= box.target.to.y
+        reorderCurrent.position.x >= box.target.from.x &&
+        reorderCurrent.position.x <= box.target.to.x &&
+        reorderCurrent.position.y >= box.target.from.y &&
+        reorderCurrent.position.y <= box.target.to.y
       ) {
         targets.push(box);
       }
     }
     return targets;
-  }, [boxes, reorder]);
+  }, [boxes, reorderCurrent]);
 
   const intersectionSignature = useMemo(
     () =>
@@ -256,29 +258,29 @@ function ReorderLayer() {
     };
   }, [intersectionSignature, intersectionTargets.length]);
 
-  const reorderTarget =
+  const nextReorderTarget =
     intersectionTargets[
       Math.min(targetIndex, intersectionTargets.length - 1)
     ] ?? null;
 
+  useEffect(() => {
+    setReorderTarget(nextReorderTarget);
+  }, [nextReorderTarget, setReorderTarget]);
+
   return (
     <>
-      {boxes.map((box, index) => {
-        const isTarget = reorderTarget === box;
-        if (!isTarget) return null;
-        return (
-          <Rect
-            key={`${box.blockId}-${box.type}-${index}`}
-            x={box.visual.from.x}
-            y={box.visual.from.y}
-            width={box.visual.to.x - box.visual.from.x}
-            height={box.visual.to.y - box.visual.from.y}
-            fill="#2B7FFF"
-            perfectDrawEnabled={false}
-            listening={false}
-          />
-        );
-      })}
+      {reorderTarget && (
+        <Rect
+          key={`${reorderTarget.blockId}-${reorderTarget.type}`}
+          x={reorderTarget.visual.from.x}
+          y={reorderTarget.visual.from.y}
+          width={reorderTarget.visual.to.x - reorderTarget.visual.from.x}
+          height={reorderTarget.visual.to.y - reorderTarget.visual.from.y}
+          fill="#2B7FFF"
+          perfectDrawEnabled={false}
+          listening={false}
+        />
+      )}
     </>
   );
 }
