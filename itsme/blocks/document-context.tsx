@@ -86,10 +86,71 @@ function normalizePersistedUpdates(raw: unknown): Record<string, BlockUpdate> {
   return {};
 }
 
+function removeEmptyContainers(doc: Document): Document {
+  const next: Document = {
+    ...doc,
+    layout: [...doc.layout],
+    blocks: doc.blocks.map((block) => {
+      switch (block.type) {
+        case "section":
+        case "list":
+          return { ...block, blocks: [...block.blocks] };
+        case "columns":
+          return {
+            ...block,
+            blocks: block.blocks.map((child) => ({ ...child })),
+          };
+        case "text":
+          return block;
+      }
+    }),
+  };
+
+  let changed = false;
+  while (true) {
+    const emptyIds = new Set(
+      next.blocks
+        .filter(
+          (block): block is Extract<Block, { type: "section" | "list" }> =>
+            (block.type === "section" || block.type === "list") &&
+            block.blocks.length === 0
+        )
+        .map((block) => block.id)
+    );
+    if (emptyIds.size === 0) break;
+    changed = true;
+
+    next.layout = next.layout.filter((id) => !emptyIds.has(id));
+    next.blocks = next.blocks
+      .filter((block) => !emptyIds.has(block.id))
+      .map((block) => {
+        switch (block.type) {
+          case "section":
+          case "list":
+            return {
+              ...block,
+              blocks: block.blocks.filter((id) => !emptyIds.has(id)),
+            };
+          case "columns":
+            return {
+              ...block,
+              blocks: block.blocks.filter(
+                (child) => !emptyIds.has(child.blockId)
+              ),
+            };
+          case "text":
+            return block;
+        }
+      });
+  }
+
+  return changed ? next : doc;
+}
+
 function applyBlockUpdate(doc: Document, update: BlockUpdate): Document {
   switch (update.type) {
     case "move":
-      return applyBlockMove(doc, update);
+      return removeEmptyContainers(applyBlockMove(doc, update));
     case "text":
       break;
   }
@@ -112,7 +173,7 @@ function applyBlockUpdate(doc: Document, update: BlockUpdate): Document {
     return doc;
   }
 
-  return { ...doc, blocks };
+  return removeEmptyContainers({ ...doc, blocks });
 }
 
 type ParentRef =
@@ -569,10 +630,11 @@ export function createDocumentStore(
       if (!result) {
         return [];
       }
-      if (result.nextDocument !== doc) {
+      const nextDocument = removeEmptyContainers(result.nextDocument);
+      if (nextDocument !== doc) {
         set({
           documentId: activeId,
-          document: result.nextDocument,
+          document: nextDocument,
         });
       }
       for (const update of result.updates) {

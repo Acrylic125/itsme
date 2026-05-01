@@ -118,6 +118,7 @@ export function InteractableBlock({
     (event: Konva.KonvaEventObject<MouseEvent>) => {
       if (event.evt.button !== 0) return;
       if (disabled) return;
+      event.cancelBubble = true;
       event.evt.preventDefault();
       if (!onClick) return;
       const node = groupRef.current;
@@ -201,6 +202,7 @@ export function InteractableBlock({
 
   const handleDragStart = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
+      event.cancelBubble = true;
       dragStartPosition.current = event.target.getPosition();
       if (disabled) return;
       const pointerCanvasPosition = getPointerCanvasPosition(event.target);
@@ -217,6 +219,7 @@ export function InteractableBlock({
 
   const handleDragMove = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
+      event.cancelBubble = true;
       if (disabled) return;
       const pointerCanvasPosition = getPointerCanvasPosition(event.target);
       if (!pointerCanvasPosition) {
@@ -232,6 +235,7 @@ export function InteractableBlock({
 
   const handleDragEnd = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
+      event.cancelBubble = true;
       setIsDragging(false);
       commitReorder(updateQueueStore, blockTree);
       event.target.position({
