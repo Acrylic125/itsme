@@ -2,6 +2,7 @@
 
 import { Fragment } from "react";
 import { z } from "zod";
+import type { ColumnsResizeContext } from "../renderer-types";
 import {
   BlockRenderer,
   getEdgeReorderBoundingBoxes,
@@ -23,12 +24,14 @@ function SectionBlockComponent({
   pos,
   parents,
   nodes,
+  columnsResizeContext,
 }: {
   blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   parents: string[];
   nodes: React.ReactNode[];
+  columnsResizeContext?: ColumnsResizeContext;
 }) {
   const { documentStore, blockTree } = useDocument();
   const { focusBlock, focusBlockId } = useStore(
@@ -55,6 +58,7 @@ function SectionBlockComponent({
       height={dimensions.height}
       disabled={isDisabled}
       inFocus={focusBlockId === blockId}
+      columnsResizeContext={columnsResizeContext}
       onClick={() => focusBlock(blockId)}
     >
       {nodes}
@@ -69,7 +73,10 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
       .map((id) => ctx.allBlocks.find((b) => b.id === id))
       .filter((b): b is z.infer<typeof BlockSchema> => b != null);
 
+    const { columnsResizeContext: _stripResize, ...relativeBase } = relativeTo;
+    void _stripResize;
     const sectionStartPosition = {
+      ...relativeBase,
       ...ctx.getNextPosition(),
       parents: [...relativeTo.parents, block.id],
       width: relativeTo.width,
@@ -117,6 +124,7 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
           parents={relativeTo.parents}
+          columnsResizeContext={relativeTo.columnsResizeContext}
           nodes={children.map((c) => (
             <Fragment key={c.blockId}>{c.component()}</Fragment>
           ))}

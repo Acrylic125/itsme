@@ -41,6 +41,8 @@ export function documentBlockUpdateKey(update: BlockUpdate): string {
     case "text":
     case "move":
       return `${update.documentId}:${update.blockId}`;
+    case "columns_spans":
+      return `${update.documentId}:${update.columnsBlockId}:columns_spans`;
     default: {
       const u: { type: string } = update;
       throw new Error(`Unhandled block update type: ${u.type}`);
@@ -151,6 +153,29 @@ function applyBlockUpdate(doc: Document, update: BlockUpdate): Document {
   switch (update.type) {
     case "move":
       return removeEmptyContainers(applyBlockMove(doc, update));
+    case "columns_spans": {
+      let changed = false;
+      const blocks: Block[] = doc.blocks.map((b) => {
+        if (b.id !== update.columnsBlockId || b.type !== "columns") {
+          return b;
+        }
+        if (update.spans.length !== b.blocks.length) {
+          return b;
+        }
+        changed = true;
+        return {
+          ...b,
+          blocks: b.blocks.map((child, i) => ({
+            ...child,
+            span: update.spans[i]!,
+          })),
+        };
+      });
+      if (!changed) {
+        return doc;
+      }
+      return removeEmptyContainers({ ...doc, blocks });
+    }
     case "text":
       break;
   }

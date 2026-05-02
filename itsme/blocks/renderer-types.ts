@@ -6,6 +6,18 @@ export type Pos = {
   y: number;
 };
 
+/** Passed from `columns` renderer to direct children for edge-drag span resizing. */
+export type ColumnsResizeContext = {
+  columnsBlockId: string;
+  /** Full row inner width in layout px (matches columns `relativeTo.width`). */
+  columnRowWidthPx: number;
+  /** Sum of sibling spans (`tallySpans`). */
+  totalSpan: number;
+  /** Index of this block among column siblings. */
+  childIndex: number;
+  siblingCount: number;
+};
+
 type BlockRendererMap = {
   [T in z.infer<typeof BlockSchema>["type"]]: BlockRenderer<T>;
 };
@@ -147,9 +159,9 @@ export type BlockRenderer<T extends z.infer<typeof BlockSchema>["type"]> = {
   render: (
     block: Extract<z.infer<typeof BlockSchema>, { type: T }>,
     relativeTo: Pos & {
-      // blockId: string | null;
       parents: string[]; // Last element is the direct parent.
       width: number;
+      columnsResizeContext?: ColumnsResizeContext;
     },
     ctx: BlockRendererContext
   ) => {

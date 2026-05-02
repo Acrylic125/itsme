@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
+import type { ColumnsResizeContext } from "../renderer-types";
 import {
   BlockRenderer,
   getEdgeReorderBoundingBoxes,
@@ -21,12 +22,14 @@ function ColumnsBlockComponent({
   parents,
   nodes,
   blockId,
+  columnsResizeContext,
 }: {
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   parents: string[];
   nodes: React.ReactNode[];
   blockId: string;
+  columnsResizeContext?: ColumnsResizeContext;
 }) {
   const { documentStore, blockTree } = useDocument();
   const { focusBlock, focusBlockId } = useStore(
@@ -53,6 +56,7 @@ function ColumnsBlockComponent({
       height={dimensions.height}
       disabled={isDisabled}
       inFocus={focusBlockId === blockId}
+      columnsResizeContext={columnsResizeContext}
       onClick={() => focusBlock(blockId)}
     >
       {nodes}
@@ -89,7 +93,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
     let maxOffsetY = 0;
     const tallySpans = childBlocks.reduce((acc, b) => acc + b.span, 0);
     // Child components will do the space claiming.
-    const children = childBlocks.map((b) => {
+    const children = childBlocks.map((b, childIndex) => {
       const renderer = ctx.renderers[b.block.type];
       if (!renderer) {
         throw new Error(`Renderer not found for block type: ${b.block.type}`);
@@ -110,6 +114,16 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
           y: groupStartPosition.y,
           width: spanWidth,
           parents: [...relativeTo.parents, block.id],
+          columnsResizeContext:
+            tallySpans > 0 && childBlocks.length > 0
+              ? {
+                  columnsBlockId: block.id,
+                  columnRowWidthPx: relativeTo.width,
+                  totalSpan: tallySpans,
+                  childIndex,
+                  siblingCount: childBlocks.length,
+                }
+              : undefined,
         },
         ctx
       );
@@ -161,6 +175,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
             <Fragment key={c.blockId}>{c.component()}</Fragment>
           ))}
           blockId={block.id}
+          columnsResizeContext={relativeTo.columnsResizeContext}
         />
       ),
     };

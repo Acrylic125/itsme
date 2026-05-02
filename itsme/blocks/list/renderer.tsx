@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { Group } from "react-konva";
+import type { ColumnsResizeContext } from "../renderer-types";
 import {
   BlockRenderer,
   getEdgeReorderBoundingBoxes,
@@ -25,12 +26,14 @@ function ListBlockComponent({
   pos,
   parents,
   nodes,
+  columnsResizeContext,
 }: {
   blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
   parents: string[];
   nodes: React.ReactNode[];
+  columnsResizeContext?: ColumnsResizeContext;
 }) {
   const { documentStore, blockTree } = useDocument();
   const { focusBlock, focusBlockId } = useStore(
@@ -57,6 +60,7 @@ function ListBlockComponent({
       height={dimensions.height}
       disabled={isDisabled}
       inFocus={focusBlockId === blockId}
+      columnsResizeContext={columnsResizeContext}
       onClick={() => focusBlock(blockId)}
     >
       {nodes}
@@ -214,6 +218,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
           dimensions={dimensions}
           pos={listPosRelativeTo}
           parents={relativeTo.parents}
+          columnsResizeContext={relativeTo.columnsResizeContext}
           nodes={nodes}
         />
       ),

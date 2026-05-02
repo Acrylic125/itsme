@@ -4,6 +4,7 @@ import { TextBlockSchema, TextStyleSchema } from "./schema";
 import { z } from "zod";
 import { Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
+import type { ColumnsResizeContext } from "../renderer-types";
 import {
   BlockRenderer,
   getEdgeReorderBoundingBoxes,
@@ -91,6 +92,7 @@ function TextBlockComponent({
   parents,
   style,
   fontSizePx,
+  columnsResizeContext,
 }: {
   block: z.infer<typeof TextBlockSchema>;
   dimensions: { width: number; height: number };
@@ -105,6 +107,7 @@ function TextBlockComponent({
   };
   style: z.infer<typeof TextStyleSchema>;
   fontSizePx: number;
+  columnsResizeContext?: ColumnsResizeContext;
 }) {
   const popup = useDomPopup();
   const popupKey = useId();
@@ -168,6 +171,7 @@ function TextBlockComponent({
       height={dimensions.height}
       disabled={isDisabled}
       inFocus={focusBlockId === block.id}
+      columnsResizeContext={columnsResizeContext}
       onClick={handleClick}
     >
       <Text
@@ -239,6 +243,7 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
           }}
           style={style}
           fontSizePx={fontSizePx}
+          columnsResizeContext={relativeTo.columnsResizeContext}
         />
       ),
     };
