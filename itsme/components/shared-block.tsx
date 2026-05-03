@@ -115,10 +115,17 @@ export function InteractableBlock({
   const groupRef = useRef<Konva.Group | null>(null);
   const [hovered, setHovered] = useState(false);
   const { documentStore, updateQueueStore, blockTree } = useDocument();
-  const { setReorder, commitReorder, documentId, patchDocument } = useStore(
+  const {
+    setReorder,
+    setReorderTarget,
+    commitReorder,
+    documentId,
+    patchDocument,
+  } = useStore(
     documentStore,
     useShallow((s) => ({
       setReorder: s.setReorderCurrent,
+      setReorderTarget: s.setReorderTarget,
       commitReorder: s.commitReorder,
       documentId: s.documentId,
       patchDocument: s.update,
@@ -253,6 +260,7 @@ export function InteractableBlock({
     (event: Konva.KonvaEventObject<DragEvent>) => {
       event.cancelBubble = true;
       const node = groupRef.current ?? event.target;
+      // console.log("START");
       dragStartPosition.current = node.getPosition();
       if (disabled) return;
 
@@ -340,6 +348,7 @@ export function InteractableBlock({
   const handleDragEnd = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
       event.cancelBubble = true;
+      // console.log("END");
       const resizeKind = columnResizeKindRef.current;
       const resizeCtx = columnsResizeContext;
       const ptrStart = pointerStartCanvasRef.current;
@@ -350,7 +359,7 @@ export function InteractableBlock({
       setIsDragging(false);
       setActiveColumnResize(null);
 
-      if (resizeKind && resizeCtx && ptrStart && !disabled) {
+      if (resizeKind && resizeCtx && ptrStart) {
         const ptrEnd = getPointerCanvasPosition(node);
         node.position({
           x: dragStartPosition.current.x,
@@ -429,13 +438,30 @@ export function InteractableBlock({
       updateQueueStore,
       blockTree,
       columnsResizeContext,
-      disabled,
       documentStore,
       documentId,
       patchDocument,
       getPointerCanvasPosition,
     ]
   );
+
+  /** Konva drag-cancel payload is unreliable; reset from refs only (no commit). */
+  const handleDragCancel = useCallback(() => {
+    columnResizeKindRef.current = null;
+    pointerStartCanvasRef.current = null;
+    const node = groupRef.current;
+    setIsDragging(false);
+    setActiveColumnResize(null);
+    setReorder(null);
+    setReorderTarget(null);
+    if (node) {
+      node.position({
+        x: dragStartPosition.current.x,
+        y: dragStartPosition.current.y,
+      });
+      node.getLayer()?.batchDraw();
+    }
+  }, [setReorder, setReorderTarget]);
 
   // const innerStroke = 0.2 * dpi;
   const innerStroke = 0.01 * dpi;
@@ -486,7 +512,7 @@ export function InteractableBlock({
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
-        onDragCancel={handleDragEnd}
+        onDragCancel={handleDragCancel}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onContextMenu={handleContextMenu}

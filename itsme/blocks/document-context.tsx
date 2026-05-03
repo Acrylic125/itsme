@@ -22,9 +22,13 @@ import {
 } from "./renderer";
 import type { Block } from "./blocks";
 import { BlockUpdateSchema } from "./updater";
-import { applyBlockMove } from "./apply-block-move";
+import {
+  applyBlockMove,
+  isMoveIntoOwnSubtree,
+  isNestedInsideBlock,
+  type MoveBlockUpdate,
+} from "./apply-block-move";
 import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
-import { MoveBlockUpdate } from "./apply-block-move";
 import { nanoid } from "nanoid";
 
 export type DocumentId = string;
@@ -368,6 +372,9 @@ function buildMoveUpdatesForReorder(args: {
     if (!update) {
       return null;
     }
+    if (isMoveIntoOwnSubtree(document, movingBlockId, update.destination)) {
+      return null;
+    }
     return {
       updates: [update],
       nextDocument: applyMoveUpdates(document, [update]),
@@ -402,10 +409,20 @@ function buildMoveUpdatesForReorder(args: {
         span: sourceSpan,
       },
     };
+    if (isMoveIntoOwnSubtree(document, movingBlockId, update.destination)) {
+      return null;
+    }
     return {
       updates: [update],
       nextDocument: applyMoveUpdates(document, [update]),
     };
+  }
+
+  if (
+    movingBlockId === targetBox.blockId ||
+    isNestedInsideBlock(document, movingBlockId, targetBox.blockId)
+  ) {
+    return null;
   }
 
   const next = cloneDocument(document);
@@ -443,7 +460,9 @@ function buildMoveUpdatesForReorder(args: {
   }
 
   const newColumnsId =
-    typeof nanoid === "function" ? `columns-${nanoid()}` : `columns-${Date.now()}`;
+    typeof nanoid === "function"
+      ? `columns-${nanoid()}`
+      : `columns-${Date.now()}`;
   const movingWidth = getBlockWidthPx(blockTree, movingBlockId);
   const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
   const movingSpan = Math.max(0.1, movingWidth / Math.max(1, targetWidth));

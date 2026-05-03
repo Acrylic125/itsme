@@ -1,6 +1,10 @@
 import z from "zod";
 import { DocumentSchema } from "./renderer";
-import type { DropZone } from "@/components/block-dnd-context";
+
+/** Discriminant from drag-and-drop; defined here so block logic does not depend on UI modules. */
+export type DropZone =
+  | { type: "column-insert"; targetBlockId: string; id: string }
+  | { type: "before" | "after"; targetBlockId: string };
 
 export const MoveBlockDestinationSchema = z.discriminatedUnion("container", [
   z.object({
@@ -147,12 +151,44 @@ function isInvalidNestedDestination(
   );
 }
 
+function destinationParentBlockId(
+  destination: MoveBlockUpdate["destination"]
+): string | null {
+  if (destination.container === "document") {
+    return null;
+  }
+  return destination.parentBlockId;
+}
+
+/** True if `descendantId` is strictly nested under `ancestorId` (not equal). */
+export function isNestedInsideBlock(
+  doc: Document,
+  ancestorId: string,
+  descendantId: string
+): boolean {
+  return isDescendantOf(doc, descendantId, ancestorId);
+}
+
+/** Moving would place the block inside its own subtree (invalid). */
+export function isMoveIntoOwnSubtree(
+  doc: Document,
+  movingBlockId: string,
+  destination: MoveBlockUpdate["destination"]
+): boolean {
+  return isInvalidNestedDestination(
+    doc,
+    movingBlockId,
+    destinationParentBlockId(destination)
+  );
+}
+
 function sameContainer(
   a: ParentRef,
   b: MoveBlockUpdate["destination"]
 ): boolean {
   if (a.container !== b.container) return false;
   if (a.container === "document") return true;
+  if (b.container === "document") return false;
   return a.parentBlockId === b.parentBlockId;
 }
 
@@ -257,6 +293,10 @@ export function applyBlockMove(
   doc: Document,
   update: MoveBlockUpdate
 ): Document {
+  if (isMoveIntoOwnSubtree(doc, update.blockId, update.destination)) {
+    return doc;
+  }
+
   const source = findParentRef(doc, update.blockId);
   if (!source) return doc;
 

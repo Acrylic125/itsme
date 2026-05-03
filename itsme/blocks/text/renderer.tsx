@@ -17,11 +17,13 @@ import {
 } from "@/components/shared-block";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useDomPopup } from "@/components/dom-popup";
+import { AnchorRect, useDomPopup } from "@/components/dom-popup";
 import { useDocument, useDocumentStore } from "@/blocks/document-context";
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
+import { createPortal } from "react-dom";
+import { Html } from "react-konva-utils";
 
 export function EditTextModal({
   closePopup,
@@ -109,8 +111,7 @@ function TextBlockComponent({
   fontSizePx: number;
   columnsResizeContext?: ColumnsResizeContext;
 }) {
-  const popup = useDomPopup();
-  const popupKey = useId();
+  // const popupKey = useId();
   const { documentStore, blockTree } = useDocument();
   const { focusBlock, focusBlockId } = useStore(
     documentStore,
@@ -119,41 +120,31 @@ function TextBlockComponent({
       focusBlockId: s.focusBlockId,
     }))
   );
+  const [anchor, setAnchor] = useState<AnchorRect | null>(null);
+
+  const closeTextEditor = useCallback(() => {
+    setAnchor(null);
+    focusBlock((cur) => (cur === block.id ? null : cur));
+  }, [block.id, focusBlock]);
+
   const handleClick = useCallback(
-    (args: {
-      anchor: { left: number; top: number; width: number; height: number };
-    }) => {
+    (args: { anchor: AnchorRect }) => {
       focusBlock(block.id);
-      popup.openPopup({
-        anchor: args.anchor,
-        popupKey,
-        onClose: () => {
-          focusBlock((cur) => {
-            if (cur === block.id) {
-              return null;
-            }
-            return cur;
-          });
-        },
-        content: ({ closePopup }) => (
-          <EditTextModal
-            key={popupKey}
-            block={block}
-            closePopup={() => {
-              closePopup();
-              focusBlock((cur) => {
-                if (cur === block.id) {
-                  return null;
-                }
-                return cur;
-              });
-            }}
-          />
-        ),
-      });
+      setAnchor(args.anchor);
     },
-    [popup, block, popupKey, focusBlock]
+    [block.id, focusBlock]
   );
+
+  useEffect(() => {
+    if (!anchor || focusBlockId !== block.id) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeTextEditor();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [anchor, focusBlockId, block.id, closeTextEditor]);
 
   const isDisabled = useInteractableBlock({
     focusBlockId,
@@ -161,34 +152,75 @@ function TextBlockComponent({
     blockId: block.id,
     blockTree,
   });
-
   return (
-    <InteractableBlock
-      blockId={block.id}
-      x={pos.relativeTo.x}
-      y={pos.relativeTo.y}
-      width={dimensions.width}
-      height={dimensions.height}
-      disabled={isDisabled}
-      inFocus={focusBlockId === block.id}
-      columnsResizeContext={columnsResizeContext}
-      onClick={handleClick}
-    >
-      <Text
-        x={0}
-        y={0}
+    <>
+      <InteractableBlock
+        blockId={block.id}
+        x={pos.relativeTo.x}
+        y={pos.relativeTo.y}
         width={dimensions.width}
         height={dimensions.height}
-        text={block.text}
-        fontFamily={style.fontFamily}
-        fontSize={fontSizePx}
-        lineHeight={style.lineHeight}
-        fontStyle={style.fontWeight === "bold" ? "bold" : "normal"}
-        align={block.align}
-        fill="#000000"
-        perfectDrawEnabled={false}
-      />
-    </InteractableBlock>
+        disabled={isDisabled}
+        inFocus={focusBlockId === block.id}
+        columnsResizeContext={columnsResizeContext}
+        onClick={handleClick}
+      >
+        <Text
+          x={0}
+          y={0}
+          width={dimensions.width}
+          height={dimensions.height}
+          text={block.text}
+          fontFamily={style.fontFamily}
+          fontSize={fontSizePx}
+          lineHeight={style.lineHeight}
+          fontStyle={style.fontWeight === "bold" ? "bold" : "normal"}
+          align={block.align}
+          fill="#000000"
+          perfectDrawEnabled={false}
+        />
+        {anchor && focusBlockId === block.id && (
+          <Html
+            transform={false}
+            divProps={{
+              style: {
+                // width: 400,
+                // height: 400,
+                // // top: 20,
+                // // left: 20,
+                // top: "20%",
+                // left: "20%",
+                position: "absolute",
+                top: anchor.top * 100 + "%",
+                left: anchor.left * 100 + "%",
+                width: anchor.width * 100 + "%",
+                height: anchor.height * 100 + "%",
+              },
+              // className: "w-full h-24",
+            }}
+          >
+            <EditTextModal
+              // key={popupKey}
+              block={block}
+              closePopup={closeTextEditor}
+            />
+            {/* <div className="h-1 w-full bg-amber-300" /> */}
+          </Html>
+        )}
+      </InteractableBlock>
+      {/* <Html
+        divProps={{
+          className: "pointer-events-none w-full h-full",
+        }}
+        transformFunc={(attrs) => ({
+          ...attrs,
+          // scaleX: 1,
+          // scaleY: 1,
+        })}
+      >
+        <div className="h-1 w-full bg-amber-300" />
+      </Html> */}
+    </>
   );
 }
 
