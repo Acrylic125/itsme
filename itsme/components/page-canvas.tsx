@@ -267,16 +267,106 @@ function ReorderLayer() {
     setReorderTarget(nextReorderTarget);
   }, [nextReorderTarget, setReorderTarget]);
 
+  /** Block ids whose full layout rect contains the pointer (not only edge target strips). */
+  const blocksUnderPointer = useMemo(() => {
+    const set = new Set<string>();
+    if (reorderCurrent === null) {
+      return set;
+    }
+    const byId = new Map<string, (typeof boxes)[number][]>();
+    for (const b of boxes) {
+      const list = byId.get(b.blockId);
+      if (list) {
+        list.push(b);
+      } else {
+        byId.set(b.blockId, [b]);
+      }
+    }
+    const { x: px, y: py } = reorderCurrent.position;
+    for (const [, blockBoxes] of byId) {
+      const top = blockBoxes.find((b) => b.type === "top");
+      const bottom = blockBoxes.find((b) => b.type === "bottom");
+      if (!top || !bottom) continue;
+      const x0 = top.visual.from.x;
+      const y0 = top.visual.from.y;
+      const x1 = bottom.visual.to.x;
+      const y1 = bottom.visual.to.y;
+      if (px >= x0 && px <= x1 && py >= y0 && py <= y1) {
+        set.add(top.blockId);
+      }
+    }
+    return set;
+  }, [boxes, reorderCurrent]);
+
+  if (reorderCurrent === null) {
+    return null;
+  }
+
   return (
     <>
+      {/* Any block the pointer is over: show edge strips that are not hit targets / not active */}
+      {boxes.map((box) => {
+        if (!blocksUnderPointer.has(box.blockId)) {
+          return null;
+        }
+        if (
+          intersectionTargets.some(
+            (t) => t.blockId === box.blockId && t.type === box.type
+          )
+        ) {
+          return null;
+        }
+        const isActive =
+          reorderTarget != null &&
+          reorderTarget.blockId === box.blockId &&
+          reorderTarget.type === box.type;
+        if (isActive) {
+          return null;
+        }
+        return (
+          <Rect
+            key={`hover-edge-${box.blockId}-${box.type}`}
+            x={box.visual.from.x}
+            y={box.visual.from.y}
+            width={box.visual.to.x - box.visual.from.x}
+            height={box.visual.to.y - box.visual.from.y}
+            fill="#51A2FF"
+            perfectDrawEnabled={false}
+            listening={false}
+          />
+        );
+      })}
+      {/* Edge target strips currently under the pointer (excluding active — drawn last) */}
+      {intersectionTargets.map((box) => {
+        const isActive =
+          reorderTarget != null &&
+          reorderTarget.blockId === box.blockId &&
+          reorderTarget.type === box.type;
+        if (isActive) {
+          return null;
+        }
+        return (
+          <Rect
+            key={`potential-${box.blockId}-${box.type}`}
+            x={box.visual.from.x}
+            y={box.visual.from.y}
+            width={box.visual.to.x - box.visual.from.x}
+            height={box.visual.to.y - box.visual.from.y}
+            fill="#51A2FF"
+            perfectDrawEnabled={false}
+            listening={false}
+          />
+        );
+      })}
       {reorderTarget && (
         <Rect
-          key={`${reorderTarget.blockId}-${reorderTarget.type}`}
+          key={`active-${reorderTarget.blockId}-${reorderTarget.type}`}
           x={reorderTarget.visual.from.x}
           y={reorderTarget.visual.from.y}
           width={reorderTarget.visual.to.x - reorderTarget.visual.from.x}
           height={reorderTarget.visual.to.y - reorderTarget.visual.from.y}
-          fill="#2B7FFF"
+          fill="#ea580c"
+          opacity={0.9}
           perfectDrawEnabled={false}
           listening={false}
         />
