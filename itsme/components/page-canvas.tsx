@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Group, Stage } from "react-konva";
-import { DomPopupProvider } from "./dom-popup";
 import {
   DocumentSchema,
   getPageLayoutMetrics,
@@ -99,7 +98,7 @@ function PageCanvasKonva({
   const scale = containerWidth > 0 ? containerWidth / pageWidth : 1;
 
   return (
-    <DomPopupProvider>
+    <div className="relative w-full h-full">
       <DocumentStage
         blocks={blocks}
         pageWidth={pageWidth}
@@ -110,7 +109,7 @@ function PageCanvasKonva({
         dpi={dpi}
         dpr={dpr}
       />
-    </DomPopupProvider>
+    </div>
   );
 }
 
