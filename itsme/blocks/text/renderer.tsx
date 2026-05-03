@@ -17,12 +17,11 @@ import {
 } from "@/components/shared-block";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { AnchorRect, useDomPopup } from "@/components/dom-popup";
+import { AnchorRect } from "@/components/dom-popup";
 import { useDocument, useDocumentStore } from "@/blocks/document-context";
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
-import { createPortal } from "react-dom";
 import { Html } from "react-konva-utils";
 
 export function EditTextModal({

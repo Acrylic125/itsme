@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
 import { BlockTree, type ColumnsResizeContext } from "@/blocks/renderer-types";
-import { useDocument } from "@/blocks/document-context";
+import {
+  useDocument,
+  type DocumentStore,
+  type DocumentStoreState,
+  type DocumentUpdateQueueStore,
+} from "@/blocks/document-context";
 import { useStore } from "zustand/react";
 import { useShallow } from "zustand/react/shallow";
 // import { useBlockDragContext } from "./block-dnd-context";
@@ -55,6 +60,13 @@ const COLUMN_RESIZE_GRIP_WIDTH = 24;
 const COLUMN_RESIZE_GRIP_HEIGHT_MIN = 24;
 const COLUMN_RESIZE_GRIP_HEIGHT_MAX = 24;
 
+type NormalizedAnchorRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 /** Move the boundary between neighbors; positive delta means the boundary moves right. */
 function transferSpansBetweenNeighbors(
   spans: readonly number[],
@@ -79,82 +91,268 @@ function transferSpansBetweenNeighbors(
   return out;
 }
 
-export function InteractableBlock({
-  blockId,
+function normalizedAnchorRectForNode(
+  node: Konva.Node
+): NormalizedAnchorRect | null {
+  const stage = node.getStage();
+  const container = stage?.container();
+  if (!stage || !container) return null;
+
+  const stageRect = container.getBoundingClientRect();
+  const r = node.getClientRect();
+  return {
+    left: r.x / stageRect.width,
+    top: (r.y + r.height) / stageRect.height,
+    width: r.width / stageRect.width,
+    height: r.height / stageRect.height,
+  };
+}
+
+function resetNodeDragPosition(
+  node: Konva.Node,
+  startPos: { x: number; y: number }
+) {
+  node.position({ x: startPos.x, y: startPos.y });
+  node.getLayer()?.batchDraw();
+}
+
+function hitColumnResizeEdge(
+  localX: number,
+  blockWidth: number,
+  ctx: ColumnsResizeContext
+): "left" | "right" | null {
+  const edgePx = Math.min(COLUMN_RESIZE_EDGE_PX, Math.max(blockWidth / 3, 8));
+  const idx = ctx.childIndex;
+  const n = ctx.siblingCount;
+  const distLeft = localX;
+  const distRight = blockWidth - localX;
+  const hitLeft = idx > 0 && distLeft <= edgePx;
+  const hitRight = idx < n - 1 && distRight <= edgePx;
+  if (hitLeft && hitRight) {
+    return distLeft <= distRight ? "left" : "right";
+  }
+  if (hitLeft) return "left";
+  if (hitRight) return "right";
+  return null;
+}
+
+function patchColumnSpansAfterResizeDrag(args: {
+  dx: number;
+  resizeKind: "left" | "right";
+  resizeCtx: ColumnsResizeContext;
+  documentStore: DocumentStore;
+  updateQueueStore: DocumentUpdateQueueStore;
+  documentId: string;
+  patchDocument: DocumentStoreState["update"];
+}): void {
+  const W = args.resizeCtx.columnRowWidthPx;
+  const { dx, resizeKind, resizeCtx, documentStore } = args;
+  if (W <= 0 || dx === 0) return;
+
+  const doc = documentStore.getState().document;
+  const colBlock = doc.blocks.find(
+    (b) => b.id === resizeCtx.columnsBlockId && b.type === "columns"
+  );
+  if (
+    !colBlock ||
+    colBlock.type !== "columns" ||
+    colBlock.blocks.length !== resizeCtx.siblingCount
+  ) {
+    return;
+  }
+
+  const spans = colBlock.blocks.map((c) => c.span);
+  const T = spans.reduce((acc, s) => acc + s, 0);
+  if (T <= 0) return;
+
+  const deltaSpan = (dx * T) / W;
+  const i = resizeCtx.childIndex;
+
+  let nextSpans: number[];
+  if (resizeKind === "left" && i > 0) {
+    nextSpans = transferSpansBetweenNeighbors(
+      spans,
+      i - 1,
+      i,
+      deltaSpan,
+      MIN_COLUMN_SPAN
+    );
+  } else if (resizeKind === "right" && i < resizeCtx.siblingCount - 1) {
+    nextSpans = transferSpansBetweenNeighbors(
+      spans,
+      i,
+      i + 1,
+      deltaSpan,
+      MIN_COLUMN_SPAN
+    );
+  } else {
+    nextSpans = spans;
+  }
+
+  const unchanged =
+    nextSpans.length === spans.length &&
+    nextSpans.every((s, idx) => s === spans[idx]);
+  if (unchanged) return;
+
+  args.patchDocument(args.updateQueueStore, {
+    type: "columns_spans",
+    documentId: args.documentId,
+    columnsBlockId: resizeCtx.columnsBlockId,
+    spans: nextSpans,
+  });
+}
+
+function DraggingFillPreview({
   x,
   y,
   width,
   height,
-  dpi = 300,
-  children,
-  onContextMenu,
-  onClick,
-  inFocus = false,
-  disabled = false,
-  columnsResizeContext,
 }: {
-  blockId: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  dpi?: number;
-  inFocus?: boolean;
-  disabled?: boolean;
-  columnsResizeContext?: ColumnsResizeContext;
-  children: React.ReactNode;
-  onContextMenu?: (args: {
-    event: Konva.KonvaEventObject<MouseEvent>;
-    anchor: { left: number; top: number; width: number; height: number };
-  }) => void;
-  onClick?: (args: {
-    event: Konva.KonvaEventObject<MouseEvent>;
-    anchor: { left: number; top: number; width: number; height: number };
-  }) => void;
 }) {
-  const groupRef = useRef<Konva.Group | null>(null);
-  const [hovered, setHovered] = useState(false);
-  const { documentStore, updateQueueStore, blockTree } = useDocument();
+  return (
+    <Group x={x} y={y} width={width} height={height}>
+      <Rect
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+        fill="#fff7ea"
+        stroke="#e37100"
+        strokeWidth={1}
+      />
+    </Group>
+  );
+}
+
+function ActiveColumnResizePreview({
+  x,
+  y,
+  width,
+  height,
+  activeColumnResize,
+  resizeGripY,
+  resizeGripHeight,
+  resizeIndicatorHeight,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  activeColumnResize: { kind: "left" | "right"; dx: number };
+  resizeGripY: number;
+  resizeGripHeight: number;
+  resizeIndicatorHeight: number;
+}) {
+  return (
+    <Group x={x} y={y} width={width} height={height}>
+      <Rect
+        x={activeColumnResize.kind === "left" ? activeColumnResize.dx : 0}
+        y={0}
+        width={
+          activeColumnResize.kind === "left"
+            ? Math.max(0, width - activeColumnResize.dx)
+            : Math.max(0, width + activeColumnResize.dx)
+        }
+        height={resizeIndicatorHeight}
+        fill="#fff7ea"
+        stroke="#e37100"
+        strokeWidth={1}
+        opacity={0.45}
+        perfectDrawEnabled={false}
+        listening={false}
+      />
+      <Rect
+        x={
+          (activeColumnResize.kind === "left" ? 0 : width) +
+          activeColumnResize.dx -
+          COLUMN_RESIZE_GRIP_WIDTH / 2
+        }
+        y={resizeGripY}
+        width={COLUMN_RESIZE_GRIP_WIDTH}
+        height={resizeGripHeight}
+        fill="#ffffff"
+        stroke="#e37100"
+        strokeWidth={1}
+        cornerRadius={2}
+        perfectDrawEnabled={false}
+        listening={false}
+      />
+    </Group>
+  );
+}
+
+function useInteractableBlockController(args: {
+  blockId: string;
+  width: number;
+  height: number;
+  dpi: number;
+  disabled: boolean;
+  inFocus: boolean;
+  onContextMenu?: (p: {
+    event: Konva.KonvaEventObject<MouseEvent>;
+    anchor: NormalizedAnchorRect;
+  }) => void;
+  onClick?: (p: {
+    event: Konva.KonvaEventObject<MouseEvent>;
+    anchor: NormalizedAnchorRect;
+  }) => void;
+  columnsResizeContext?: ColumnsResizeContext;
+  documentStore: DocumentStore;
+  updateQueueStore: DocumentUpdateQueueStore;
+  blockTree: BlockTree;
+  patchDocument: DocumentStoreState["update"];
+  documentId: string;
+  setReorder: DocumentStoreState["setReorderCurrent"];
+  setReorderTarget: DocumentStoreState["setReorderTarget"];
+  commitReorder: DocumentStoreState["commitReorder"];
+}) {
   const {
+    blockId,
+    width,
+    height,
+    dpi,
+    disabled,
+    inFocus,
+    onContextMenu,
+    onClick,
+    columnsResizeContext,
+    documentStore,
+    updateQueueStore,
+    blockTree,
+    patchDocument,
+    documentId,
     setReorder,
     setReorderTarget,
     commitReorder,
-    documentId,
-    patchDocument,
-  } = useStore(
-    documentStore,
-    useShallow((s) => ({
-      setReorder: s.setReorderCurrent,
-      setReorderTarget: s.setReorderTarget,
-      commitReorder: s.commitReorder,
-      documentId: s.documentId,
-      patchDocument: s.update,
-    }))
-  );
+  } = args;
 
+  const groupRef = useRef<Konva.Group | null>(null);
+  const assignGroupRef = useCallback((n: Konva.Group | null) => {
+    groupRef.current = n;
+  }, []);
+  const [hovered, setHovered] = useState(false);
   const columnResizeKindRef = useRef<null | "left" | "right">(null);
   const pointerStartCanvasRef = useRef<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [activeColumnResize, setActiveColumnResize] = useState<{
+    kind: "left" | "right";
+    dx: number;
+  } | null>(null);
+  const dragStartPosition = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const handleContextMenu = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
       event.evt.preventDefault();
       if (!onContextMenu) return;
       const node = groupRef.current;
-      const stage = node?.getStage();
-      const container = stage?.container();
-      if (!node || !stage || !container) return;
-
-      const stageRect = container.getBoundingClientRect();
-      const r = node.getClientRect();
-      onContextMenu({
-        event,
-        anchor: {
-          left: r.x / stageRect.width,
-          top: (r.y + r.height) / stageRect.height,
-          width: r.width / stageRect.width,
-          height: r.height / stageRect.height,
-        },
-      });
+      if (!node) return;
+      const anchor = normalizedAnchorRectForNode(node);
+      if (!anchor) return;
+      onContextMenu({ event, anchor });
     },
     [onContextMenu]
   );
@@ -167,21 +365,10 @@ export function InteractableBlock({
       event.evt.preventDefault();
       if (!onClick) return;
       const node = groupRef.current;
-      const stage = node?.getStage();
-      const container = stage?.container();
-      if (!node || !stage || !container) return;
-
-      const stageRect = container.getBoundingClientRect();
-      const r = node.getClientRect();
-      onClick({
-        event,
-        anchor: {
-          left: r.x / stageRect.width,
-          top: (r.y + r.height) / stageRect.height,
-          width: r.width / stageRect.width,
-          height: r.height / stageRect.height,
-        },
-      });
+      if (!node) return;
+      const anchor = normalizedAnchorRectForNode(node);
+      if (!anchor) return;
+      onClick({ event, anchor });
     },
     [onClick, disabled]
   );
@@ -222,13 +409,6 @@ export function InteractableBlock({
     return () => cancelAnimationFrame(frame);
   }, [disabled, height, inFocus, width]);
 
-  const [isDragging, setIsDragging] = useState(false);
-  const [activeColumnResize, setActiveColumnResize] = useState<{
-    kind: "left" | "right";
-    dx: number;
-  } | null>(null);
-  const dragStartPosition = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-
   const canResizeLeft =
     columnsResizeContext != null && columnsResizeContext.childIndex > 0;
   const canResizeRight =
@@ -260,28 +440,13 @@ export function InteractableBlock({
     (event: Konva.KonvaEventObject<DragEvent>) => {
       event.cancelBubble = true;
       const node = groupRef.current ?? event.target;
-      // console.log("START");
       dragStartPosition.current = node.getPosition();
       if (disabled) return;
 
       const ctx = columnsResizeContext;
       const local = node.getRelativePointerPosition();
       if (ctx && local && ctx.columnRowWidthPx > 0 && ctx.siblingCount > 1) {
-        const edgePx = Math.min(COLUMN_RESIZE_EDGE_PX, Math.max(width / 3, 8));
-        const distLeft = local.x;
-        const distRight = width - local.x;
-        const idx = ctx.childIndex;
-        const n = ctx.siblingCount;
-        let edgeKind: null | "left" | "right" = null;
-        const hitLeft = idx > 0 && distLeft <= edgePx;
-        const hitRight = idx < n - 1 && distRight <= edgePx;
-        if (hitLeft && hitRight) {
-          edgeKind = distLeft <= distRight ? "left" : "right";
-        } else if (hitLeft) {
-          edgeKind = "left";
-        } else if (hitRight) {
-          edgeKind = "right";
-        }
+        const edgeKind = hitColumnResizeEdge(local.x, width, ctx);
         if (edgeKind) {
           const startPtr = getPointerCanvasPosition(node);
           if (startPtr) {
@@ -326,11 +491,7 @@ export function InteractableBlock({
             dx: ptrCurrent.x - ptrStart.x,
           });
         }
-        node.position({
-          x: dragStartPosition.current.x,
-          y: dragStartPosition.current.y,
-        });
-        node.getLayer()?.batchDraw();
+        resetNodeDragPosition(node, dragStartPosition.current);
         return;
       }
       const pointerCanvasPosition = getPointerCanvasPosition(node);
@@ -348,7 +509,6 @@ export function InteractableBlock({
   const handleDragEnd = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
       event.cancelBubble = true;
-      // console.log("END");
       const resizeKind = columnResizeKindRef.current;
       const resizeCtx = columnsResizeContext;
       const ptrStart = pointerStartCanvasRef.current;
@@ -361,77 +521,23 @@ export function InteractableBlock({
 
       if (resizeKind && resizeCtx && ptrStart) {
         const ptrEnd = getPointerCanvasPosition(node);
-        node.position({
-          x: dragStartPosition.current.x,
-          y: dragStartPosition.current.y,
-        });
-        node.getLayer()?.batchDraw();
+        resetNodeDragPosition(node, dragStartPosition.current);
         if (ptrEnd) {
-          const dx = ptrEnd.x - ptrStart.x;
-          const W = resizeCtx.columnRowWidthPx;
-          if (W > 0 && dx !== 0) {
-            const doc = documentStore.getState().document;
-            const colBlock = doc.blocks.find(
-              (b) => b.id === resizeCtx.columnsBlockId && b.type === "columns"
-            );
-            if (
-              colBlock &&
-              colBlock.type === "columns" &&
-              colBlock.blocks.length === resizeCtx.siblingCount
-            ) {
-              const spans = colBlock.blocks.map((c) => c.span);
-              const T = spans.reduce((acc, s) => acc + s, 0);
-              if (T <= 0) {
-                return;
-              }
-              const deltaSpan = (dx * T) / W;
-              const i = resizeCtx.childIndex;
-              let nextSpans: number[];
-              if (resizeKind === "left" && i > 0) {
-                nextSpans = transferSpansBetweenNeighbors(
-                  spans,
-                  i - 1,
-                  i,
-                  deltaSpan,
-                  MIN_COLUMN_SPAN
-                );
-              } else if (
-                resizeKind === "right" &&
-                i < resizeCtx.siblingCount - 1
-              ) {
-                nextSpans = transferSpansBetweenNeighbors(
-                  spans,
-                  i,
-                  i + 1,
-                  deltaSpan,
-                  MIN_COLUMN_SPAN
-                );
-              } else {
-                nextSpans = spans;
-              }
-              const unchanged =
-                nextSpans.length === spans.length &&
-                nextSpans.every((s, idx) => s === spans[idx]);
-              if (!unchanged) {
-                patchDocument(updateQueueStore, {
-                  type: "columns_spans",
-                  documentId,
-                  columnsBlockId: resizeCtx.columnsBlockId,
-                  spans: nextSpans,
-                });
-              }
-            }
-          }
+          patchColumnSpansAfterResizeDrag({
+            dx: ptrEnd.x - ptrStart.x,
+            resizeKind,
+            resizeCtx,
+            documentStore,
+            updateQueueStore,
+            documentId,
+            patchDocument,
+          });
         }
         return;
       }
 
       commitReorder(updateQueueStore, blockTree);
-      node.position({
-        x: dragStartPosition.current.x,
-        y: dragStartPosition.current.y,
-      });
-      node.getLayer()?.batchDraw();
+      resetNodeDragPosition(node, dragStartPosition.current);
     },
     [
       commitReorder,
@@ -455,15 +561,10 @@ export function InteractableBlock({
     setReorder(null);
     setReorderTarget(null);
     if (node) {
-      node.position({
-        x: dragStartPosition.current.x,
-        y: dragStartPosition.current.y,
-      });
-      node.getLayer()?.batchDraw();
+      resetNodeDragPosition(node, dragStartPosition.current);
     }
   }, [setReorder, setReorderTarget]);
 
-  // const innerStroke = 0.2 * dpi;
   const innerStroke = 0.01 * dpi;
   const outerStroke = 0.03 * dpi;
   /** Space between the outer edge of the inner stroke and the inner edge of the outer stroke. */
@@ -483,27 +584,137 @@ export function InteractableBlock({
   );
   const resizeGripY = (height - resizeGripHeight) / 2;
 
+  return {
+    assignGroupRef,
+    handleContextMenu,
+    handleClick,
+    handleMouseEnter,
+    handleMouseLeave,
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleDragCancel,
+    innerStroke,
+    outerStroke,
+    padding,
+    innerRadius,
+    outerRadius,
+    isDragging,
+    activeColumnResize,
+    canResizeLeft,
+    canResizeRight,
+    showInnerRing,
+    showOuterHoverRing,
+    showResizeHandles,
+    resizeGripY,
+    resizeGripHeight,
+    resizeIndicatorHeight,
+  };
+}
+
+export function InteractableBlock({
+  blockId,
+  x,
+  y,
+  width,
+  height,
+  dpi = 300,
+  children,
+  onContextMenu,
+  onClick,
+  inFocus = false,
+  disabled = false,
+  columnsResizeContext,
+}: {
+  blockId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  dpi?: number;
+  inFocus?: boolean;
+  disabled?: boolean;
+  columnsResizeContext?: ColumnsResizeContext;
+  children: React.ReactNode;
+  onContextMenu?: (args: {
+    event: Konva.KonvaEventObject<MouseEvent>;
+    anchor: { left: number; top: number; width: number; height: number };
+  }) => void;
+  onClick?: (args: {
+    event: Konva.KonvaEventObject<MouseEvent>;
+    anchor: { left: number; top: number; width: number; height: number };
+  }) => void;
+}) {
+  const { documentStore, updateQueueStore, blockTree } = useDocument();
+  const {
+    setReorder,
+    setReorderTarget,
+    commitReorder,
+    documentId,
+    patchDocument,
+  } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      setReorder: s.setReorderCurrent,
+      setReorderTarget: s.setReorderTarget,
+      commitReorder: s.commitReorder,
+      documentId: s.documentId,
+      patchDocument: s.update,
+    }))
+  );
+
+  const {
+    assignGroupRef,
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleDragCancel,
+    handleMouseEnter,
+    handleMouseLeave,
+    handleContextMenu,
+    handleClick,
+    innerStroke,
+    outerStroke,
+    padding,
+    innerRadius,
+    outerRadius,
+    isDragging,
+    activeColumnResize,
+    canResizeLeft,
+    canResizeRight,
+    showInnerRing,
+    showOuterHoverRing,
+    showResizeHandles,
+    resizeGripY,
+    resizeGripHeight,
+    resizeIndicatorHeight,
+  } = useInteractableBlockController({
+    blockId,
+    width,
+    height,
+    dpi,
+    disabled,
+    inFocus,
+    onContextMenu,
+    onClick,
+    columnsResizeContext,
+    documentStore,
+    updateQueueStore,
+    blockTree,
+    patchDocument,
+    documentId,
+    setReorder,
+    setReorderTarget,
+    commitReorder,
+  });
+
   return (
     <>
-      {/* Not draggable! */}
       {isDragging && (
-        <Group x={x} y={y} width={width} height={height}>
-          <Rect
-            x={0}
-            y={0}
-            width={width}
-            height={height}
-            fill="#fff7ea"
-            stroke="#e37100"
-            strokeWidth={1}
-          />
-        </Group>
+        <DraggingFillPreview x={x} y={y} width={width} height={height} />
       )}
-      {/* Draggable! */}
       <Group
-        ref={(n) => {
-          groupRef.current = n;
-        }}
+        ref={assignGroupRef}
         x={x}
         y={y}
         width={width}
@@ -586,40 +797,16 @@ export function InteractableBlock({
         )}
       </Group>
       {activeColumnResize && (
-        <Group x={x} y={y} width={width} height={height}>
-          <Rect
-            x={activeColumnResize.kind === "left" ? activeColumnResize.dx : 0}
-            y={0}
-            width={
-              activeColumnResize.kind === "left"
-                ? Math.max(0, width - activeColumnResize.dx)
-                : Math.max(0, width + activeColumnResize.dx)
-            }
-            height={resizeIndicatorHeight}
-            fill="#fff7ea"
-            stroke="#e37100"
-            strokeWidth={1}
-            opacity={0.45}
-            perfectDrawEnabled={false}
-            listening={false}
-          />
-          <Rect
-            x={
-              (activeColumnResize.kind === "left" ? 0 : width) +
-              activeColumnResize.dx -
-              COLUMN_RESIZE_GRIP_WIDTH / 2
-            }
-            y={resizeGripY}
-            width={COLUMN_RESIZE_GRIP_WIDTH}
-            height={resizeGripHeight}
-            fill="#ffffff"
-            stroke="#e37100"
-            strokeWidth={1}
-            cornerRadius={2}
-            perfectDrawEnabled={false}
-            listening={false}
-          />
-        </Group>
+        <ActiveColumnResizePreview
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          activeColumnResize={activeColumnResize}
+          resizeGripY={resizeGripY}
+          resizeGripHeight={resizeGripHeight}
+          resizeIndicatorHeight={resizeIndicatorHeight}
+        />
       )}
     </>
   );
