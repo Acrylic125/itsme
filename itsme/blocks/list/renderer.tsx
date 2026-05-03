@@ -1,7 +1,8 @@
 "use client";
 
 import { z } from "zod";
-import { Group } from "react-konva";
+import { Group, Text } from "react-konva";
+import { prepare, layout } from "@chenglou/pretext";
 import type { ColumnsResizeContext } from "../renderer-types";
 import {
   BlockRenderer,
@@ -11,7 +12,6 @@ import {
 } from "../renderer-types";
 import { BlockSchema } from "../blocks";
 import { ListBulletSchema } from "./schema";
-import { TextBlockSchema } from "../text/schema";
 import {
   InteractableBlock,
   useInteractableBlock,
@@ -120,30 +120,29 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       BlockRenderer<z.infer<typeof BlockSchema>["type"]>["render"]
     >[] = [];
     const nodes: React.ReactNode[] = [];
+    const defaultTextStyle = ctx.styleSheet.text.default;
+
     childBlocks.forEach((childBlock, index) => {
       const rowStartPosition = ctx.getNextPosition();
-      const bulletBlock: z.infer<typeof TextBlockSchema> = {
-        id: `${block.id}-bullet-${index}`,
-        type: "text",
-        text: getBulletLabel(block.bullet, index),
-        style: "default",
-        align: "right",
-      };
+      const bulletLabel = getBulletLabel(block.bullet, index);
+      const bulletFontSizePx = (defaultTextStyle.fontSize * ctx.dpi) / 72;
+      const bulletPrepared = prepare(
+        bulletLabel,
+        `${defaultTextStyle.fontWeight} ${bulletFontSizePx}px ${defaultTextStyle.fontFamily}`
+      );
+      const { lineCount: bulletLineCount } = layout(
+        bulletPrepared,
+        bulletWidth,
+        defaultTextStyle.lineHeight
+      );
+      const bulletHeight =
+        bulletLineCount * bulletFontSizePx * defaultTextStyle.lineHeight;
 
       ctx.setNextPosition({
         x: rowStartPosition.x,
         y: rowStartPosition.y,
       });
-      const bulletResult = ctx.renderers.text.render(
-        bulletBlock,
-        {
-          parents: [...relativeTo.parents, block.id],
-          x: listStartPosition.x,
-          y: listStartPosition.y,
-          width: bulletWidth,
-        },
-        ctx
-      );
+      ctx.claimBlockSpace(bulletHeight);
       const afterBulletPosition = ctx.getNextPosition();
 
       ctx.setNextPosition({
@@ -178,11 +177,26 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
         y: rowStartPosition.y + rowHeight,
       });
 
-      children.push(bulletResult);
       children.push(childResult);
       nodes.push(
         <Group key={childBlock.id}>
-          {bulletResult.component()}
+          <Text
+            x={rowStartPosition.x - listStartPosition.x}
+            y={rowStartPosition.y - listStartPosition.y}
+            width={bulletWidth}
+            height={bulletHeight}
+            text={bulletLabel}
+            fontFamily={defaultTextStyle.fontFamily}
+            fontSize={bulletFontSizePx}
+            lineHeight={defaultTextStyle.lineHeight}
+            fontStyle={
+              defaultTextStyle.fontWeight === "bold" ? "bold" : "normal"
+            }
+            align="right"
+            fill="#000000"
+            perfectDrawEnabled={false}
+            listening={false}
+          />
           {childResult.component()}
         </Group>
       );
