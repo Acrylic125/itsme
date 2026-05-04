@@ -37,11 +37,10 @@ export function EditTextModal({
       patchDocument: s.update,
     }))
   );
-  const { updateQueueStore } = useDocument();
   const [text, setText] = useState(block.text);
 
   const handleSave = useCallback(() => {
-    patchDocument(updateQueueStore, {
+    patchDocument({
       type: "text",
       documentId,
       blockId: block.id,
@@ -52,7 +51,6 @@ export function EditTextModal({
     closePopup();
   }, [
     patchDocument,
-    updateQueueStore,
     documentId,
     block.id,
     block.align,

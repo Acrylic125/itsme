@@ -8,7 +8,6 @@ import {
   useDocument,
   type DocumentStore,
   type DocumentStoreState,
-  type DocumentUpdateQueueStore,
 } from "@/blocks/document-context";
 import { useStore } from "zustand/react";
 import { useShallow } from "zustand/react/shallow";
@@ -141,7 +140,6 @@ function patchColumnSpansAfterResizeDrag(args: {
   resizeKind: "left" | "right";
   resizeCtx: ColumnsResizeContext;
   documentStore: DocumentStore;
-  updateQueueStore: DocumentUpdateQueueStore;
   documentId: string;
   patchDocument: DocumentStoreState["update"];
 }): void {
@@ -194,7 +192,7 @@ function patchColumnSpansAfterResizeDrag(args: {
     nextSpans.every((s, idx) => s === spans[idx]);
   if (unchanged) return;
 
-  args.patchDocument(args.updateQueueStore, {
+  args.patchDocument({
     type: "columns_spans",
     documentId: args.documentId,
     columnsBlockId: resizeCtx.columnsBlockId,
@@ -302,7 +300,6 @@ function useInteractableBlockController(args: {
   }) => void;
   columnsResizeContext?: ColumnsResizeContext;
   documentStore: DocumentStore;
-  updateQueueStore: DocumentUpdateQueueStore;
   blockTree: BlockTree;
   patchDocument: DocumentStoreState["update"];
   documentId: string;
@@ -321,7 +318,6 @@ function useInteractableBlockController(args: {
     onClick,
     columnsResizeContext,
     documentStore,
-    updateQueueStore,
     blockTree,
     patchDocument,
     documentId,
@@ -528,7 +524,6 @@ function useInteractableBlockController(args: {
             resizeKind,
             resizeCtx,
             documentStore,
-            updateQueueStore,
             documentId,
             patchDocument,
           });
@@ -536,12 +531,11 @@ function useInteractableBlockController(args: {
         return;
       }
 
-      commitReorder(updateQueueStore, blockTree);
+      commitReorder(blockTree);
       resetNodeDragPosition(node, dragStartPosition.current);
     },
     [
       commitReorder,
-      updateQueueStore,
       blockTree,
       columnsResizeContext,
       documentStore,
@@ -645,7 +639,7 @@ export function InteractableBlock({
     anchor: { left: number; top: number; width: number; height: number };
   }) => void;
 }) {
-  const { documentStore, updateQueueStore, blockTree } = useDocument();
+  const { documentStore, blockTree } = useDocument();
   const {
     setReorder,
     setReorderTarget,
@@ -699,7 +693,6 @@ export function InteractableBlock({
     onClick,
     columnsResizeContext,
     documentStore,
-    updateQueueStore,
     blockTree,
     patchDocument,
     documentId,

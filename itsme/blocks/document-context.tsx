@@ -3,16 +3,13 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { createStore } from "zustand/vanilla";
-import {
-  persist,
-  createJSONStorage,
-  type StateStorage,
-} from "zustand/middleware";
 import { useStore } from "zustand/react";
 import z from "zod";
 import {
@@ -30,6 +27,7 @@ import {
 } from "./apply-block-move";
 import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
 import { nanoid } from "nanoid";
+import { useTRPCClient } from "@/server/utils";
 
 export type DocumentId = string;
 
@@ -38,58 +36,45 @@ export type Document = z.infer<typeof DocumentSchema>;
 export type DocumentWithId = Document & { id: DocumentId };
 
 export type BlockUpdate = z.infer<typeof BlockUpdateSchema>;
-
-/** Key for deduping queue entries: one pending update per document + block pair. */
-export function documentBlockUpdateKey(update: BlockUpdate): string {
-  switch (update.type) {
-    case "text":
-    case "move":
-      return `${update.documentId}:${update.blockId}`;
-    case "columns_spans":
-      return `${update.documentId}:${update.columnsBlockId}:columns_spans`;
-    default: {
-      const u: { type: string } = update;
-      throw new Error(`Unhandled block update type: ${u.type}`);
-    }
-  }
-}
-
-const noopStorage: StateStorage = {
-  getItem: () => null,
-  setItem: () => {},
-  removeItem: () => {},
+type UpdateDocumentBlocksInput = {
+  blocks: (
+    | { type: "create" | "update"; block: Block }
+    | { type: "delete"; blockId: string }
+  )[];
 };
+type BlockSyncAction = UpdateDocumentBlocksInput["blocks"][number];
 
-function getLocalStorage(): StateStorage {
-  if (typeof window === "undefined") {
-    return noopStorage;
-  }
-  return localStorage;
+function areBlocksEqual(a: Block, b: Block): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
-const DEFAULT_QUEUE_STORAGE_KEY = "itsme:document-update-queue";
+function buildDocumentBlockDiff(
+  serverDocument: Document,
+  document: Document
+): UpdateDocumentBlocksInput["blocks"] {
+  const serverBlocksById = new Map(serverDocument.blocks.map((b) => [b.id, b]));
+  const blocksById = new Map(document.blocks.map((b) => [b.id, b]));
 
-const PersistedUpdatesRecordSchema = z.record(z.string(), BlockUpdateSchema);
-
-function normalizePersistedUpdates(raw: unknown): Record<string, BlockUpdate> {
-  const asRecord = PersistedUpdatesRecordSchema.safeParse(raw);
-  if (asRecord.success) {
-    const out: Record<string, BlockUpdate> = {};
-    for (const [k, u] of Object.entries(asRecord.data)) {
-      const r = BlockUpdateSchema.safeParse(u);
-      if (r.success) {
-        out[k] = r.data;
-      }
+  const createOrUpdate: BlockSyncAction[] = [];
+  for (const block of document.blocks) {
+    const serverBlock = serverBlocksById.get(block.id);
+    if (!serverBlock) {
+      createOrUpdate.push({ type: "create", block });
+      continue;
     }
-    return out;
+    if (!areBlocksEqual(serverBlock, block)) {
+      createOrUpdate.push({ type: "update", block });
+    }
   }
-  const asArray = z.array(BlockUpdateSchema).safeParse(raw);
-  if (asArray.success) {
-    return Object.fromEntries(
-      asArray.data.map((u) => [documentBlockUpdateKey(u), u])
-    );
-  }
-  return {};
+
+  const deletes: BlockSyncAction[] = serverDocument.blocks
+    .filter((serverBlock) => !blocksById.has(serverBlock.id))
+    .map((serverBlock) => ({
+      type: "delete" as const,
+      blockId: serverBlock.id,
+    }));
+
+  return [...createOrUpdate, ...deletes];
 }
 
 function removeEmptyContainers(doc: Document): Document {
@@ -512,75 +497,14 @@ function buildMoveUpdatesForReorder(args: {
     }
   }
 
-  // Wrapping requires creating a new columns block and cannot be represented
-  // by existing MoveBlockUpdate alone; keep queue updates empty for now.
+  // Wrapping creates a columns block inline; document state is updated directly.
   return { updates: [], nextDocument: next };
-}
-
-export type DocumentUpdateQueueState = {
-  updates: Record<string, BlockUpdate>;
-  enqueue: (update: BlockUpdate) => void;
-  setUpdates: (updates: Record<string, BlockUpdate>) => void;
-};
-
-export type DocumentUpdateQueueStore = ReturnType<
-  typeof createDocumentUpdateQueueStore
->;
-
-export function createDocumentUpdateQueueStore(options?: {
-  storageKey?: string;
-}) {
-  const name = options?.storageKey ?? DEFAULT_QUEUE_STORAGE_KEY;
-
-  return createStore(
-    persist<
-      DocumentUpdateQueueState,
-      [],
-      [],
-      Pick<DocumentUpdateQueueState, "updates">
-    >(
-      (set, get) => ({
-        updates: {},
-        enqueue: (update) => {
-          const key = documentBlockUpdateKey(update);
-          set({
-            ...get(),
-            updates: { ...get().updates, [key]: update },
-          });
-        },
-        setUpdates: (updates) =>
-          set({
-            ...get(),
-            updates,
-          }),
-      }),
-      {
-        name,
-        storage:
-          createJSONStorage<Pick<DocumentUpdateQueueState, "updates">>(
-            getLocalStorage
-          ),
-        partialize: (s): Pick<DocumentUpdateQueueState, "updates"> => ({
-          updates: s.updates,
-        }),
-        merge: (persisted, current) => {
-          if (persisted == null || typeof persisted !== "object") {
-            return current;
-          }
-          const p = persisted as { updates?: unknown };
-          return {
-            ...current,
-            updates: normalizePersistedUpdates(p.updates),
-          };
-        },
-      }
-    )
-  );
 }
 
 export type DocumentStoreState = {
   documentId: DocumentId;
   document: Document;
+  serverDocument: Document;
   focusBlockId: string | null;
   reorder: {
     current: {
@@ -589,7 +513,7 @@ export type DocumentStoreState = {
     } | null;
     targetBlock: BlockTreeReorderBoundingBox | null;
   };
-  update: (queue: DocumentUpdateQueueStore, update: BlockUpdate) => void;
+  update: (update: BlockUpdate) => void;
   focusBlock: (
     blockId: string | ((current: string | null) => string | null) | null
   ) => void;
@@ -599,11 +523,9 @@ export type DocumentStoreState = {
       blockIds: string[];
     } | null
   ) => void;
+  setServerDocument: (document: Document) => void;
   setReorderTarget: (targetBlock: BlockTreeReorderBoundingBox | null) => void;
-  commitReorder: (
-    queue: DocumentUpdateQueueStore,
-    blockTree: BlockTree
-  ) => BlockUpdate[];
+  commitReorder: (blockTree: BlockTree) => BlockUpdate[];
 };
 
 export type DocumentStore = ReturnType<typeof createDocumentStore>;
@@ -612,9 +534,11 @@ export function createDocumentStore(
   documentId: DocumentId,
   initialDocument: Document
 ) {
+  const initialServerDocument = cloneDocument(initialDocument);
   return createStore<DocumentStoreState>((set, get) => ({
     documentId,
     document: initialDocument,
+    serverDocument: initialServerDocument,
     focusBlockId: null,
     reorder: {
       current: null,
@@ -642,6 +566,11 @@ export function createDocumentStore(
         },
       });
     },
+    setServerDocument: (serverDocument) => {
+      set({
+        serverDocument: cloneDocument(serverDocument),
+      });
+    },
     setReorderTarget: (targetBlock) => {
       const current = get().reorder;
       if (!current) {
@@ -654,7 +583,7 @@ export function createDocumentStore(
         },
       });
     },
-    commitReorder: (queue, blockTree) => {
+    commitReorder: (blockTree) => {
       const { documentId: activeId, document: doc, reorder } = get();
       if (!reorder) {
         return [];
@@ -681,12 +610,9 @@ export function createDocumentStore(
           document: nextDocument,
         });
       }
-      for (const update of result.updates) {
-        queue.getState().enqueue(update);
-      }
       return result.updates;
     },
-    update: (queue, update) => {
+    update: (update) => {
       const parsed = BlockUpdateSchema.safeParse(update);
       if (!parsed.success) {
         return;
@@ -704,7 +630,6 @@ export function createDocumentStore(
         documentId: activeId,
         document: next,
       });
-      queue.getState().enqueue(patch);
     },
   }));
 }
@@ -719,7 +644,6 @@ type DocumentContextValue = {
   blocks: RenderedLayoutBlock[];
   blockTree: BlockTree;
   documentStore: DocumentStore;
-  updateQueueStore: DocumentUpdateQueueStore;
 };
 
 const DocumentContext = createContext<DocumentContextValue | null>(null);
@@ -733,23 +657,52 @@ export function DocumentStoresProvider({
   children: ReactNode;
   dpi: number;
 }) {
-  const [stores] = useState(() => {
-    const documentStore = createDocumentStore(
-      document.id,
-      documentPayloadFromWithId(document)
-    );
-    return {
-      documentStore,
-      updateQueueStore: createDocumentUpdateQueueStore(),
+  const trpcClient = useTRPCClient();
+  const [documentStore] = useState(() =>
+    createDocumentStore(document.id, documentPayloadFromWithId(document))
+  );
+  const isSyncingRef = useRef(false);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (isSyncingRef.current) {
+        return;
+      }
+      const {
+        document: currentDocument,
+        serverDocument,
+        setServerDocument,
+      } = documentStore.getState();
+      const blocks = buildDocumentBlockDiff(serverDocument, currentDocument);
+      if (blocks.length === 0) {
+        return;
+      }
+      isSyncingRef.current = true;
+      trpcClient.resumes.updateDocumentBlocks
+        .mutate({ blocks })
+        .then(() => {
+          setServerDocument(currentDocument);
+        })
+        .catch((error) => {
+          // Keep serverDocument unchanged on failed sync; next loop retries.
+          console.error("Failed to sync document blocks", error);
+        })
+        .finally(() => {
+          isSyncingRef.current = false;
+        });
+    }, 500);
+
+    return () => {
+      window.clearInterval(interval);
     };
-  });
+  }, [documentStore, trpcClient]);
 
   const canMeasureText =
     typeof window !== "undefined" &&
     (typeof OffscreenCanvas !== "undefined" ||
       (!!window.document &&
         !!window.document.createElement("canvas").getContext("2d")));
-  const renderedDocument = useStore(stores.documentStore, (s) => s.document);
+  const renderedDocument = useStore(documentStore, (s) => s.document);
   const rendered = useMemo(() => {
     if (canMeasureText) {
       return renderDocumentLayout({ document: renderedDocument, dpi });
@@ -764,10 +717,9 @@ export function DocumentStoresProvider({
     return {
       blocks: rendered.rendered,
       blockTree: rendered.blockTree,
-      documentStore: stores.documentStore,
-      updateQueueStore: stores.updateQueueStore,
+      documentStore,
     };
-  }, [stores, rendered]);
+  }, [documentStore, rendered]);
 
   return (
     <DocumentContext.Provider value={value}>
@@ -788,11 +740,4 @@ export function useDocument(): DocumentContextValue {
 export function useDocumentStore<T>(selector: (s: DocumentStoreState) => T): T {
   const { documentStore } = useDocument();
   return useStore(documentStore, selector);
-}
-
-export function useDocumentUpdateQueueStore<T>(
-  selector: (s: DocumentUpdateQueueState) => T
-): T {
-  const { updateQueueStore } = useDocument();
-  return useStore(updateQueueStore, selector);
 }
