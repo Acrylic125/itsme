@@ -1,18 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Layer, Rect, Group, Stage } from "react-konva";
-import {
-  DocumentSchema,
-  getPageLayoutMetrics,
-  type RenderedLayoutBlock,
-} from "@/blocks/renderer";
+import type { Stage as KonvaStage } from "konva/lib/Stage";
+import type { Layer as KonvaLayer } from "konva/lib/Layer";
+import { DocumentSchema, getPageLayoutMetrics } from "@/blocks/renderer";
 import { z } from "zod";
-import {
-  DocumentStoresProvider,
-  useDocumentStore,
-  useDocument,
-} from "@/blocks/document-context";
+import { useDocument } from "@/blocks/document-context";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 
@@ -24,6 +18,8 @@ export function PageCanvas({
   dpi?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<KonvaStage | null>(null);
+  const layerRef = useRef<KonvaLayer | null>(null);
   const [measurements, setMeasurements] = useState<{
     containerWidth: number | null;
     dpr: number;
@@ -32,162 +28,105 @@ export function PageCanvas({
     dpr: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
   });
 
+  const { blocks } = useDocument();
+  const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(
+    () => getPageLayoutMetrics(document, dpi),
+    [document, dpi]
+  );
+
+  const pageWidth = pageWidthPx;
+  const pageHeight = pageHeightPx;
+
   // Keep width + DPR updates in one effect to avoid stale pixel ratios and
   // ensure we react when flex/grid layout changes container width.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const update = () => {
-      setMeasurements({
-        containerWidth: el.clientWidth || el.getBoundingClientRect().width || 0,
-        dpr: window.devicePixelRatio || 1,
+    const resizeObserver = new ResizeObserver((cb) => {
+      cb.forEach((update) => {
+        setMeasurements({
+          containerWidth: update.contentRect.width,
+          dpr: window.devicePixelRatio,
+        });
       });
-    };
-
-    update();
-    const rafId = window.requestAnimationFrame(update);
-    const resizeObserver = new ResizeObserver(update);
+    });
     resizeObserver.observe(el);
-    window.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("resize", update);
 
     return () => {
-      window.cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
-      window.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("resize", update);
     };
-  }, []);
+  }, [pageWidth, pageHeight]);
 
-  const { containerWidth, dpr } = measurements;
+  useEffect(() => {
+    layerRef.current?.canvas.setPixelRatio(measurements.dpr);
+    layerRef.current?.batchDraw();
+  }, [measurements.dpr]);
 
-  return (
-    <div ref={containerRef} className="w-full bg-black">
-      {containerWidth !== null && (
-        <DocumentStoresProvider document={document} dpi={dpi}>
-          <PageCanvasKonva
-            containerWidth={containerWidth}
-            dpi={dpi}
-            dpr={dpr}
-          />
-        </DocumentStoresProvider>
-      )}
-    </div>
-  );
-}
-
-function PageCanvasKonva({
-  containerWidth,
-  dpi,
-  dpr,
-}: {
-  containerWidth: number;
-  dpi: number;
-  dpr: number;
-}) {
-  const document = useDocumentStore((s) => s.document);
-  const { blocks } = useDocument();
-  const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(
-    () => getPageLayoutMetrics(document, dpi),
-    [document, dpi]
-  );
-  const pageWidth = pageWidthPx;
-  const pageHeight = pageHeightPx;
-
+  const containerWidth = measurements.containerWidth ?? 0;
   const scale = containerWidth > 0 ? containerWidth / pageWidth : 1;
 
-  return (
-    <div className="relative w-full h-full">
-      <DocumentStage
-        blocks={blocks}
-        pageWidth={pageWidth}
-        pageHeight={pageHeight}
-        pageStridePx={pageStridePx}
-        gapPx={gapPx}
-        scale={scale}
-        dpi={dpi}
-        dpr={dpr}
-      />
-    </div>
-  );
-}
-
-function DocumentStage({
-  blocks,
-  pageWidth,
-  pageHeight,
-  pageStridePx,
-  gapPx,
-  scale,
-  dpi,
-  dpr,
-}: {
-  blocks: RenderedLayoutBlock[];
-  pageWidth: number;
-  pageHeight: number;
-  /** Layout stride in px: page height plus inter-page gap (matches renderer `createContext`). */
-  pageStridePx: number;
-  gapPx: number;
-  scale: number;
-  dpi: number;
-  dpr: number;
-}) {
   const maxEndY = blocks.reduce((m, b) => Math.max(m, b.y + b.height), 0);
   const pageCount = Math.max(1, Math.ceil(maxEndY / pageStridePx));
-  const stageWidth = pageWidth * scale;
+  const stageWidth = pageWidth;
   const stageHeight =
-    (pageCount * pageHeight + Math.max(0, pageCount - 1) * gapPx) * scale;
+    pageCount * pageHeight + Math.max(0, pageCount - 1) * gapPx;
 
-  const requestedPixelRatio = (dpi / 96) * dpr;
+  const requestedPixelRatio = (dpi / 96) * measurements.dpr;
   // Very large backing stores can exceed browser canvas limits.
   // Cap pixel ratio for interactive editing stability.
   const pixelRatio = Math.min(requestedPixelRatio, 2);
 
   return (
-    <Stage
-      // Force a remount when DPR changes to avoid Konva keeping the old backing store
-      key={`${dpi}:${dpr}:${scale}`}
-      width={stageWidth}
-      height={stageHeight}
-      pixelRatio={pixelRatio}
-    >
-      <Layer>
-        <Rect
-          x={0}
-          y={0}
-          width={stageWidth}
-          height={stageHeight}
-          fill="#000000"
-          perfectDrawEnabled={false}
-          listening={false}
-        />
-        {Array.from({ length: pageCount }, (_, pageIndex) => {
-          const yOffset = pageIndex * pageStridePx * scale;
-          return (
-            <Group key={pageIndex} y={yOffset} scaleX={scale} scaleY={scale}>
-              <Rect
-                x={0}
-                y={0}
-                width={pageWidth}
-                height={pageHeight}
-                stroke="#e5e5e5"
-                fill="#ffffff"
-                cornerRadius={2}
-                perfectDrawEnabled={false}
-                listening={false}
-              />
+    <div className="flex-1 h-screen-safe relative overflow-y-auto flex flex-col w-full items-center">
+      <div
+        className="w-full max-w-7xl overflow-x-hidden h-fit absolute"
+        ref={containerRef}
+      >
+        <Stage
+          width={stageWidth * scale}
+          height={stageHeight * scale}
+          pixelRatio={pixelRatio}
+          ref={stageRef}
+        >
+          <Layer scaleX={scale} scaleY={scale} ref={layerRef}>
+            <Rect
+              x={0}
+              y={0}
+              width={stageWidth}
+              height={stageHeight}
+              fill="#000000"
+              perfectDrawEnabled={false}
+              listening={false}
+            />
+            {Array.from({ length: pageCount }, (_, pageIndex) => {
+              const yOffset = pageIndex * pageStridePx;
+              return (
+                <Group key={pageIndex} y={yOffset}>
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={pageWidth}
+                    height={pageHeight}
+                    stroke="#e5e5e5"
+                    fill="#ffffff"
+                    cornerRadius={2}
+                    perfectDrawEnabled={false}
+                    listening={false}
+                  />
+                </Group>
+              );
+            })}
+            <Group>
+              {blocks.map((block) => (
+                <Group key={block.id}>{block.component()}</Group>
+              ))}
+              <ReorderLayer />
             </Group>
-          );
-        })}
-        <Group scaleX={scale} scaleY={scale}>
-          {blocks.map((block) => (
-            <Group key={block.id}>{block.component()}</Group>
-          ))}
-          <ReorderLayer />
-        </Group>
-      </Layer>
-    </Stage>
+          </Layer>
+        </Stage>
+      </div>
+    </div>
   );
 }
 

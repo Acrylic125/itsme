@@ -58,8 +58,6 @@
   --shadow-xl: 0px 1px 3px 0px oklch(0 0 0 / 0.01),
     0px 8px 10px -1px oklch(0 0 0 / 0.01);
   --shadow-2xl: 0px 1px 3px 0px oklch(0 0 0 / 0.03);
-
-  --width-ui: 1920px;
 }
 
 .dark {
@@ -160,6 +158,8 @@
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
+
+  --max-width-ui: 2440px;
 }
 
 @layer base {
@@ -182,4 +182,12 @@
     100vh - var(--safe-area-inset-top) - var(--safe-area-inset-bottom)
   ); */
   @apply h-[calc(100vh-var(--safe-area-inset-top)-var(--safe-area-inset-bottom))];
+}
+
+.navbar-height {
+  @apply h-0 lg:h-10 xl:h-12;
+}
+
+.h-screen-safe {
+  @apply h-svh lg:h-[calc(100vh-40px)] xl:h-[calc(100vh-48px)];
 }

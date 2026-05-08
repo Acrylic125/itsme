@@ -188,6 +188,7 @@ function TextBlockComponent({
                 // top: "20%",
                 // left: "20%",
                 position: "absolute",
+                // top: "10%",
                 top: anchor.top * 100 + "%",
                 left: anchor.left * 100 + "%",
                 width: anchor.width * 100 + "%",

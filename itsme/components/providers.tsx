@@ -5,6 +5,7 @@ import { AppRouter } from "@/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { TRPCProvider } from "@/server/utils";
+import { ThemeProvider } from "./theme-provider";
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -32,7 +33,13 @@ function getQueryClient() {
   }
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   const queryClient = getQueryClient();
   const [trpcClient] = useState(() =>
     createTRPCClient<AppRouter>({
@@ -47,7 +54,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-        {children}
+        <ThemeProvider className={className}>{children}</ThemeProvider>
       </TRPCProvider>
     </QueryClientProvider>
   );

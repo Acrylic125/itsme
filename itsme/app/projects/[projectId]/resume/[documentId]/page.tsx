@@ -16,6 +16,8 @@ import {
   mapStyles,
 } from "@/blocks/retriever";
 import { PAGE_SIZE } from "@/blocks/blocks";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { DocumentStoresProvider } from "@/blocks/document-context";
 
 export async function getProjectById(projectId: string) {
   return db
@@ -59,30 +61,23 @@ export default async function ProjectResumePage({
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[1400px] gap-6 px-6 py-10">
-      <Suspense fallback={<ProjectDocumentsSidebarSkeleton />}>
-        <ProjectDocumentsSidebar
-          projectId={projectId}
-          activeDocumentId={documentId}
-        />
-      </Suspense>
+    <div className="flex flex-col items-center justify-center">
+      <div className="w-full flex flex-row gap-4 max-w-ui">
+        <div className="w-56 md:w-64 lg:w-72 py-4 h-screen-safe">
+          <Suspense fallback={<ProjectDocumentsSidebarSkeleton />}>
+            <ProjectDocumentsSidebar
+              projectId={projectId}
+              activeDocumentId={documentId}
+            />
+          </Suspense>
+        </div>
 
-      <section className="min-w-0 flex-1 space-y-3">
-        <Button className="w-fit" variant="outline" asChild>
-          <Link href="/projects" className="text-sm">
-            Projects
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-xl font-semibold">{project.name}</h1>
-          <p className="text-sm text-zinc-700">
-            {document.name} ({document.id})
-          </p>
+        <div className="flex-1">
+          <DocumentStoresProvider document={renderedDocument} dpi={300}>
+            <PageCanvas document={renderedDocument} dpi={300} />
+          </DocumentStoresProvider>
         </div>
-        <div className="w-full">
-          <PageCanvas document={renderedDocument} dpi={300} />
-        </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }

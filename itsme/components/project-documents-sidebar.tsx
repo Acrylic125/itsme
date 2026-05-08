@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { documents } from "@/db/schema";
 import db from "@/db/db";
 import { asc, eq } from "drizzle-orm";
+import { Button } from "./ui/button";
 
 export async function ProjectDocumentsSidebar({
   projectId,
@@ -12,7 +13,6 @@ export async function ProjectDocumentsSidebar({
   projectId: string;
   activeDocumentId: string;
 }) {
-  // const projectDocuments = await getProjectDocuments(projectId);
   const projectDocuments = await db
     .select({
       id: documents.id,
@@ -23,29 +23,26 @@ export async function ProjectDocumentsSidebar({
     .orderBy(asc(documents.name));
 
   return (
-    <aside className="w-72 shrink-0 rounded-xl border border-border bg-card p-3">
-      <h2 className="px-2 pb-2 text-sm font-semibold">Documents</h2>
+    <aside className="w-full flex flex-col gap-2 px-1 py-4 h-fit border border-border rounded-xl bg-card">
+      <h2 className="text-muted-foreground text-sm px-3">Documents</h2>
       {projectDocuments.length === 0 ? (
-        <p className="px-2 py-1 text-sm text-muted-foreground">
+        <p className="px-2 py-1 text-muted-foreground">
           No documents in this project.
         </p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="w-full flex flex-col">
           {projectDocuments.map((document) => {
             const isActive = document.id === activeDocumentId;
             return (
               <li key={document.id}>
-                <Link
-                  href={`/projects/${projectId}/resume/${document.id}`}
-                  className={cn(
-                    "block rounded-md px-2 py-2 text-sm transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-muted"
-                  )}
+                <Button
+                  variant={isActive ? "default" : "ghost"}
+                  className="w-full justify-start px-3 text-base py-1 h-fit"
                 >
-                  {document.name}
-                </Link>
+                  <Link href={`/projects/${projectId}/resume/${document.id}`}>
+                    {document.name}
+                  </Link>
+                </Button>
               </li>
             );
           })}
@@ -57,14 +54,14 @@ export async function ProjectDocumentsSidebar({
 
 export function ProjectDocumentsSidebarSkeleton() {
   return (
-    <aside className="w-72 shrink-0 rounded-xl border border-border bg-card p-3">
-      <Skeleton className="mb-3 h-4 w-20" />
-      <div className="space-y-2">
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-        <Skeleton className="h-9 w-full" />
-      </div>
+    <aside className="w-full flex flex-col gap-2 px-1 py-4 h-fit border border-border rounded-xl bg-card">
+      <h2 className="text-muted-foreground text-sm px-3">Documents</h2>
+      <ul className="flex flex-col gap-2">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </ul>
     </aside>
   );
 }
