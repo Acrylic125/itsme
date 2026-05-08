@@ -98,10 +98,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <Providers
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable}`}
+    >
+      <Providers className={`${geistSans.className} antialiased`}>
         <div className="w-full h-full relative z-10 navbar-height">
           {/* Navbar */}
           <Suspense fallback={<Navbar isLoading={true} />}>

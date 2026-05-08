@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Group, Stage } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
@@ -9,6 +9,8 @@ import { z } from "zod";
 import { useDocument } from "@/blocks/document-context";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
+import { Button } from "./ui/button";
+import { TextIcon } from "@radix-ui/react-icons";
 
 export function PageCanvas({
   document,
@@ -79,6 +81,20 @@ export function PageCanvas({
 
   return (
     <div className="flex-1 h-screen-safe relative overflow-y-auto flex flex-col w-full items-center">
+      <div className="w-full flex flex-row justify-between items-center sticky top-0 z-10 bg-background border-b p-2">
+        <div className="flex-1"></div>
+        <div className="flex-1 flex flex-row items-center">
+          <Button variant="ghost">
+            <div className="flex flex-row items-center gap-2">
+              <TextIcon />
+              <span>Text</span>
+            </div>
+          </Button>
+        </div>
+        <div className="flex-1 flex flex-row justify-end">
+          <Button size="xs">Download</Button>
+        </div>
+      </div>
       <div
         className="w-full max-w-7xl overflow-x-hidden h-fit absolute"
         ref={containerRef}
@@ -95,7 +111,7 @@ export function PageCanvas({
               y={0}
               width={stageWidth}
               height={stageHeight}
-              fill="#000000"
+              fill="#00000000"
               perfectDrawEnabled={false}
               listening={false}
             />

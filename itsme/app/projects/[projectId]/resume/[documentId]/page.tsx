@@ -62,8 +62,8 @@ export default async function ProjectResumePage({
 
   return (
     <div className="flex flex-col items-center justify-center">
-      <div className="w-full flex flex-row gap-4 max-w-ui">
-        <div className="w-56 md:w-64 lg:w-72 py-4 h-screen-safe">
+      <div className="w-full flex flex-row max-w-ui">
+        <div className="w-56 md:w-64 lg:w-72 px-2 py-4 h-screen-safe border-r border-border overflow-y-auto">
           <Suspense fallback={<ProjectDocumentsSidebarSkeleton />}>
             <ProjectDocumentsSidebar
               projectId={projectId}

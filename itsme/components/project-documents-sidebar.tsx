@@ -23,8 +23,9 @@ export async function ProjectDocumentsSidebar({
     .orderBy(asc(documents.name));
 
   return (
-    <aside className="w-full flex flex-col gap-2 px-1 py-4 h-fit border border-border rounded-xl bg-card">
-      <h2 className="text-muted-foreground text-sm px-3">Documents</h2>
+    // <aside className="w-full flex flex-col gap-2 px-1 py-2 h-fit border border-border rounded-xl bg-card">
+    <aside className="w-full flex flex-col gap-2 py-2 h-fit">
+      <h2 className="text-muted-foreground text-sm px-2">Documents</h2>
       {projectDocuments.length === 0 ? (
         <p className="px-2 py-1 text-muted-foreground">
           No documents in this project.
@@ -37,7 +38,7 @@ export async function ProjectDocumentsSidebar({
               <li key={document.id}>
                 <Button
                   variant={isActive ? "default" : "ghost"}
-                  className="w-full justify-start px-3 text-base py-1 h-fit"
+                  className="w-full justify-start px-2 text-base py-1 h-fit"
                 >
                   <Link href={`/projects/${projectId}/resume/${document.id}`}>
                     {document.name}
