@@ -5,7 +5,11 @@ import {
   PAGE_SIZE,
   StyleSheetSchema,
 } from "./blocks";
-import { BlockRendererContext } from "./renderer-types";
+import {
+  BlockRendererContext,
+  BlockTree,
+  BlockTreeReorderBoundingBox,
+} from "./renderer-types";
 import { SectionBlockRenderer } from "./section/renderer";
 import { ColumnsBlockRenderer } from "./columns/renderer";
 import { TextBlockRenderer } from "./text/renderer";
@@ -455,6 +459,33 @@ export function createContext(
     y: marginTopPx,
   };
   const usableHeightPerPage = pageHeightPx - marginTopPx - marginBottomPx;
+  // const parentHasChild: Record<string, string[]> = {};
+  // const childHasParent: Record<string, string> = {};
+  // for (const block of document.blocks) {
+  //   switch (block.type) {
+  //     case "section":
+  //     case "list": {
+  //       const children = [...block.blocks];
+  //       parentHasChild[block.id] = children;
+  //       for (const childId of children) {
+  //         childHasParent[childId] = block.id;
+  //       }
+  //       break;
+  //     }
+  //     case "columns": {
+  //       const children = block.blocks.map((child) => child.blockId);
+  //       parentHasChild[block.id] = children;
+  //       for (const childId of children) {
+  //         childHasParent[childId] = block.id;
+  //       }
+  //       break;
+  //     }
+  //     case "text":
+  //       parentHasChild[block.id] = [];
+  //       break;
+  //   }
+  // }
+  // const blockTree = new BlockTree({ parentHasChild, childHasParent });
   //   const renderers = [
   //     SectionBlockRenderer,
   //     TextBlockRenderer,
@@ -530,18 +561,23 @@ export type RenderedLayoutBlock = {
   y: number;
   /** Vertical extent in document px (same space as `y`); used for pagination / canvas. */
   height: number;
+  tree: {
+    blockId: string;
+    children: RenderedLayoutBlock["tree"][];
+  };
   component: () => React.ReactNode;
 };
 
 export function renderDocumentLayout(args: {
   document: z.infer<typeof DocumentSchema>;
   dpi: number;
-}): RenderedLayoutBlock[] {
+}) {
   const { document, dpi } = args;
   const ctx = createContext(document, dpi);
   const { contentWidthPx } = getPageLayoutMetrics(document, dpi);
   const byId = new Map(document.blocks.map((block) => [block.id, block]));
   const rendered: RenderedLayoutBlock[] = [];
+  const reorderBoundingBoxes: BlockTreeReorderBoundingBox[] = [];
 
   for (const blockId of document.layout) {
     const block = byId.get(blockId);
@@ -555,23 +591,82 @@ export function renderDocumentLayout(args: {
       continue;
     }
     const start = ctx.getNextPosition();
-    const result = (
-      renderer.render as (
-        block: z.infer<typeof BlockSchema>,
-        relativeTo: { x: number; y: number; width: number },
-        ctx: BlockRendererContext
-      ) => {
-        estimatedDimensions: { width: number; height: number };
-        component: () => React.ReactNode;
-      }
-    )(block, { x: 0, y: 0, width: contentWidthPx }, ctx);
+    const result = renderer.render(
+      // Hate this, but whatever.
+      block as never,
+      { x: 0, y: 0, width: contentWidthPx, parents: [] },
+      ctx
+    );
     rendered.push({
       id: block.id,
       y: start.y,
       height: result.estimatedDimensions.height,
+      tree: {
+        blockId: result.blockId,
+        children: result.children.map((child) => ({
+          blockId: child.blockId,
+          children: [],
+        })),
+      },
       component: result.component,
     });
+    const reorderQueue = [result];
+    while (reorderQueue.length > 0) {
+      const next = reorderQueue.shift();
+      if (!next) {
+        continue;
+      }
+      reorderBoundingBoxes.push(...next.boundingBoxes);
+      reorderQueue.push(...next.children);
+    }
+    const queue = [...result.children];
+    const childQueue = [...rendered[rendered.length - 1].tree.children];
+    while (queue.length > 0) {
+      const next = queue.shift();
+      const nextTree = childQueue.shift();
+      if (!next || !nextTree) {
+        continue;
+      }
+      nextTree.children = next.children.map((child) => ({
+        blockId: child.blockId,
+        children: [],
+      }));
+      queue.push(...next.children);
+      childQueue.push(...nextTree.children);
+    }
+    // const children = renderer.getChildren(block as never);
+    // for (const childId of children) {
+    //   parentHasChild[block.id].push(childId);
+    //   childHasParent[childId] = block.id;
+    // }
   }
 
-  return rendered;
+  // Block tree.
+  const parentHasChild: Record<string, string[]> = {};
+  const childHasParent: Record<string, string> = {};
+
+  const queue = rendered.map((block) => block.tree);
+  while (queue.length > 0) {
+    const node = queue.shift();
+    if (!node) {
+      continue;
+    }
+    const children = node.children.map((child) => child.blockId);
+    parentHasChild[node.blockId] = children;
+    for (const child of node.children) {
+      childHasParent[child.blockId] = node.blockId;
+    }
+    queue.push(...node.children);
+  }
+
+  const blockTree = new BlockTree({
+    parentHasChild,
+    childHasParent,
+    reorderBoundingBoxes,
+  });
+
+  return {
+    rendered,
+    blockTree,
+  };
 }

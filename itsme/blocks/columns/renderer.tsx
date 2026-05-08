@@ -1,90 +1,66 @@
 "use client";
 
-import { Fragment, useLayoutEffect, useRef } from "react";
-import { Group } from "react-konva";
-import Konva from "konva";
-import { BlockRenderer } from "../renderer-types";
-import { useBlockDragContext } from "@/components/block-dnd-context";
-import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import { Fragment } from "react";
+import type { ColumnsResizeContext } from "../renderer-types";
+import {
+  BlockRenderer,
+  getEdgeReorderBoundingBoxes,
+  REORDER_BOUNDING_BOX_TARGET_SIZE,
+  REORDER_BOUNDING_BOX_VISUAL_SIZE,
+} from "../renderer-types";
+import {
+  InteractableBlock,
+  useInteractableBlock,
+} from "@/components/shared-block";
+import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand/react";
+import { useDocument } from "../document-context";
 
 function ColumnsBlockComponent({
   dimensions,
   pos,
+  parents,
   nodes,
   blockId,
-  totalSpan,
-  columnSpans,
-  childBlockIds,
+  columnsResizeContext,
 }: {
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
+  parents: string[];
   nodes: React.ReactNode[];
   blockId: string;
-  totalSpan: number;
-  columnSpans: number[];
-  childBlockIds: string[];
+  columnsResizeContext?: ColumnsResizeContext;
 }) {
-  const groupRef = useRef<Konva.Group | null>(null);
-  const dragCtx = useBlockDragContext();
-  const {
-    registerColumnBlock,
-    unregisterColumnBlock,
-    scale: ctxScale,
-  } = dragCtx ?? {};
+  const { documentStore, blockTree } = useDocument();
+  const { focusBlock, focusBlockId } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      focusBlock: s.focusBlock,
+      focusBlockId: s.focusBlockId,
+    }))
+  );
 
-  useLayoutEffect(() => {
-    if (!blockId || !registerColumnBlock || !unregisterColumnBlock || !ctxScale)
-      return;
-    const node = groupRef.current;
-    if (!node) return;
-    const stage = node.getStage();
-    if (!stage) return;
-
-    const cr = node.getClientRect();
-    if (cr.width === 0 && cr.height === 0) return;
-
-    registerColumnBlock(
-      blockId,
-      {
-        x: cr.x / ctxScale,
-        y: cr.y / ctxScale,
-        width: cr.width / ctxScale,
-        height: cr.height / ctxScale,
-      },
-      totalSpan,
-      columnSpans,
-      childBlockIds
-    );
-
-    return () => {
-      unregisterColumnBlock(blockId);
-    };
+  const isDisabled = useInteractableBlock({
+    focusBlockId,
+    parents,
+    blockId,
+    blockTree,
   });
 
   return (
-    <HoverRegion
+    <InteractableBlock
+      blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      blockId={blockId}
+      disabled={isDisabled}
+      inFocus={focusBlockId === blockId}
+      columnsResizeContext={columnsResizeContext}
+      onClick={() => focusBlock(blockId)}
     >
-      <ReorderRegion
-        blockId={blockId}
-        width={dimensions.width}
-        height={dimensions.height}
-      >
-        <Group
-          ref={(n) => {
-            groupRef.current = n;
-          }}
-          width={dimensions.width}
-          height={dimensions.height}
-        >
-          {nodes}
-        </Group>
-      </ReorderRegion>
-    </HoverRegion>
+      {nodes}
+    </InteractableBlock>
   );
 }
 
@@ -106,6 +82,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
 
     const groupStartPosition = {
       ...ctx.getNextPosition(),
+      parents: [...relativeTo.parents, block.id],
       width: relativeTo.width,
     };
 
@@ -116,7 +93,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
     let maxOffsetY = 0;
     const tallySpans = childBlocks.reduce((acc, b) => acc + b.span, 0);
     // Child components will do the space claiming.
-    const children = childBlocks.map((b) => {
+    const children = childBlocks.map((b, childIndex) => {
       const renderer = ctx.renderers[b.block.type];
       if (!renderer) {
         throw new Error(`Renderer not found for block type: ${b.block.type}`);
@@ -136,6 +113,17 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
           x: groupStartPosition.x,
           y: groupStartPosition.y,
           width: spanWidth,
+          parents: [...relativeTo.parents, block.id],
+          columnsResizeContext:
+            tallySpans > 0 && childBlocks.length > 0
+              ? {
+                  columnsBlockId: block.id,
+                  columnRowWidthPx: relativeTo.width,
+                  totalSpan: tallySpans,
+                  childIndex,
+                  siblingCount: childBlocks.length,
+                }
+              : undefined,
         },
         ctx
       );
@@ -143,7 +131,7 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
       const componentTakesY = afterAddingPosition.y - cursor.y;
       maxOffsetY = Math.max(maxOffsetY, componentTakesY);
       cursor.x += spanWidth;
-      return <Fragment key={b.block.id}>{result.component()}</Fragment>;
+      return result;
     });
     ctx.setNextPosition({
       x: groupStartPosition.x,
@@ -161,20 +149,33 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
       y: groupStartPosition.y - relativeTo.y,
     };
 
-    const columnSpans = childBlocks.map((b) => b.span);
-    const childBlockIds = childBlocks.map((b) => b.block.id);
+    // const columnSpans = childBlocks.map((b) => b.span);
+    // const childBlockIds = childBlocks.map((b) => b.block.id);
 
     return {
+      blockId: block.id,
       estimatedDimensions: dimensions,
+      boundingBoxes: getEdgeReorderBoundingBoxes({
+        blockId: block.id,
+        from: { x: groupStartPosition.x, y: groupStartPosition.y },
+        to: {
+          x: groupStartPosition.x + dimensions.width,
+          y: groupStartPosition.y + dimensions.height,
+        },
+        visualSize: REORDER_BOUNDING_BOX_VISUAL_SIZE,
+        targetSize: REORDER_BOUNDING_BOX_TARGET_SIZE,
+      }),
+      children: children,
       component: () => (
         <ColumnsBlockComponent
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
-          nodes={children}
+          parents={relativeTo.parents}
+          nodes={children.map((c) => (
+            <Fragment key={c.blockId}>{c.component()}</Fragment>
+          ))}
           blockId={block.id}
-          totalSpan={tallySpans}
-          columnSpans={columnSpans}
-          childBlockIds={childBlockIds}
+          columnsResizeContext={relativeTo.columnsResizeContext}
         />
       ),
     };

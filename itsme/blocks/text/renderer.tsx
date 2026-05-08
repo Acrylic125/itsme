@@ -4,14 +4,25 @@ import { TextBlockSchema, TextStyleSchema } from "./schema";
 import { z } from "zod";
 import { Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
-import { BlockRenderer } from "../renderer-types";
-import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import type { ColumnsResizeContext } from "../renderer-types";
+import {
+  BlockRenderer,
+  getEdgeReorderBoundingBoxes,
+  REORDER_BOUNDING_BOX_TARGET_SIZE,
+  REORDER_BOUNDING_BOX_VISUAL_SIZE,
+} from "../renderer-types";
+import {
+  InteractableBlock,
+  useInteractableBlock,
+} from "@/components/shared-block";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useDomPopup } from "@/components/dom-popup";
-import { useDocumentStores, useDocumentStore } from "@/blocks/document-context";
-import { useCallback, useId, useState } from "react";
+import { AnchorRect } from "@/components/dom-popup";
+import { useDocument, useDocumentStore } from "@/blocks/document-context";
+import { useCallback, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand/react";
+import { Html } from "react-konva-utils";
 
 export function EditTextModal({
   closePopup,
@@ -26,11 +37,10 @@ export function EditTextModal({
       patchDocument: s.update,
     }))
   );
-  const { updateQueueStore } = useDocumentStores();
   const [text, setText] = useState(block.text);
 
   const handleSave = useCallback(() => {
-    patchDocument(updateQueueStore, {
+    patchDocument({
       type: "text",
       documentId,
       blockId: block.id,
@@ -41,7 +51,6 @@ export function EditTextModal({
     closePopup();
   }, [
     patchDocument,
-    updateQueueStore,
     documentId,
     block.id,
     block.align,
@@ -79,11 +88,14 @@ function TextBlockComponent({
   block,
   dimensions,
   pos,
+  parents,
   style,
   fontSizePx,
+  columnsResizeContext,
 }: {
   block: z.infer<typeof TextBlockSchema>;
   dimensions: { width: number; height: number };
+  parents: string[];
   pos: {
     relativeTo: {
       x: number;
@@ -94,38 +106,61 @@ function TextBlockComponent({
   };
   style: z.infer<typeof TextStyleSchema>;
   fontSizePx: number;
+  columnsResizeContext?: ColumnsResizeContext;
 }) {
-  const popup = useDomPopup();
-  const popupKey = useId();
+  // const popupKey = useId();
+  const { documentStore, blockTree } = useDocument();
+  const { focusBlock, focusBlockId } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      focusBlock: s.focusBlock,
+      focusBlockId: s.focusBlockId,
+    }))
+  );
+  const [anchor, setAnchor] = useState<AnchorRect | null>(null);
+
+  const closeTextEditor = useCallback(() => {
+    setAnchor(null);
+    focusBlock((cur) => (cur === block.id ? null : cur));
+  }, [block.id, focusBlock]);
+
   const handleClick = useCallback(
-    (args: {
-      anchor: { left: number; top: number; width: number; height: number };
-    }) => {
-      popup.openPopup({
-        anchor: args.anchor,
-        popupKey,
-        content: ({ closePopup }) => (
-          <EditTextModal key={popupKey} block={block} closePopup={closePopup} />
-        ),
-      });
+    (args: { anchor: AnchorRect }) => {
+      focusBlock(block.id);
+      setAnchor(args.anchor);
     },
-    [popup, block, popupKey]
+    [block.id, focusBlock]
   );
 
+  useEffect(() => {
+    if (!anchor || focusBlockId !== block.id) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeTextEditor();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [anchor, focusBlockId, block.id, closeTextEditor]);
+
+  const isDisabled = useInteractableBlock({
+    focusBlockId,
+    parents,
+    blockId: block.id,
+    blockTree,
+  });
   return (
-    <HoverRegion
-      x={pos.relativeTo.x}
-      y={pos.relativeTo.y}
-      width={dimensions.width}
-      height={dimensions.height}
-      blockId={block.id}
-      onClick={handleClick}
-      inFocus={popup.isOpen && popup.popupKey === popupKey}
-    >
-      <ReorderRegion
+    <>
+      <InteractableBlock
         blockId={block.id}
+        x={pos.relativeTo.x}
+        y={pos.relativeTo.y}
         width={dimensions.width}
         height={dimensions.height}
+        disabled={isDisabled}
+        inFocus={focusBlockId === block.id}
+        columnsResizeContext={columnsResizeContext}
+        onClick={handleClick}
       >
         <Text
           x={0}
@@ -141,8 +176,49 @@ function TextBlockComponent({
           fill="#000000"
           perfectDrawEnabled={false}
         />
-      </ReorderRegion>
-    </HoverRegion>
+        {anchor && focusBlockId === block.id && (
+          <Html
+            transform={false}
+            divProps={{
+              style: {
+                // width: 400,
+                // height: 400,
+                // // top: 20,
+                // // left: 20,
+                // top: "20%",
+                // left: "20%",
+                position: "absolute",
+                // top: "10%",
+                top: anchor.top * 100 + "%",
+                left: anchor.left * 100 + "%",
+                width: anchor.width * 100 + "%",
+                height: anchor.height * 100 + "%",
+              },
+              // className: "w-full h-24",
+            }}
+          >
+            <EditTextModal
+              // key={popupKey}
+              block={block}
+              closePopup={closeTextEditor}
+            />
+            {/* <div className="h-1 w-full bg-amber-300" /> */}
+          </Html>
+        )}
+      </InteractableBlock>
+      {/* <Html
+        divProps={{
+          className: "pointer-events-none w-full h-full",
+        }}
+        transformFunc={(attrs) => ({
+          ...attrs,
+          // scaleX: 1,
+          // scaleY: 1,
+        })}
+      >
+        <div className="h-1 w-full bg-amber-300" />
+      </Html> */}
+    </>
   );
 }
 
@@ -166,6 +242,7 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     const pos = ctx.claimBlockSpace(dimensions.height);
 
     const posRelativeTo = {
+      parents: [...relativeTo.parents, block.id],
       x: pos.canvas.from.x - relativeTo.x,
       y: pos.canvas.from.y - relativeTo.y,
       width: relativeTo.width,
@@ -173,16 +250,30 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     };
 
     return {
+      blockId: block.id,
       estimatedDimensions: dimensions,
+      boundingBoxes: getEdgeReorderBoundingBoxes({
+        blockId: block.id,
+        from: pos.canvas.from,
+        to: {
+          x: pos.canvas.from.x + dimensions.width,
+          y: pos.canvas.from.y + dimensions.height,
+        },
+        visualSize: REORDER_BOUNDING_BOX_VISUAL_SIZE,
+        targetSize: REORDER_BOUNDING_BOX_TARGET_SIZE,
+      }),
+      children: [],
       component: () => (
         <TextBlockComponent
           block={block}
           dimensions={dimensions}
+          parents={relativeTo.parents}
           pos={{
             relativeTo: posRelativeTo,
           }}
           style={style}
           fontSizePx={fontSizePx}
+          columnsResizeContext={relativeTo.columnsResizeContext}
         />
       ),
     };

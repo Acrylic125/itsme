@@ -1,4 +1,4 @@
-import { DEFAULT_STYLE_SHEET, type Block } from "@/blocks/blocks";
+import { BlockSchema, DEFAULT_STYLE_SHEET, type Block } from "@/blocks/blocks";
 import db from "@/db/db";
 import {
   blocks,
@@ -20,19 +20,17 @@ import {
 import { CreateProjectFromPdfInputSchema } from "@/lib/pdf-to-blocks/schema";
 import { pdfToBlocks } from "@/lib/pdf-to-blocks/server";
 import { splitInsert } from "@/lib/split-insert";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { publicProcedure, router } from "./trpc";
+import { BatchItem } from "drizzle-orm/batch";
+import {
+  getProjectDocuments,
+  getProjectMasterDocument,
+} from "./project-documents";
 
 const USER_ID = "USER";
-
-function createProjectId() {
-  return `p_${nanoid(22)}`;
-}
-
-function createDocumentId() {
-  return `d_${nanoid(22)}`;
-}
 
 function getProjectNameFromBlocks(
   blocks: Awaited<ReturnType<typeof pdfToBlocks>>
@@ -78,10 +76,774 @@ function getMainLayoutBlockIds(blockList: Block[]) {
     .filter((blockId) => !referencedBlockIds.has(blockId));
 }
 
+const UpdateDocumentBlockActionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("update"),
+    block: BlockSchema,
+  }),
+  z.object({
+    type: z.literal("create"),
+    block: BlockSchema,
+  }),
+  z.object({
+    type: z.literal("delete"),
+    blockId: z.string(),
+  }),
+]);
+
+const UpdateDocumentBlocksInputSchema = z.object({
+  blocks: z.array(UpdateDocumentBlockActionSchema),
+});
+
 export const resumesRouter = router({
+  getProjectDocuments: publicProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const [projectDocuments, masterDocument] = await Promise.all([
+        getProjectDocuments(input.projectId),
+        getProjectMasterDocument(input.projectId),
+      ]);
+      return {
+        documents: projectDocuments,
+        masterDocumentId: masterDocument?.id ?? null,
+      };
+    }),
+  duplicateResume: publicProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+        documentId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const [
+        sourceDocumentRows,
+        sourcePageStyleRows,
+        sourceTextStyles,
+        sourceListStyleRows,
+        sourceMainLayout,
+        sourceBlocks,
+        sourceTextBlocks,
+        sourceSectionBlocks,
+        sourceColumnsBlocks,
+        sourceListBlocks,
+      ] = await db.batch([
+        db
+          .select({
+            id: documents.id,
+            name: documents.name,
+            projectId: documents.projectId,
+          })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.id, input.documentId),
+              eq(documents.projectId, input.projectId)
+            )
+          )
+          .limit(1),
+        db
+          .select({
+            gap: documentPageStyles.gap,
+            marginTop: documentPageStyles.marginTop,
+            marginBottom: documentPageStyles.marginBottom,
+            marginLeft: documentPageStyles.marginLeft,
+            marginRight: documentPageStyles.marginRight,
+          })
+          .from(documentPageStyles)
+          .where(eq(documentPageStyles.documentId, input.documentId))
+          .limit(1),
+        db
+          .select({
+            style: documentTextStyles.style,
+            fontSize: documentTextStyles.fontSize,
+            fontWeight: documentTextStyles.fontWeight,
+            fontFamily: documentTextStyles.fontFamily,
+            lineHeight: documentTextStyles.lineHeight,
+          })
+          .from(documentTextStyles)
+          .where(eq(documentTextStyles.documentId, input.documentId)),
+        db
+          .select({
+            leftSpace: documentListStyles.leftSpace,
+            rightSpace: documentListStyles.rightSpace,
+          })
+          .from(documentListStyles)
+          .where(eq(documentListStyles.documentId, input.documentId))
+          .limit(1),
+        db
+          .select({
+            blockId: documentMainLayout.blockId,
+            orderIndex: documentMainLayout.orderIndex,
+          })
+          .from(documentMainLayout)
+          .where(eq(documentMainLayout.documentId, input.documentId)),
+        db
+          .select({
+            id: blocks.id,
+            type: blocks.type,
+            orderIndex: blocks.orderIndex,
+          })
+          .from(blocks)
+          .where(eq(blocks.documentId, input.documentId)),
+        db
+          .select({
+            blockId: textBlocks.blockId,
+            text: textBlocks.text,
+            align: textBlocks.align,
+            style: textBlocks.style,
+            ref: textBlocks.ref,
+          })
+          .from(textBlocks)
+          .innerJoin(blocks, eq(textBlocks.blockId, blocks.id))
+          .where(eq(blocks.documentId, input.documentId)),
+        db
+          .select({
+            blockId: sectionBlocks.blockId,
+            ref: sectionBlocks.ref,
+          })
+          .from(sectionBlocks)
+          .innerJoin(blocks, eq(sectionBlocks.blockId, blocks.id))
+          .where(eq(blocks.documentId, input.documentId)),
+        db
+          .select({
+            blockId: columnsBlocks.blockId,
+            ref: columnsBlocks.ref,
+          })
+          .from(columnsBlocks)
+          .innerJoin(blocks, eq(columnsBlocks.blockId, blocks.id))
+          .where(eq(blocks.documentId, input.documentId)),
+        db
+          .select({
+            blockId: listBlocks.blockId,
+            bulletType: listBlocks.bulletType,
+            bulletValue: listBlocks.bulletValue,
+            leftSpace: listBlocks.leftSpace,
+            rightSpace: listBlocks.rightSpace,
+            ref: listBlocks.ref,
+          })
+          .from(listBlocks)
+          .innerJoin(blocks, eq(listBlocks.blockId, blocks.id))
+          .where(eq(blocks.documentId, input.documentId)),
+      ]);
+
+      const sourceDocument = sourceDocumentRows[0];
+      if (!sourceDocument) {
+        throw new Error("Document not found.");
+      }
+
+      const sourcePageStyle = sourcePageStyleRows[0];
+      const sourceListStyle = sourceListStyleRows[0];
+
+      const sourceBlockIds = sourceBlocks.map((row) => row.id);
+
+      const sourceSectionBlockIds = sourceSectionBlocks.map(
+        (row) => row.blockId
+      );
+      const sourceColumnsBlockIds = sourceColumnsBlocks.map(
+        (row) => row.blockId
+      );
+      const sourceListBlockIds = sourceListBlocks.map((row) => row.blockId);
+
+      const sourceSectionChildren =
+        sourceSectionBlockIds.length === 0
+          ? []
+          : await db
+              .select({
+                sectionBlockId: sectionBlockChildren.sectionBlockId,
+                childBlockId: sectionBlockChildren.childBlockId,
+                orderIndex: sectionBlockChildren.orderIndex,
+              })
+              .from(sectionBlockChildren)
+              .where(
+                inArray(
+                  sectionBlockChildren.sectionBlockId,
+                  sourceSectionBlockIds
+                )
+              );
+      const sourceColumnsChildren =
+        sourceColumnsBlockIds.length === 0
+          ? []
+          : await db
+              .select({
+                columnsBlockId: columnsBlockChildren.columnsBlockId,
+                childBlockId: columnsBlockChildren.childBlockId,
+                span: columnsBlockChildren.span,
+                orderIndex: columnsBlockChildren.orderIndex,
+              })
+              .from(columnsBlockChildren)
+              .where(
+                inArray(
+                  columnsBlockChildren.columnsBlockId,
+                  sourceColumnsBlockIds
+                )
+              );
+      const sourceListChildren =
+        sourceListBlockIds.length === 0
+          ? []
+          : await db
+              .select({
+                listBlockId: listBlockChildren.listBlockId,
+                childBlockId: listBlockChildren.childBlockId,
+                orderIndex: listBlockChildren.orderIndex,
+              })
+              .from(listBlockChildren)
+              .where(
+                inArray(listBlockChildren.listBlockId, sourceListBlockIds)
+              );
+
+      const duplicatedDocumentId = createDocumentId();
+      const duplicatedDocumentName = `${sourceDocument.name} Copy`;
+
+      const duplicatedBlockIdBySourceId = new Map<string, string>();
+      for (const sourceBlockId of sourceBlockIds) {
+        duplicatedBlockIdBySourceId.set(sourceBlockId, createBlockId());
+      }
+
+      const duplicatedBlockId = (sourceBlockId: string) => {
+        const nextId = duplicatedBlockIdBySourceId.get(sourceBlockId);
+        if (!nextId) {
+          throw new Error(
+            `Could not find duplicated block id for source block '${sourceBlockId}'.`
+          );
+        }
+        return nextId;
+      };
+
+      const statements: BatchItem<"sqlite">[] = [
+        db.insert(documents).values({
+          id: duplicatedDocumentId,
+          name: duplicatedDocumentName,
+          projectId: input.projectId,
+        }),
+      ];
+
+      if (sourcePageStyle) {
+        statements.push(
+          db.insert(documentPageStyles).values({
+            documentId: duplicatedDocumentId,
+            gap: sourcePageStyle.gap,
+            marginTop: sourcePageStyle.marginTop,
+            marginBottom: sourcePageStyle.marginBottom,
+            marginLeft: sourcePageStyle.marginLeft,
+            marginRight: sourcePageStyle.marginRight,
+          })
+        );
+      }
+
+      if (sourceTextStyles.length > 0) {
+        for (const batch of splitInsert(
+          sourceTextStyles.map((row) => ({
+            documentId: duplicatedDocumentId,
+            style: row.style,
+            fontSize: row.fontSize,
+            fontWeight: row.fontWeight,
+            fontFamily: row.fontFamily,
+            lineHeight: row.lineHeight,
+          }))
+        )) {
+          statements.push(db.insert(documentTextStyles).values(batch));
+        }
+      }
+
+      if (sourceListStyle) {
+        statements.push(
+          db.insert(documentListStyles).values({
+            documentId: duplicatedDocumentId,
+            leftSpace: sourceListStyle.leftSpace,
+            rightSpace: sourceListStyle.rightSpace,
+          })
+        );
+      }
+
+      if (sourceBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceBlocks.map((row) => ({
+            id: duplicatedBlockId(row.id),
+            documentId: duplicatedDocumentId,
+            type: row.type,
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(blocks).values(batch));
+        }
+      }
+
+      if (sourceTextBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceTextBlocks.map((row) => ({
+            blockId: duplicatedBlockId(row.blockId),
+            text: row.text,
+            align: row.align,
+            style: row.style,
+            ref: row.ref,
+          }))
+        )) {
+          statements.push(db.insert(textBlocks).values(batch));
+        }
+      }
+
+      if (sourceSectionBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceSectionBlocks.map((row) => ({
+            blockId: duplicatedBlockId(row.blockId),
+            ref: row.ref,
+          }))
+        )) {
+          statements.push(db.insert(sectionBlocks).values(batch));
+        }
+      }
+
+      if (sourceColumnsBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceColumnsBlocks.map((row) => ({
+            blockId: duplicatedBlockId(row.blockId),
+            ref: row.ref,
+          }))
+        )) {
+          statements.push(db.insert(columnsBlocks).values(batch));
+        }
+      }
+
+      if (sourceListBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceListBlocks.map((row) => ({
+            blockId: duplicatedBlockId(row.blockId),
+            bulletType: row.bulletType,
+            bulletValue: row.bulletValue,
+            leftSpace: row.leftSpace,
+            rightSpace: row.rightSpace,
+            ref: row.ref,
+          }))
+        )) {
+          statements.push(db.insert(listBlocks).values(batch));
+        }
+      }
+
+      if (sourceSectionChildren.length > 0) {
+        for (const batch of splitInsert(
+          sourceSectionChildren.map((row) => ({
+            sectionBlockId: duplicatedBlockId(row.sectionBlockId),
+            childBlockId: duplicatedBlockId(row.childBlockId),
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(sectionBlockChildren).values(batch));
+        }
+      }
+
+      if (sourceColumnsChildren.length > 0) {
+        for (const batch of splitInsert(
+          sourceColumnsChildren.map((row) => ({
+            columnsBlockId: duplicatedBlockId(row.columnsBlockId),
+            childBlockId: duplicatedBlockId(row.childBlockId),
+            span: row.span,
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(columnsBlockChildren).values(batch));
+        }
+      }
+
+      if (sourceListChildren.length > 0) {
+        for (const batch of splitInsert(
+          sourceListChildren.map((row) => ({
+            listBlockId: duplicatedBlockId(row.listBlockId),
+            childBlockId: duplicatedBlockId(row.childBlockId),
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(listBlockChildren).values(batch));
+        }
+      }
+
+      if (sourceMainLayout.length > 0) {
+        for (const batch of splitInsert(
+          sourceMainLayout.map((row) => ({
+            documentId: duplicatedDocumentId,
+            blockId: duplicatedBlockId(row.blockId),
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(documentMainLayout).values(batch));
+        }
+      }
+
+      await db.batch([statements[0], ...statements.slice(1)]);
+
+      return {
+        documentId: duplicatedDocumentId,
+        documentName: duplicatedDocumentName,
+      };
+    }),
+  deleteResume: publicProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+        documentId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const sourceDocument = await db
+        .select({
+          id: documents.id,
+          projectId: documents.projectId,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, input.documentId),
+            eq(documents.projectId, input.projectId)
+          )
+        )
+        .get();
+
+      if (!sourceDocument) {
+        throw new Error("Document not found.");
+      }
+
+      const masterDocument = await db
+        .select({
+          documentId: projectMasterDocuments.documentId,
+        })
+        .from(projectMasterDocuments)
+        .where(eq(projectMasterDocuments.projectId, input.projectId))
+        .get();
+
+      if (masterDocument?.documentId === input.documentId) {
+        throw new Error("Master resume cannot be deleted.");
+      }
+
+      await db.delete(documents).where(eq(documents.id, input.documentId));
+
+      const fallbackDocument = await db
+        .select({
+          id: documents.id,
+        })
+        .from(documents)
+        .where(eq(documents.projectId, input.projectId))
+        .orderBy(asc(documents.name))
+        .limit(1);
+
+      return {
+        deletedDocumentId: input.documentId,
+        nextDocumentId: fallbackDocument[0]?.id ?? null,
+      };
+    }),
+  updateDocumentBlocks: publicProcedure
+    .input(UpdateDocumentBlocksInputSchema)
+    .mutation(async ({ input }) => {
+      if (input.blocks.length === 0) {
+        return { created: 0, updated: 0, deleted: 0 };
+      }
+
+      const upserts = input.blocks.filter(
+        (
+          action
+        ): action is Extract<
+          z.infer<typeof UpdateDocumentBlockActionSchema>,
+          { type: "create" | "update" }
+        > => action.type === "create" || action.type === "update"
+      );
+      const deleteIds = input.blocks
+        .filter(
+          (
+            action
+          ): action is Extract<
+            z.infer<typeof UpdateDocumentBlockActionSchema>,
+            { type: "delete" }
+          > => action.type === "delete"
+        )
+        .map((action) => action.blockId);
+
+      const touchedBlockIds = [
+        ...upserts.map((action) => action.block.id),
+        ...deleteIds,
+      ];
+
+      const existingRows =
+        touchedBlockIds.length === 0
+          ? []
+          : await db
+              .select({
+                id: blocks.id,
+                documentId: blocks.documentId,
+                orderIndex: blocks.orderIndex,
+              })
+              .from(blocks)
+              .where(inArray(blocks.id, touchedBlockIds));
+
+      const existingById = new Map(existingRows.map((row) => [row.id, row]));
+      const documentIds = new Set(existingRows.map((row) => row.documentId));
+      if (documentIds.size > 1) {
+        throw new Error(
+          "updateDocumentBlocks only supports mutations within one document."
+        );
+      }
+      const inferredDocumentId = existingRows[0]?.documentId ?? null;
+
+      const hasCreate = upserts.some((action) => action.type === "create");
+      if (hasCreate && !inferredDocumentId) {
+        throw new Error(
+          "Could not infer documentId for create actions. Include at least one existing block action in the same request."
+        );
+      }
+
+      for (const action of upserts) {
+        if (action.type === "update" && !existingById.has(action.block.id)) {
+          throw new Error(
+            `Cannot update missing block '${action.block.id}'. Use type='create' instead.`
+          );
+        }
+      }
+
+      let nextOrderIndex =
+        existingRows.reduce(
+          (maxOrderIndex, row) => Math.max(maxOrderIndex, row.orderIndex),
+          -1
+        ) + 1;
+
+      const createActions = upserts.filter(
+        (
+          action
+        ): action is Extract<
+          z.infer<typeof UpdateDocumentBlockActionSchema>,
+          { type: "create" }
+        > => action.type === "create"
+      );
+      const updateActions = upserts.filter(
+        (
+          action
+        ): action is Extract<
+          z.infer<typeof UpdateDocumentBlockActionSchema>,
+          { type: "update" }
+        > => action.type === "update"
+      );
+
+      const createBlockRows = createActions.map((action) => {
+        const existing = existingById.get(action.block.id);
+        const documentId = existing?.documentId ?? inferredDocumentId;
+        if (!documentId) {
+          throw new Error(
+            `Could not resolve documentId for block '${action.block.id}'.`
+          );
+        }
+        const orderIndex = existing?.orderIndex ?? nextOrderIndex++;
+        return {
+          id: action.block.id,
+          documentId,
+          type: action.block.type,
+          orderIndex,
+        };
+      });
+
+      const statements: BatchItem<"sqlite">[] = [];
+
+      if (deleteIds.length > 0) {
+        statements.push(db.delete(blocks).where(inArray(blocks.id, deleteIds)));
+      }
+
+      for (const action of updateActions) {
+        statements.push(
+          db
+            .update(blocks)
+            .set({
+              type: action.block.type,
+            })
+            .where(eq(blocks.id, action.block.id))
+        );
+      }
+      for (const batch of splitInsert(createBlockRows)) {
+        statements.push(db.insert(blocks).values(batch));
+      }
+
+      const blocksToPersist = upserts.map((action) => action.block);
+      const blocksToPersistIds = blocksToPersist.map((block) => block.id);
+
+      if (blocksToPersistIds.length > 0) {
+        statements.push(
+          db
+            .delete(textBlocks)
+            .where(inArray(textBlocks.blockId, blocksToPersistIds))
+        );
+        statements.push(
+          db
+            .delete(sectionBlockChildren)
+            .where(
+              inArray(sectionBlockChildren.sectionBlockId, blocksToPersistIds)
+            )
+        );
+        statements.push(
+          db
+            .delete(sectionBlocks)
+            .where(inArray(sectionBlocks.blockId, blocksToPersistIds))
+        );
+        statements.push(
+          db
+            .delete(columnsBlockChildren)
+            .where(
+              inArray(columnsBlockChildren.columnsBlockId, blocksToPersistIds)
+            )
+        );
+        statements.push(
+          db
+            .delete(columnsBlocks)
+            .where(inArray(columnsBlocks.blockId, blocksToPersistIds))
+        );
+        statements.push(
+          db
+            .delete(listBlockChildren)
+            .where(inArray(listBlockChildren.listBlockId, blocksToPersistIds))
+        );
+        statements.push(
+          db
+            .delete(listBlocks)
+            .where(inArray(listBlocks.blockId, blocksToPersistIds))
+        );
+      }
+
+      const textRows = blocksToPersist
+        .filter((block): block is Extract<Block, { type: "text" }> => {
+          return block.type === "text";
+        })
+        .map((block) => ({
+          blockId: block.id,
+          text: block.text,
+          align: block.align,
+          style: block.style,
+          ref: block.ref ?? null,
+        }));
+      for (const batch of splitInsert(textRows)) {
+        statements.push(db.insert(textBlocks).values(batch));
+      }
+
+      const sectionRows = blocksToPersist
+        .filter((block): block is Extract<Block, { type: "section" }> => {
+          return block.type === "section";
+        })
+        .map((block) => ({
+          blockId: block.id,
+          ref: block.ref ?? null,
+        }));
+      for (const batch of splitInsert(sectionRows)) {
+        statements.push(db.insert(sectionBlocks).values(batch));
+      }
+      for (const block of blocksToPersist) {
+        if (block.type !== "section") {
+          continue;
+        }
+        statements.push(
+          db
+            .delete(sectionBlockChildren)
+            .where(eq(sectionBlockChildren.sectionBlockId, block.id))
+        );
+        const sectionChildrenRows = block.blocks.map(
+          (childBlockId, orderIndex) => ({
+            sectionBlockId: block.id,
+            childBlockId,
+            orderIndex,
+          })
+        );
+        for (const batch of splitInsert(sectionChildrenRows)) {
+          statements.push(db.insert(sectionBlockChildren).values(batch));
+        }
+      }
+
+      const columnsRows = blocksToPersist
+        .filter((block): block is Extract<Block, { type: "columns" }> => {
+          return block.type === "columns";
+        })
+        .map((block) => ({
+          blockId: block.id,
+          ref: block.ref ?? null,
+        }));
+      for (const batch of splitInsert(columnsRows)) {
+        statements.push(db.insert(columnsBlocks).values(batch));
+      }
+      for (const block of blocksToPersist) {
+        if (block.type !== "columns") {
+          continue;
+        }
+        statements.push(
+          db
+            .delete(columnsBlockChildren)
+            .where(eq(columnsBlockChildren.columnsBlockId, block.id))
+        );
+        const columnsChildrenRows = block.blocks.map((child, orderIndex) => ({
+          columnsBlockId: block.id,
+          childBlockId: child.blockId,
+          span: child.span,
+          orderIndex,
+        }));
+        for (const batch of splitInsert(columnsChildrenRows)) {
+          statements.push(db.insert(columnsBlockChildren).values(batch));
+        }
+      }
+
+      const listRows = blocksToPersist
+        .filter((block): block is Extract<Block, { type: "list" }> => {
+          return block.type === "list";
+        })
+        .map((block) => ({
+          blockId: block.id,
+          bulletType: block.bullet.type,
+          bulletValue:
+            block.bullet.type === "normal" ? block.bullet.value : null,
+          leftSpace: block.leftSpace ?? null,
+          rightSpace: block.rightSpace ?? null,
+          ref: block.ref ?? null,
+        }));
+      for (const batch of splitInsert(listRows)) {
+        statements.push(db.insert(listBlocks).values(batch));
+      }
+      for (const block of blocksToPersist) {
+        if (block.type !== "list") {
+          continue;
+        }
+        statements.push(
+          db
+            .delete(listBlockChildren)
+            .where(eq(listBlockChildren.listBlockId, block.id))
+        );
+        const listChildrenRows = block.blocks.map(
+          (childBlockId, orderIndex) => ({
+            listBlockId: block.id,
+            childBlockId,
+            orderIndex,
+          })
+        );
+        for (const batch of splitInsert(listChildrenRows)) {
+          statements.push(db.insert(listBlockChildren).values(batch));
+        }
+      }
+
+      if (statements.length > 0) {
+        const [firstStatement, ...restStatements] = statements;
+        await db.batch([firstStatement, ...restStatements]);
+      }
+
+      console.log(
+        "input.blocks",
+        input.blocks.length,
+        upserts.length,
+        deleteIds.length
+      );
+
+      return {
+        created: upserts.filter((action) => action.type === "create").length,
+        updated: upserts.filter((action) => action.type === "update").length,
+        deleted: deleteIds.length,
+      };
+    }),
   createProjectFromPdf: publicProcedure
     .input(CreateProjectFromPdfInputSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input: unvalidatedInput }) => {
+      // Validate input
+      const input = CreateProjectFromPdfInputSchema.parse(unvalidatedInput);
       const docBlocks = await pdfToBlocks(input);
 
       const mainLayoutBlockIds = getMainLayoutBlockIds(docBlocks);

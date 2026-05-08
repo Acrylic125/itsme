@@ -2,40 +2,67 @@
 
 import { Fragment } from "react";
 import { z } from "zod";
-import { Group } from "react-konva";
-import { BlockRenderer } from "../renderer-types";
+import type { ColumnsResizeContext } from "../renderer-types";
+import {
+  BlockRenderer,
+  getEdgeReorderBoundingBoxes,
+  REORDER_BOUNDING_BOX_TARGET_SIZE,
+  REORDER_BOUNDING_BOX_VISUAL_SIZE,
+} from "../renderer-types";
 import { BlockSchema } from "../blocks";
-import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import {
+  InteractableBlock,
+  useInteractableBlock,
+} from "@/components/shared-block";
+import { useDocument } from "../document-context";
+import { useShallow } from "zustand/react/shallow";
+import { useStore } from "zustand/react";
 
 function SectionBlockComponent({
   blockId,
   dimensions,
   pos,
+  parents,
   nodes,
+  columnsResizeContext,
 }: {
   blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
+  parents: string[];
   nodes: React.ReactNode[];
+  columnsResizeContext?: ColumnsResizeContext;
 }) {
+  const { documentStore, blockTree } = useDocument();
+  const { focusBlock, focusBlockId } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      focusBlock: s.focusBlock,
+      focusBlockId: s.focusBlockId,
+    }))
+  );
+
+  const isDisabled = useInteractableBlock({
+    focusBlockId,
+    parents,
+    blockId,
+    blockTree,
+  });
+
   return (
-    <HoverRegion
+    <InteractableBlock
+      blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      blockId={blockId}
+      disabled={isDisabled}
+      inFocus={focusBlockId === blockId}
+      columnsResizeContext={columnsResizeContext}
+      onClick={() => focusBlock(blockId)}
     >
-      <ReorderRegion
-        blockId={blockId}
-        width={dimensions.width}
-        height={dimensions.height}
-      >
-        <Group width={dimensions.width} height={dimensions.height}>
-          {nodes}
-        </Group>
-      </ReorderRegion>
-    </HoverRegion>
+      {nodes}
+    </InteractableBlock>
   );
 }
 
@@ -46,8 +73,12 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
       .map((id) => ctx.allBlocks.find((b) => b.id === id))
       .filter((b): b is z.infer<typeof BlockSchema> => b != null);
 
+    const { columnsResizeContext: _stripResize, ...relativeBase } = relativeTo;
+    void _stripResize;
     const sectionStartPosition = {
+      ...relativeBase,
       ...ctx.getNextPosition(),
+      parents: [...relativeTo.parents, block.id],
       width: relativeTo.width,
     };
     // Child components will do the space claiming.
@@ -56,9 +87,9 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
       if (!renderer) {
         throw new Error(`Renderer not found for block type: ${b.type}`);
       }
-      // I hate this.
       const result = renderer.render(b as never, sectionStartPosition, ctx);
-      return <Fragment key={b.id}>{result.component()}</Fragment>;
+      return result;
+      // return <Fragment key={b.id}>{result.component()}</Fragment>;
     });
     const sectionEndPosition = ctx.getNextPosition();
 
@@ -74,13 +105,29 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
     };
 
     return {
+      blockId: block.id,
       estimatedDimensions: dimensions,
+      boundingBoxes: getEdgeReorderBoundingBoxes({
+        blockId: block.id,
+        from: { x: sectionStartPosition.x, y: sectionStartPosition.y },
+        to: {
+          x: sectionStartPosition.x + dimensions.width,
+          y: sectionStartPosition.y + dimensions.height,
+        },
+        visualSize: REORDER_BOUNDING_BOX_VISUAL_SIZE,
+        targetSize: REORDER_BOUNDING_BOX_TARGET_SIZE,
+      }),
+      children: children,
       component: () => (
         <SectionBlockComponent
           blockId={block.id}
           dimensions={dimensions}
           pos={sectionPosRelativeTo}
-          nodes={children}
+          parents={relativeTo.parents}
+          columnsResizeContext={relativeTo.columnsResizeContext}
+          nodes={children.map((c) => (
+            <Fragment key={c.blockId}>{c.component()}</Fragment>
+          ))}
         />
       ),
     };

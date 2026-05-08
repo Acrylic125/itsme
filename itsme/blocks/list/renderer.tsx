@@ -1,42 +1,70 @@
 "use client";
 
 import { z } from "zod";
-import { Group } from "react-konva";
-import { BlockRenderer } from "../renderer-types";
+import { Group, Text } from "react-konva";
+import { prepare, layout } from "@chenglou/pretext";
+import type { ColumnsResizeContext } from "../renderer-types";
+import {
+  BlockRenderer,
+  getEdgeReorderBoundingBoxes,
+  REORDER_BOUNDING_BOX_TARGET_SIZE,
+  REORDER_BOUNDING_BOX_VISUAL_SIZE,
+} from "../renderer-types";
 import { BlockSchema } from "../blocks";
 import { ListBulletSchema } from "./schema";
-import { TextBlockSchema } from "../text/schema";
-import { HoverRegion, ReorderRegion } from "@/components/shared-block";
+import {
+  InteractableBlock,
+  useInteractableBlock,
+} from "@/components/shared-block";
+import { useStore } from "zustand/react";
+import { useShallow } from "zustand/react/shallow";
+import { useDocument } from "../document-context";
 
 function ListBlockComponent({
   blockId,
   dimensions,
   pos,
+  parents,
   nodes,
+  columnsResizeContext,
 }: {
   blockId: string;
   dimensions: { width: number; height: number };
   pos: { x: number; y: number };
+  parents: string[];
   nodes: React.ReactNode[];
+  columnsResizeContext?: ColumnsResizeContext;
 }) {
+  const { documentStore, blockTree } = useDocument();
+  const { focusBlock, focusBlockId } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      focusBlock: s.focusBlock,
+      focusBlockId: s.focusBlockId,
+    }))
+  );
+
+  const isDisabled = useInteractableBlock({
+    focusBlockId,
+    parents,
+    blockId,
+    blockTree,
+  });
+
   return (
-    <HoverRegion
+    <InteractableBlock
+      blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      blockId={blockId}
+      disabled={isDisabled}
+      inFocus={focusBlockId === blockId}
+      columnsResizeContext={columnsResizeContext}
+      onClick={() => focusBlock(blockId)}
     >
-      <ReorderRegion
-        blockId={blockId}
-        width={dimensions.width}
-        height={dimensions.height}
-      >
-        <Group width={dimensions.width} height={dimensions.height}>
-          {nodes}
-        </Group>
-      </ReorderRegion>
-    </HoverRegion>
+      {nodes}
+    </InteractableBlock>
   );
 }
 
@@ -75,6 +103,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
 
     const listStartPosition = {
       ...ctx.getNextPosition(),
+      blockId: block.id,
       width: relativeTo.width,
     };
     const listSheet = ctx.styleSheet.list;
@@ -87,29 +116,33 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       relativeTo.width - bulletWidth - betweenPx
     );
 
-    const children = childBlocks.map((childBlock, index) => {
+    const children: ReturnType<
+      BlockRenderer<z.infer<typeof BlockSchema>["type"]>["render"]
+    >[] = [];
+    const nodes: React.ReactNode[] = [];
+    const defaultTextStyle = ctx.styleSheet.text.default;
+
+    childBlocks.forEach((childBlock, index) => {
       const rowStartPosition = ctx.getNextPosition();
-      const bulletBlock: z.infer<typeof TextBlockSchema> = {
-        id: `${block.id}-bullet-${index}`,
-        type: "text",
-        text: getBulletLabel(block.bullet, index),
-        style: "default",
-        align: "right",
-      };
+      const bulletLabel = getBulletLabel(block.bullet, index);
+      const bulletFontSizePx = (defaultTextStyle.fontSize * ctx.dpi) / 72;
+      const bulletPrepared = prepare(
+        bulletLabel,
+        `${defaultTextStyle.fontWeight} ${bulletFontSizePx}px ${defaultTextStyle.fontFamily}`
+      );
+      const { lineCount: bulletLineCount } = layout(
+        bulletPrepared,
+        bulletWidth,
+        defaultTextStyle.lineHeight
+      );
+      const bulletHeight =
+        bulletLineCount * bulletFontSizePx * defaultTextStyle.lineHeight;
 
       ctx.setNextPosition({
         x: rowStartPosition.x,
         y: rowStartPosition.y,
       });
-      const bulletResult = ctx.renderers.text.render(
-        bulletBlock,
-        {
-          x: listStartPosition.x,
-          y: listStartPosition.y,
-          width: bulletWidth,
-        },
-        ctx
-      );
+      ctx.claimBlockSpace(bulletHeight);
       const afterBulletPosition = ctx.getNextPosition();
 
       ctx.setNextPosition({
@@ -125,6 +158,7 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       const childResult = childRenderer.render(
         childBlock as never,
         {
+          parents: [...relativeTo.parents, block.id],
           x: listStartPosition.x,
           y: listStartPosition.y,
           width: contentWidth,
@@ -143,9 +177,26 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
         y: rowStartPosition.y + rowHeight,
       });
 
-      return (
+      children.push(childResult);
+      nodes.push(
         <Group key={childBlock.id}>
-          {bulletResult.component()}
+          <Text
+            x={rowStartPosition.x - listStartPosition.x}
+            y={rowStartPosition.y - listStartPosition.y}
+            width={bulletWidth}
+            height={bulletHeight}
+            text={bulletLabel}
+            fontFamily={defaultTextStyle.fontFamily}
+            fontSize={bulletFontSizePx}
+            lineHeight={defaultTextStyle.lineHeight}
+            fontStyle={
+              defaultTextStyle.fontWeight === "bold" ? "bold" : "normal"
+            }
+            align="right"
+            fill="#000000"
+            perfectDrawEnabled={false}
+            listening={false}
+          />
           {childResult.component()}
         </Group>
       );
@@ -162,13 +213,27 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
     };
 
     return {
+      blockId: block.id,
       estimatedDimensions: dimensions,
+      boundingBoxes: getEdgeReorderBoundingBoxes({
+        blockId: block.id,
+        from: { x: listStartPosition.x, y: listStartPosition.y },
+        to: {
+          x: listStartPosition.x + dimensions.width,
+          y: listStartPosition.y + dimensions.height,
+        },
+        visualSize: REORDER_BOUNDING_BOX_VISUAL_SIZE,
+        targetSize: REORDER_BOUNDING_BOX_TARGET_SIZE,
+      }),
+      children: children,
       component: () => (
         <ListBlockComponent
           blockId={block.id}
           dimensions={dimensions}
           pos={listPosRelativeTo}
-          nodes={children}
+          parents={relativeTo.parents}
+          columnsResizeContext={relativeTo.columnsResizeContext}
+          nodes={nodes}
         />
       ),
     };

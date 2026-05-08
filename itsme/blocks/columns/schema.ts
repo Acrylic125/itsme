@@ -11,3 +11,10 @@ export const ColumnsBlockSchema = z.object({
   ),
   ref: z.string().optional(),
 });
+
+export const ColumnsSpansUpdateSchema = z.object({
+  type: z.literal("columns_spans"),
+  documentId: z.string(),
+  columnsBlockId: z.string(),
+  spans: z.array(z.number().positive()),
+});
