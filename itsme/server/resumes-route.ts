@@ -32,18 +32,6 @@ import {
 
 const USER_ID = "USER";
 
-function createProjectId() {
-  return `p_${nanoid(22)}`;
-}
-
-function createDocumentId() {
-  return `d_${nanoid(22)}`;
-}
-
-function createBlockId() {
-  return `b_${nanoid(22)}`;
-}
-
 function getProjectNameFromBlocks(
   blocks: Awaited<ReturnType<typeof pdfToBlocks>>
 ) {
@@ -853,7 +841,9 @@ export const resumesRouter = router({
     }),
   createProjectFromPdf: publicProcedure
     .input(CreateProjectFromPdfInputSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input: unvalidatedInput }) => {
+      // Validate input
+      const input = CreateProjectFromPdfInputSchema.parse(unvalidatedInput);
       const docBlocks = await pdfToBlocks(input);
 
       const mainLayoutBlockIds = getMainLayoutBlockIds(docBlocks);
