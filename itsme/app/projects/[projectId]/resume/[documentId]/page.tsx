@@ -13,29 +13,12 @@ import {
 import { PAGE_SIZE } from "@/blocks/blocks";
 import { DocumentStoresProvider } from "@/blocks/document-context";
 
-export async function getProjectById(projectId: string) {
-  return db
-    .select({
-      id: projects.id,
-      name: projects.name,
-      userId: projects.userId,
-    })
-    .from(projects)
-    .where(eq(projects.id, projectId))
-    .get();
-}
-
 export default async function ProjectResumePage({
   params,
 }: {
-  params: Promise<{ projectId: string; documentId: string }>;
+  params: Promise<{ documentId: string }>;
 }) {
-  const { projectId, documentId } = await params;
-
-  const project = await getProjectById(projectId);
-  if (!project) {
-    notFound();
-  }
+  const { documentId } = await params;
 
   const ctxData = await getRetrieverContextData(documentId);
   const pipelineBlocks = await mapBlocks({ data: ctxData });
@@ -55,35 +38,8 @@ export default async function ProjectResumePage({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center">
-      <div className="w-full flex flex-row">
-        <div className="w-56 md:w-64 lg:w-72 px-2 py-4 h-screen-safe border-r border-border overflow-y-auto relative">
-          <Suspense
-            fallback={
-              <ProjectDocumentsSidebar
-                projectId={projectId}
-                activeDocumentId={documentId}
-                projectName={project.name}
-                isLoading
-              />
-            }
-          >
-            <ProjectDocumentsSidebar
-              projectId={projectId}
-              activeDocumentId={documentId}
-              projectName={project.name}
-              isLoading={false}
-            />
-          </Suspense>
-          <div></div>
-        </div>
-
-        <div className="flex-1">
-          <DocumentStoresProvider document={renderedDocument} dpi={300}>
-            <PageCanvas document={renderedDocument} dpi={300} />
-          </DocumentStoresProvider>
-        </div>
-      </div>
-    </div>
+    <DocumentStoresProvider document={renderedDocument} dpi={300}>
+      <PageCanvas document={renderedDocument} dpi={300} />
+    </DocumentStoresProvider>
   );
 }

@@ -20,11 +20,15 @@ import {
 import { CreateProjectFromPdfInputSchema } from "@/lib/pdf-to-blocks/schema";
 import { pdfToBlocks } from "@/lib/pdf-to-blocks/server";
 import { splitInsert } from "@/lib/split-insert";
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { publicProcedure, router } from "./trpc";
 import { BatchItem } from "drizzle-orm/batch";
+import {
+  getProjectDocuments,
+  getProjectMasterDocument,
+} from "./project-documents";
 
 const USER_ID = "USER";
 
@@ -34,6 +38,10 @@ function createProjectId() {
 
 function createDocumentId() {
   return `d_${nanoid(22)}`;
+}
+
+function createBlockId() {
+  return `b_${nanoid(22)}`;
 }
 
 function getProjectNameFromBlocks(
@@ -100,6 +108,444 @@ const UpdateDocumentBlocksInputSchema = z.object({
 });
 
 export const resumesRouter = router({
+  getProjectDocuments: publicProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const [projectDocuments, masterDocument] = await Promise.all([
+        getProjectDocuments(input.projectId),
+        getProjectMasterDocument(input.projectId),
+      ]);
+      return {
+        documents: projectDocuments,
+        masterDocumentId: masterDocument?.id ?? null,
+      };
+    }),
+  duplicateResume: publicProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+        documentId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const [
+        sourceDocumentRows,
+        sourcePageStyleRows,
+        sourceTextStyles,
+        sourceListStyleRows,
+        sourceMainLayout,
+        sourceBlocks,
+        sourceTextBlocks,
+        sourceSectionBlocks,
+        sourceColumnsBlocks,
+        sourceListBlocks,
+      ] = await db.batch([
+        db
+          .select({
+            id: documents.id,
+            name: documents.name,
+            projectId: documents.projectId,
+          })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.id, input.documentId),
+              eq(documents.projectId, input.projectId)
+            )
+          )
+          .limit(1),
+        db
+          .select({
+            gap: documentPageStyles.gap,
+            marginTop: documentPageStyles.marginTop,
+            marginBottom: documentPageStyles.marginBottom,
+            marginLeft: documentPageStyles.marginLeft,
+            marginRight: documentPageStyles.marginRight,
+          })
+          .from(documentPageStyles)
+          .where(eq(documentPageStyles.documentId, input.documentId))
+          .limit(1),
+        db
+          .select({
+            style: documentTextStyles.style,
+            fontSize: documentTextStyles.fontSize,
+            fontWeight: documentTextStyles.fontWeight,
+            fontFamily: documentTextStyles.fontFamily,
+            lineHeight: documentTextStyles.lineHeight,
+          })
+          .from(documentTextStyles)
+          .where(eq(documentTextStyles.documentId, input.documentId)),
+        db
+          .select({
+            leftSpace: documentListStyles.leftSpace,
+            rightSpace: documentListStyles.rightSpace,
+          })
+          .from(documentListStyles)
+          .where(eq(documentListStyles.documentId, input.documentId))
+          .limit(1),
+        db
+          .select({
+            blockId: documentMainLayout.blockId,
+            orderIndex: documentMainLayout.orderIndex,
+          })
+          .from(documentMainLayout)
+          .where(eq(documentMainLayout.documentId, input.documentId)),
+        db
+          .select({
+            id: blocks.id,
+            type: blocks.type,
+            orderIndex: blocks.orderIndex,
+          })
+          .from(blocks)
+          .where(eq(blocks.documentId, input.documentId)),
+        db
+          .select({
+            blockId: textBlocks.blockId,
+            text: textBlocks.text,
+            align: textBlocks.align,
+            style: textBlocks.style,
+            ref: textBlocks.ref,
+          })
+          .from(textBlocks)
+          .innerJoin(blocks, eq(textBlocks.blockId, blocks.id))
+          .where(eq(blocks.documentId, input.documentId)),
+        db
+          .select({
+            blockId: sectionBlocks.blockId,
+            ref: sectionBlocks.ref,
+          })
+          .from(sectionBlocks)
+          .innerJoin(blocks, eq(sectionBlocks.blockId, blocks.id))
+          .where(eq(blocks.documentId, input.documentId)),
+        db
+          .select({
+            blockId: columnsBlocks.blockId,
+            ref: columnsBlocks.ref,
+          })
+          .from(columnsBlocks)
+          .innerJoin(blocks, eq(columnsBlocks.blockId, blocks.id))
+          .where(eq(blocks.documentId, input.documentId)),
+        db
+          .select({
+            blockId: listBlocks.blockId,
+            bulletType: listBlocks.bulletType,
+            bulletValue: listBlocks.bulletValue,
+            leftSpace: listBlocks.leftSpace,
+            rightSpace: listBlocks.rightSpace,
+            ref: listBlocks.ref,
+          })
+          .from(listBlocks)
+          .innerJoin(blocks, eq(listBlocks.blockId, blocks.id))
+          .where(eq(blocks.documentId, input.documentId)),
+      ]);
+
+      const sourceDocument = sourceDocumentRows[0];
+      if (!sourceDocument) {
+        throw new Error("Document not found.");
+      }
+
+      const sourcePageStyle = sourcePageStyleRows[0];
+      const sourceListStyle = sourceListStyleRows[0];
+
+      const sourceBlockIds = sourceBlocks.map((row) => row.id);
+
+      const sourceSectionBlockIds = sourceSectionBlocks.map(
+        (row) => row.blockId
+      );
+      const sourceColumnsBlockIds = sourceColumnsBlocks.map(
+        (row) => row.blockId
+      );
+      const sourceListBlockIds = sourceListBlocks.map((row) => row.blockId);
+
+      const sourceSectionChildren =
+        sourceSectionBlockIds.length === 0
+          ? []
+          : await db
+              .select({
+                sectionBlockId: sectionBlockChildren.sectionBlockId,
+                childBlockId: sectionBlockChildren.childBlockId,
+                orderIndex: sectionBlockChildren.orderIndex,
+              })
+              .from(sectionBlockChildren)
+              .where(
+                inArray(
+                  sectionBlockChildren.sectionBlockId,
+                  sourceSectionBlockIds
+                )
+              );
+      const sourceColumnsChildren =
+        sourceColumnsBlockIds.length === 0
+          ? []
+          : await db
+              .select({
+                columnsBlockId: columnsBlockChildren.columnsBlockId,
+                childBlockId: columnsBlockChildren.childBlockId,
+                span: columnsBlockChildren.span,
+                orderIndex: columnsBlockChildren.orderIndex,
+              })
+              .from(columnsBlockChildren)
+              .where(
+                inArray(
+                  columnsBlockChildren.columnsBlockId,
+                  sourceColumnsBlockIds
+                )
+              );
+      const sourceListChildren =
+        sourceListBlockIds.length === 0
+          ? []
+          : await db
+              .select({
+                listBlockId: listBlockChildren.listBlockId,
+                childBlockId: listBlockChildren.childBlockId,
+                orderIndex: listBlockChildren.orderIndex,
+              })
+              .from(listBlockChildren)
+              .where(
+                inArray(listBlockChildren.listBlockId, sourceListBlockIds)
+              );
+
+      const duplicatedDocumentId = createDocumentId();
+      const duplicatedDocumentName = `${sourceDocument.name} Copy`;
+
+      const duplicatedBlockIdBySourceId = new Map<string, string>();
+      for (const sourceBlockId of sourceBlockIds) {
+        duplicatedBlockIdBySourceId.set(sourceBlockId, createBlockId());
+      }
+
+      const duplicatedBlockId = (sourceBlockId: string) => {
+        const nextId = duplicatedBlockIdBySourceId.get(sourceBlockId);
+        if (!nextId) {
+          throw new Error(
+            `Could not find duplicated block id for source block '${sourceBlockId}'.`
+          );
+        }
+        return nextId;
+      };
+
+      const statements: BatchItem<"sqlite">[] = [
+        db.insert(documents).values({
+          id: duplicatedDocumentId,
+          name: duplicatedDocumentName,
+          projectId: input.projectId,
+        }),
+      ];
+
+      if (sourcePageStyle) {
+        statements.push(
+          db.insert(documentPageStyles).values({
+            documentId: duplicatedDocumentId,
+            gap: sourcePageStyle.gap,
+            marginTop: sourcePageStyle.marginTop,
+            marginBottom: sourcePageStyle.marginBottom,
+            marginLeft: sourcePageStyle.marginLeft,
+            marginRight: sourcePageStyle.marginRight,
+          })
+        );
+      }
+
+      if (sourceTextStyles.length > 0) {
+        for (const batch of splitInsert(
+          sourceTextStyles.map((row) => ({
+            documentId: duplicatedDocumentId,
+            style: row.style,
+            fontSize: row.fontSize,
+            fontWeight: row.fontWeight,
+            fontFamily: row.fontFamily,
+            lineHeight: row.lineHeight,
+          }))
+        )) {
+          statements.push(db.insert(documentTextStyles).values(batch));
+        }
+      }
+
+      if (sourceListStyle) {
+        statements.push(
+          db.insert(documentListStyles).values({
+            documentId: duplicatedDocumentId,
+            leftSpace: sourceListStyle.leftSpace,
+            rightSpace: sourceListStyle.rightSpace,
+          })
+        );
+      }
+
+      if (sourceBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceBlocks.map((row) => ({
+            id: duplicatedBlockId(row.id),
+            documentId: duplicatedDocumentId,
+            type: row.type,
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(blocks).values(batch));
+        }
+      }
+
+      if (sourceTextBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceTextBlocks.map((row) => ({
+            blockId: duplicatedBlockId(row.blockId),
+            text: row.text,
+            align: row.align,
+            style: row.style,
+            ref: row.ref,
+          }))
+        )) {
+          statements.push(db.insert(textBlocks).values(batch));
+        }
+      }
+
+      if (sourceSectionBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceSectionBlocks.map((row) => ({
+            blockId: duplicatedBlockId(row.blockId),
+            ref: row.ref,
+          }))
+        )) {
+          statements.push(db.insert(sectionBlocks).values(batch));
+        }
+      }
+
+      if (sourceColumnsBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceColumnsBlocks.map((row) => ({
+            blockId: duplicatedBlockId(row.blockId),
+            ref: row.ref,
+          }))
+        )) {
+          statements.push(db.insert(columnsBlocks).values(batch));
+        }
+      }
+
+      if (sourceListBlocks.length > 0) {
+        for (const batch of splitInsert(
+          sourceListBlocks.map((row) => ({
+            blockId: duplicatedBlockId(row.blockId),
+            bulletType: row.bulletType,
+            bulletValue: row.bulletValue,
+            leftSpace: row.leftSpace,
+            rightSpace: row.rightSpace,
+            ref: row.ref,
+          }))
+        )) {
+          statements.push(db.insert(listBlocks).values(batch));
+        }
+      }
+
+      if (sourceSectionChildren.length > 0) {
+        for (const batch of splitInsert(
+          sourceSectionChildren.map((row) => ({
+            sectionBlockId: duplicatedBlockId(row.sectionBlockId),
+            childBlockId: duplicatedBlockId(row.childBlockId),
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(sectionBlockChildren).values(batch));
+        }
+      }
+
+      if (sourceColumnsChildren.length > 0) {
+        for (const batch of splitInsert(
+          sourceColumnsChildren.map((row) => ({
+            columnsBlockId: duplicatedBlockId(row.columnsBlockId),
+            childBlockId: duplicatedBlockId(row.childBlockId),
+            span: row.span,
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(columnsBlockChildren).values(batch));
+        }
+      }
+
+      if (sourceListChildren.length > 0) {
+        for (const batch of splitInsert(
+          sourceListChildren.map((row) => ({
+            listBlockId: duplicatedBlockId(row.listBlockId),
+            childBlockId: duplicatedBlockId(row.childBlockId),
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(listBlockChildren).values(batch));
+        }
+      }
+
+      if (sourceMainLayout.length > 0) {
+        for (const batch of splitInsert(
+          sourceMainLayout.map((row) => ({
+            documentId: duplicatedDocumentId,
+            blockId: duplicatedBlockId(row.blockId),
+            orderIndex: row.orderIndex,
+          }))
+        )) {
+          statements.push(db.insert(documentMainLayout).values(batch));
+        }
+      }
+
+      await db.batch([statements[0], ...statements.slice(1)]);
+
+      return {
+        documentId: duplicatedDocumentId,
+        documentName: duplicatedDocumentName,
+      };
+    }),
+  deleteResume: publicProcedure
+    .input(
+      z.object({
+        projectId: z.string(),
+        documentId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const sourceDocument = await db
+        .select({
+          id: documents.id,
+          projectId: documents.projectId,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, input.documentId),
+            eq(documents.projectId, input.projectId)
+          )
+        )
+        .get();
+
+      if (!sourceDocument) {
+        throw new Error("Document not found.");
+      }
+
+      const masterDocument = await db
+        .select({
+          documentId: projectMasterDocuments.documentId,
+        })
+        .from(projectMasterDocuments)
+        .where(eq(projectMasterDocuments.projectId, input.projectId))
+        .get();
+
+      if (masterDocument?.documentId === input.documentId) {
+        throw new Error("Master resume cannot be deleted.");
+      }
+
+      await db.delete(documents).where(eq(documents.id, input.documentId));
+
+      const fallbackDocument = await db
+        .select({
+          id: documents.id,
+        })
+        .from(documents)
+        .where(eq(documents.projectId, input.projectId))
+        .orderBy(asc(documents.name))
+        .limit(1);
+
+      return {
+        deletedDocumentId: input.documentId,
+        nextDocumentId: fallbackDocument[0]?.id ?? null,
+      };
+    }),
   updateDocumentBlocks: publicProcedure
     .input(UpdateDocumentBlocksInputSchema)
     .mutation(async ({ input }) => {

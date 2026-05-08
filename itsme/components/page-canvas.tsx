@@ -103,12 +103,13 @@ export function PageCanvas({
             </div>
           </Button>
         </div>
-        <div className="flex-1 flex flex-row justify-end">
+        <div className="flex-1 flex flex-row gap-1 justify-end">
+          <Button variant="outline">Refine</Button>
           <Button>Download</Button>
         </div>
       </div>
       <div
-        className="w-full max-w-7xl overflow-x-hidden h-fit absolute pb-20 pt-10"
+        className="w-full max-w-7xl overflow-x-hidden h-fit absolute mt-10"
         ref={containerRef}
       >
         <Stage
