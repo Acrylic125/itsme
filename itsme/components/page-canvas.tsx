@@ -10,7 +10,8 @@ import { useDocument } from "@/blocks/document-context";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Button } from "./ui/button";
-import { TextIcon } from "@radix-ui/react-icons";
+import { ListBulletIcon, TextIcon } from "@radix-ui/react-icons";
+import { FavIcon } from "./icon/favicon";
 
 export function PageCanvas({
   document,
@@ -82,21 +83,32 @@ export function PageCanvas({
   return (
     <div className="flex-1 h-screen-safe relative overflow-y-auto flex flex-col w-full items-center">
       <div className="w-full flex flex-row justify-between items-center sticky top-0 z-10 bg-background border-b p-2">
-        <div className="flex-1"></div>
-        <div className="flex-1 flex flex-row items-center">
-          <Button variant="ghost">
+        <div className="flex-1 flex flex-row gap-1.5 items-center px-2">
+          <div className="size-6">
+            <FavIcon />
+          </div>
+          <p className="font-extrabold">ITSME</p>
+        </div>
+        <div className="flex-1 flex flex-row gap-2 items-center justify-center">
+          <Button variant="outline">
             <div className="flex flex-row items-center gap-2">
               <TextIcon />
               <span>Text</span>
             </div>
           </Button>
+          <Button variant="outline">
+            <div className="flex flex-row items-center gap-2">
+              <ListBulletIcon />
+              <span>List</span>
+            </div>
+          </Button>
         </div>
         <div className="flex-1 flex flex-row justify-end">
-          <Button size="xs">Download</Button>
+          <Button>Download</Button>
         </div>
       </div>
       <div
-        className="w-full max-w-7xl overflow-x-hidden h-fit absolute"
+        className="w-full max-w-7xl overflow-x-hidden h-fit absolute pb-20 pt-10"
         ref={containerRef}
       >
         <Stage

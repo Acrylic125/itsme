@@ -1,12 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { PageCanvas } from "@/components/page-canvas";
-import {
-  ProjectDocumentsSidebar,
-  ProjectDocumentsSidebarSkeleton,
-} from "@/components/project-documents-sidebar";
-import { Button } from "@/components/ui/button";
+import { ProjectDocumentsSidebar } from "@/components/project-documents-sidebar";
 import { eq } from "drizzle-orm";
 import { projects } from "@/db/schema";
 import db from "@/db/db";
@@ -16,7 +11,6 @@ import {
   mapStyles,
 } from "@/blocks/retriever";
 import { PAGE_SIZE } from "@/blocks/blocks";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { DocumentStoresProvider } from "@/blocks/document-context";
 
 export async function getProjectById(projectId: string) {
@@ -62,14 +56,26 @@ export default async function ProjectResumePage({
 
   return (
     <div className="flex flex-col items-center justify-center">
-      <div className="w-full flex flex-row max-w-ui">
-        <div className="w-56 md:w-64 lg:w-72 px-2 py-4 h-screen-safe border-r border-border overflow-y-auto">
-          <Suspense fallback={<ProjectDocumentsSidebarSkeleton />}>
+      <div className="w-full flex flex-row">
+        <div className="w-56 md:w-64 lg:w-72 px-2 py-4 h-screen-safe border-r border-border overflow-y-auto relative">
+          <Suspense
+            fallback={
+              <ProjectDocumentsSidebar
+                projectId={projectId}
+                activeDocumentId={documentId}
+                projectName={project.name}
+                isLoading
+              />
+            }
+          >
             <ProjectDocumentsSidebar
               projectId={projectId}
               activeDocumentId={documentId}
+              projectName={project.name}
+              isLoading={false}
             />
           </Suspense>
+          <div></div>
         </div>
 
         <div className="flex-1">

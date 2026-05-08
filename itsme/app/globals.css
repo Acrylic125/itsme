@@ -189,5 +189,6 @@
 }
 
 .h-screen-safe {
-  @apply h-svh lg:h-[calc(100vh-40px)] xl:h-[calc(100vh-48px)];
+  @apply h-svh;
+  /* @apply h-svh lg:h-[calc(100vh-40px)] xl:h-[calc(100vh-48px)]; */
 }
