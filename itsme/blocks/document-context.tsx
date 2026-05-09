@@ -331,16 +331,16 @@ function applyMoveUpdates(doc: Document, updates: MoveBlockUpdate[]): Document {
 export function buildMoveUpdatesForReorder(args: {
   document: Document;
   documentId: string;
-  reorder: NonNullable<DocumentStoreState["reorder"]>;
+  move: Extract<DocumentStoreAction, { type: "move-block" }>;
   blockTree: BlockTree;
 }): { updates: MoveBlockUpdate[]; nextDocument: Document } | null {
-  const { document, documentId, reorder, blockTree } = args;
-  const movingBlockId = reorder.current?.blockIds[0];
+  const { document, documentId, move, blockTree } = args;
+  const movingBlockId = move.current.blockIds[0];
   if (!movingBlockId) {
     return null;
   }
 
-  const targetBox = reorder.targetBlock;
+  const targetBox = move.targetBlock;
   if (!targetBox) {
     return null;
   }
@@ -540,121 +540,137 @@ export function buildMoveUpdatesForReorder(args: {
   return { updates: [], nextDocument: next };
 }
 
+/**
+ * The single in-flight user interaction with the document.
+ *
+ * At any moment the user is doing exactly one of: editing a block (focused),
+ * moving a block (drag in flight), or placing a new block. These are mutually
+ * exclusive, so they share one slot rather than living as parallel fields.
+ */
+export type DocumentStoreAction =
+  | {
+      type: "edit-block";
+      blockId: string;
+    }
+  | {
+      type: "move-block";
+      current: {
+        position: Pos;
+        blockIds: string[];
+      };
+      targetBlock: BlockTreeReorderBoundingBox | null;
+    }
+  | {
+      type: "add-block";
+      blockType: "text" | "list";
+      current: {
+        position: Pos;
+        blockIds: string[];
+      } | null;
+    };
+
+export type DocumentStoreEditBlockAction = Extract<
+  DocumentStoreAction,
+  { type: "edit-block" }
+>;
+
+export type DocumentStoreMoveBlockAction = Extract<
+  DocumentStoreAction,
+  { type: "move-block" }
+>;
+
+export type DocumentStoreAddBlockAction = Extract<
+  DocumentStoreAction,
+  { type: "add-block" }
+>;
+
 export type DocumentStoreState = {
-  focusBlockId: string | null;
-  reorder: {
-    current: {
-      position: Pos;
-      blockIds: string[];
-    } | null;
-    targetBlock: BlockTreeReorderBoundingBox | null;
-  };
-  focusBlock: (
-    blockId: string | ((current: string | null) => string | null) | null
+  action: DocumentStoreAction | null;
+  setAction: (
+    action:
+      | DocumentStoreAction
+      | null
+      | ((
+          current: DocumentStoreAction | null
+        ) => DocumentStoreAction | null)
   ) => void;
-  setReorderCurrent: (
-    current: {
-      position: Pos;
-      blockIds: string[];
-    } | null
-  ) => void;
-  setReorderTarget: (targetBlock: BlockTreeReorderBoundingBox | null) => void;
 };
 
 export type DocumentStore = ReturnType<typeof createDocumentStore>;
 
 export function createDocumentStore() {
-  // documentId: DocumentId,
-  // initialDocument: Document
   return createStore<DocumentStoreState>((set, get) => ({
-    focusBlockId: null,
-    reorder: {
-      current: null,
-      targetBlock: null,
-    },
-    focusBlock: (blockId) => {
-      if (typeof blockId === "function") {
-        set({ focusBlockId: blockId(get().focusBlockId) });
+    action: null,
+    setAction: (input) => {
+      if (typeof input === "function") {
+        set({ action: input(get().action) });
       } else {
-        set({ focusBlockId: blockId });
+        set({ action: input });
       }
     },
-    setReorderCurrent: (reorder) => {
-      const current = get().reorder;
-      set({
-        reorder: {
-          ...current,
-          current:
-            reorder == null
-              ? null
-              : {
-                  ...current.current,
-                  ...reorder,
-                },
-        },
-      });
-    },
-    setReorderTarget: (targetBlock) => {
-      const current = get().reorder;
-      if (!current) {
-        return;
-      }
-      set({
-        reorder: {
-          ...current,
-          targetBlock: targetBlock == null ? null : targetBlock,
-        },
-      });
-    },
-    // commitReorder: (blockTree) => {
-    //   const { documentId: activeId, document: doc, reorder } = get();
-    //   if (!reorder) {
-    //     return [];
-    //   }
-    //   const result = buildMoveUpdatesForReorder({
-    //     document: doc,
-    //     documentId: activeId,
-    //     reorder,
-    //     blockTree,
-    //   });
-    //   set({
-    //     reorder: {
-    //       current: null,
-    //       targetBlock: null,
-    //     },
-    //   });
-    //   if (!result) {
-    //     return [];
-    //   }
-    //   const nextDocument = removeEmptyContainers(result.nextDocument);
-    //   if (nextDocument !== doc) {
-    //     set({
-    //       documentId: activeId,
-    //       document: nextDocument,
-    //     });
-    //   }
-    //   return result.updates;
-    // },
-    // update: (update) => {
-    //   const parsed = BlockUpdateSchema.safeParse(update);
-    //   if (!parsed.success) {
-    //     return;
-    //   }
-    //   const patch = parsed.data;
-    //   const { documentId: activeId, document: doc } = get();
-    //   if (patch.documentId !== activeId) {
-    //     return;
-    //   }
-    //   const next = applyBlockUpdate(doc, patch);
-    //   if (next === doc) {
-    //     return;
-    //   }
-    //   set({
-    //     documentId: activeId,
-    //     document: next,
-    //   });
-    // },
   }));
+}
+
+export function asEditBlockAction(
+  action: DocumentStoreAction | null
+): DocumentStoreEditBlockAction | null {
+  return action?.type === "edit-block" ? action : null;
+}
+
+export function asMoveBlockAction(
+  action: DocumentStoreAction | null
+): DocumentStoreMoveBlockAction | null {
+  return action?.type === "move-block" ? action : null;
+}
+
+export function asAddBlockAction(
+  action: DocumentStoreAction | null
+): DocumentStoreAddBlockAction | null {
+  return action?.type === "add-block" ? action : null;
+}
+
+export function selectEditBlockAction(
+  state: DocumentStoreState
+): DocumentStoreEditBlockAction | null {
+  return asEditBlockAction(state.action);
+}
+
+export function selectMoveBlockAction(
+  state: DocumentStoreState
+): DocumentStoreMoveBlockAction | null {
+  return asMoveBlockAction(state.action);
+}
+
+export function selectAddBlockAction(
+  state: DocumentStoreState
+): DocumentStoreAddBlockAction | null {
+  return asAddBlockAction(state.action);
+}
+
+/** Block id currently being edited, or null when no edit is in flight. */
+export function selectFocusBlockId(state: DocumentStoreState): string | null {
+  return selectEditBlockAction(state)?.blockId ?? null;
+}
+
+/**
+ * Block id the user is currently interacting with — the block being edited
+ * for `edit-block`, or the block being dragged for `move-block`. Used by
+ * sibling blocks to decide whether they can still respond to input.
+ *
+ * Distinct from `selectFocusBlockId`, which is purely about the editing
+ * focus / focus ring and is null during a drag.
+ */
+export function selectActiveBlockId(state: DocumentStoreState): string | null {
+  const action = state.action;
+  if (!action) return null;
+  switch (action.type) {
+    case "edit-block":
+      return action.blockId;
+    case "move-block":
+      return action.current.blockIds[0] ?? null;
+    case "add-block":
+      return action.current?.blockIds[0] ?? null;
+  }
 }
 
 type DocumentContextValue = {
@@ -680,43 +696,7 @@ export function DocumentStoresProvider({
   children: ReactNode;
   dpi: number;
 }) {
-  // const trpcClient = useTRPCClient();
   const [documentStore] = useState(() => createDocumentStore());
-  // const isSyncingRef = useRef(false);
-
-  // useEffect(() => {
-  //   const interval = window.setInterval(() => {
-  //     if (isSyncingRef.current) {
-  //       return;
-  //     }
-  //     const {
-  //       document: currentDocument,
-  //       serverDocument,
-  //       setServerDocument,
-  //     } = documentStore.getState();
-  //     const blocks = buildDocumentBlockDiff(serverDocument, currentDocument);
-  //     if (blocks.length === 0) {
-  //       return;
-  //     }
-  //     isSyncingRef.current = true;
-  //     trpcClient.resumes.updateDocumentBlocks
-  //       .mutate({ blocks })
-  //       .then(() => {
-  //         setServerDocument(currentDocument);
-  //       })
-  //       .catch((error) => {
-  //         // Keep serverDocument unchanged on failed sync; next loop retries.
-  //         console.error("Failed to sync document blocks", error);
-  //       })
-  //       .finally(() => {
-  //         isSyncingRef.current = false;
-  //       });
-  //   }, 500);
-
-  //   return () => {
-  //     window.clearInterval(interval);
-  //   };
-  // }, [documentStore, trpcClient]);
 
   const convexDocumentId = documentId as Id<"documents">;
 
@@ -814,7 +794,9 @@ export function DocumentStoresProvider({
   }, [commitModifiedBlocks]);
 
   const updateBlocks = useCallback(
-    (transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot) => {
+    (
+      transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot
+    ) => {
       setModifiedBlocks((prev) => {
         const queryData = blocksQueryDataRef.current;
         if (!queryData) {

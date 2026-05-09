@@ -18,12 +18,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AnchorRect } from "@/components/dom-popup";
-import { useDocument } from "@/blocks/document-context";
+import {
+  asEditBlockAction,
+  selectActiveBlockId,
+  selectEditBlockAction,
+  useDocument,
+} from "@/blocks/document-context";
 import { useCallback, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
-import type { DocumentStoreState } from "@/blocks/document-context";
 import { useDebouncedCallback } from "use-debounce";
 
 export function EditTextModal({
@@ -119,30 +123,35 @@ function TextBlockComponent({
 }) {
   // const popupKey = useId();
   const { documentStore, blockTree } = useDocument();
-  const { focusBlock, focusBlockId } = useStore(
+  const { setAction, editAction, activeBlockId } = useStore(
     documentStore,
-    useShallow((s: DocumentStoreState) => ({
-      focusBlock: s.focusBlock,
-      focusBlockId: s.focusBlockId,
+    useShallow((s) => ({
+      setAction: s.setAction,
+      editAction: selectEditBlockAction(s),
+      activeBlockId: selectActiveBlockId(s),
     }))
   );
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
+  const isEditingThisBlock = editAction?.blockId === block.id;
 
   const closeTextEditor = useCallback(() => {
     setAnchor(null);
-    focusBlock((cur: string | null) => (cur === block.id ? null : cur));
-  }, [block.id, focusBlock]);
+    setAction((current) => {
+      const editAction = asEditBlockAction(current);
+      return editAction?.blockId === block.id ? null : current;
+    });
+  }, [block.id, setAction]);
 
   const handleClick = useCallback(
     (args: { anchor: AnchorRect }) => {
-      focusBlock(block.id);
+      setAction({ type: "edit-block", blockId: block.id });
       setAnchor(args.anchor);
     },
-    [block.id, focusBlock]
+    [block.id, setAction]
   );
 
   useEffect(() => {
-    if (!anchor || focusBlockId !== block.id) return;
+    if (!anchor || !isEditingThisBlock) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         closeTextEditor();
@@ -150,10 +159,10 @@ function TextBlockComponent({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [anchor, focusBlockId, block.id, closeTextEditor]);
+  }, [anchor, isEditingThisBlock, closeTextEditor]);
 
   const isDisabled = useInteractableBlock({
-    focusBlockId,
+    activeBlockId,
     parents,
     blockId: block.id,
     blockTree,
@@ -167,7 +176,7 @@ function TextBlockComponent({
         width={dimensions.width}
         height={dimensions.height}
         disabled={isDisabled}
-        inFocus={focusBlockId === block.id}
+        inFocus={isEditingThisBlock}
         columnsResizeContext={columnsResizeContext}
         onClick={handleClick}
       >
@@ -185,7 +194,7 @@ function TextBlockComponent({
           fill="#000000"
           perfectDrawEnabled={false}
         />
-        {anchor && focusBlockId === block.id && (
+        {anchor && isEditingThisBlock && (
           <Html
             transform={false}
             divProps={{

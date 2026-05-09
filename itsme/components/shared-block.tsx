@@ -3,50 +3,50 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
-import {
-  BlockTree,
-  BlockTreeReorderBoundingBox,
-  type ColumnsResizeContext,
-} from "@/blocks/renderer-types";
+import { BlockTree, type ColumnsResizeContext } from "@/blocks/renderer-types";
 import {
   useDocument,
+  asMoveBlockAction,
   buildMoveUpdatesForReorder,
+  selectMoveBlockAction,
   type DocumentStoreState,
 } from "@/blocks/document-context";
 import { useStore } from "zustand/react";
-import { useShallow } from "zustand/react/shallow";
 // import { useBlockDragContext } from "./block-dnd-context";
 // import { useBlockFocusContext } from "./block-focus-context";
 
 export function useInteractableBlock({
-  focusBlockId,
+  activeBlockId,
   parents,
   blockId,
   blockTree,
 }: {
-  focusBlockId: string | null;
+  /**
+   * The block the user is currently interacting with (edit or drag). Drives
+   * the sibling/parent gating for which blocks can respond to input. Pass
+   * `selectActiveBlockId(state)` rather than `selectFocusBlockId(state)` so
+   * nested blocks stay enabled while they're being dragged.
+   */
+  activeBlockId: string | null;
   parents: string[];
   blockId: string;
   blockTree: BlockTree;
 }) {
   let isDisabled;
-  if (focusBlockId !== null) {
+  if (activeBlockId !== null) {
     // Top level, can still focus. But not if it's child is focused.
     if (parents.length === 0) {
       isDisabled = blockTree.isNodeParentOf({
         parent: blockId,
-        child: focusBlockId,
+        child: activeBlockId,
       });
-      if (!isDisabled) {
-        isDisabled = blockId === focusBlockId;
-      }
     } else {
-      isDisabled = parents[parents.length - 1] !== focusBlockId;
+      isDisabled = parents[parents.length - 1] !== activeBlockId;
       // If parent block is not focused, we try to see if the current block
       if (isDisabled) {
         isDisabled =
           parents[parents.length - 1] !==
-          blockTree.getDirectParentOf(focusBlockId);
+          blockTree.getDirectParentOf(activeBlockId);
       }
     }
   } else {
@@ -312,8 +312,7 @@ function useInteractableBlockController(args: {
     anchor: NormalizedAnchorRect;
   }) => void;
   columnsResizeContext?: ColumnsResizeContext;
-  setReorder: DocumentStoreState["setReorderCurrent"];
-  setReorderTarget: (targetBlock: BlockTreeReorderBoundingBox | null) => void;
+  setAction: DocumentStoreState["setAction"];
   commitReorder: () => void;
   updateBlocks: ReturnType<typeof useDocument>["updateBlocks"];
   documentBlocks: NonNullable<
@@ -330,8 +329,7 @@ function useInteractableBlockController(args: {
     onContextMenu,
     onClick,
     columnsResizeContext,
-    setReorder,
-    setReorderTarget,
+    setAction,
     commitReorder,
     updateBlocks,
     documentBlocks,
@@ -467,16 +465,20 @@ function useInteractableBlockController(args: {
 
       const pointerCanvasPosition = getPointerCanvasPosition(node);
       if (pointerCanvasPosition) {
-        setReorder({
-          position: pointerCanvasPosition,
-          blockIds: [blockId],
+        setAction({
+          type: "move-block",
+          current: {
+            position: pointerCanvasPosition,
+            blockIds: [blockId],
+          },
+          targetBlock: null,
         });
       }
       setIsDragging(true);
     },
     [
       disabled,
-      setReorder,
+      setAction,
       blockId,
       getPointerCanvasPosition,
       columnsResizeContext,
@@ -505,12 +507,19 @@ function useInteractableBlockController(args: {
       if (!pointerCanvasPosition) {
         return;
       }
-      setReorder({
-        position: pointerCanvasPosition,
-        blockIds: [blockId],
+      setAction((current) => {
+        const moveAction = asMoveBlockAction(current);
+        if (!moveAction) return current;
+        return {
+          ...moveAction,
+          current: {
+            position: pointerCanvasPosition,
+            blockIds: [blockId],
+          },
+        };
       });
     },
-    [disabled, setReorder, blockId, getPointerCanvasPosition]
+    [disabled, setAction, blockId, getPointerCanvasPosition]
   );
 
   const handleDragEnd = useCallback(
@@ -561,12 +570,11 @@ function useInteractableBlockController(args: {
     const node = groupRef.current;
     setIsDragging(false);
     setActiveColumnResize(null);
-    setReorder(null);
-    setReorderTarget(null);
+    setAction((current) => (asMoveBlockAction(current) ? null : current));
     if (node) {
       resetNodeDragPosition(node, dragStartPosition.current);
     }
-  }, [setReorder, setReorderTarget]);
+  }, [setAction]);
 
   const innerStroke = 0.01 * dpi;
   const outerStroke = 0.03 * dpi;
@@ -653,9 +661,12 @@ export function InteractableBlock({
   const commitReorder = useCallback(() => {
     if (!document) return;
     const state = documentStore.getState();
-    if (!state.reorder.current || !state.reorder.targetBlock) {
-      state.setReorderCurrent(null);
-      state.setReorderTarget(null);
+    const moveAction = selectMoveBlockAction(state);
+    if (!moveAction?.targetBlock) {
+      // No drop target — discard the in-flight move without mutating the doc.
+      state.setAction((current) =>
+        asMoveBlockAction(current) ? null : current
+      );
       return;
     }
 
@@ -670,7 +681,7 @@ export function InteractableBlock({
       const result = buildMoveUpdatesForReorder({
         document: docForMove,
         documentId: current.document.id,
-        reorder: state.reorder,
+        move: moveAction,
         blockTree,
       });
       if (!result) return current;
@@ -681,17 +692,10 @@ export function InteractableBlock({
       };
     });
 
-    state.setReorderCurrent(null);
-    state.setReorderTarget(null);
+    state.setAction((current) => (asMoveBlockAction(current) ? null : current));
   }, [document, documentStore, updateBlocks, blockTree]);
 
-  const { setReorder, setReorderTarget } = useStore(
-    documentStore,
-    useShallow((s) => ({
-      setReorder: s.setReorderCurrent,
-      setReorderTarget: s.setReorderTarget,
-    }))
-  );
+  const setAction = useStore(documentStore, (s) => s.setAction);
 
   const {
     assignGroupRef,
@@ -728,8 +732,7 @@ export function InteractableBlock({
     onContextMenu,
     onClick,
     columnsResizeContext,
-    setReorder,
-    setReorderTarget,
+    setAction,
     commitReorder,
     updateBlocks,
     documentBlocks: document,

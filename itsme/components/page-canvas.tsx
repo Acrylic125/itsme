@@ -5,7 +5,7 @@ import { Layer, Rect, Group, Stage } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { getPageLayoutMetrics } from "@/blocks/renderer";
-import { useDocument } from "@/blocks/document-context";
+import { asMoveBlockAction, selectMoveBlockAction, useDocument } from "@/blocks/document-context";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Button } from "./ui/button";
@@ -161,14 +161,15 @@ export function PageCanvas() {
 
 function ReorderLayer() {
   const { blockTree, documentStore } = useDocument();
-  const { reorderCurrent, reorderTarget, setReorderTarget } = useStore(
+  const { moveAction, setAction } = useStore(
     documentStore,
     useShallow((s) => ({
-      reorderCurrent: s.reorder.current,
-      reorderTarget: s.reorder.targetBlock,
-      setReorderTarget: s.setReorderTarget,
+      moveAction: selectMoveBlockAction(s),
+      setAction: s.setAction,
     }))
   );
+  const reorderCurrent = moveAction?.current ?? null;
+  const reorderTarget = moveAction?.targetBlock ?? null;
   const boxes = blockTree.getReorderBoundingBoxes();
   const [targetIndex, setTargetIndex] = useState(0);
 
@@ -231,8 +232,13 @@ function ReorderLayer() {
     ] ?? null;
 
   useEffect(() => {
-    setReorderTarget(nextReorderTarget);
-  }, [nextReorderTarget, setReorderTarget]);
+    setAction((current) => {
+      const moveAction = asMoveBlockAction(current);
+      if (!moveAction) return current;
+      if (moveAction.targetBlock === nextReorderTarget) return current;
+      return { ...moveAction, targetBlock: nextReorderTarget };
+    });
+  }, [nextReorderTarget, setAction]);
 
   /** Block ids whose full layout rect contains the pointer (not only edge target strips). */
   const blocksUnderPointer = useMemo(() => {

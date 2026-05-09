@@ -18,7 +18,11 @@ import {
 } from "@/components/shared-block";
 import { useStore } from "zustand/react";
 import { useShallow } from "zustand/react/shallow";
-import { useDocument } from "../document-context";
+import {
+  selectActiveBlockId,
+  selectFocusBlockId,
+  useDocument,
+} from "../document-context";
 
 function ListBlockComponent({
   blockId,
@@ -36,16 +40,17 @@ function ListBlockComponent({
   columnsResizeContext?: ColumnsResizeContext;
 }) {
   const { documentStore, blockTree } = useDocument();
-  const { focusBlock, focusBlockId } = useStore(
+  const { setAction, focusBlockId, activeBlockId } = useStore(
     documentStore,
     useShallow((s) => ({
-      focusBlock: s.focusBlock,
-      focusBlockId: s.focusBlockId,
+      setAction: s.setAction,
+      focusBlockId: selectFocusBlockId(s),
+      activeBlockId: selectActiveBlockId(s),
     }))
   );
 
   const isDisabled = useInteractableBlock({
-    focusBlockId,
+    activeBlockId,
     parents,
     blockId,
     blockTree,
@@ -61,7 +66,7 @@ function ListBlockComponent({
       disabled={isDisabled}
       inFocus={focusBlockId === blockId}
       columnsResizeContext={columnsResizeContext}
-      onClick={() => focusBlock(blockId)}
+      onClick={() => setAction({ type: "edit-block", blockId })}
     >
       {nodes}
     </InteractableBlock>
