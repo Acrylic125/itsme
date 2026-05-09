@@ -23,6 +23,7 @@ import type { Block } from "./blocks";
 import { BlockUpdateSchema } from "./updater";
 import {
   applyBlockMove,
+  applyInsertNewBlockAtDestination,
   isMoveIntoOwnSubtree,
   isNestedInsideBlock,
   type MoveBlockUpdate,
@@ -599,6 +600,152 @@ export function buildMoveUpdatesForReorder(args: {
   return { updates: [], nextDocument: next };
 }
 
+/** Places a new text/list block using the same drop targets as block reorder (merge excluded). */
+export function buildNextDocumentForAddBlockPlacement(args: {
+  document: Document;
+  blockTree: BlockTree;
+  blockType: "text" | "list";
+  targetBox: BlockTreeReorderBoundingBox;
+}): Document | null {
+  const { document, blockTree, blockType, targetBox } = args;
+  const newId = createClientId({ kind: blockType });
+  const newBlock: Block =
+    blockType === "text"
+      ? {
+          id: newId,
+          type: "text",
+          text: "",
+          align: "left",
+          style: "default",
+        }
+      : {
+          id: newId,
+          type: "list",
+          blocks: [],
+          bullet: { type: "normal", value: "-" },
+        };
+
+  const targetParent = findParentRef(document, targetBox.blockId);
+  if (!targetParent) {
+    return null;
+  }
+
+  if (targetBox.type === "top" || targetBox.type === "bottom") {
+    const offset = targetBox.type === "bottom" ? 1 : 0;
+    let destination: MoveBlockUpdate["destination"];
+    switch (targetParent.container) {
+      case "document":
+        destination = {
+          container: "document",
+          index: targetParent.index + offset,
+        };
+        break;
+      case "section":
+      case "list":
+        destination = {
+          container: targetParent.container,
+          parentBlockId: targetParent.parentBlockId,
+          index: targetParent.index + offset,
+        };
+        break;
+      case "columns":
+        destination = {
+          container: "columns",
+          parentBlockId: targetParent.parentBlockId,
+          index: targetParent.index + offset,
+          span: targetParent.span,
+        };
+        break;
+    }
+    return applyInsertNewBlockAtDestination(document, newBlock, destination);
+  }
+
+  if (targetParent.container === "columns") {
+    const columnsBlock = document.blocks.find(
+      (b): b is Extract<Document["blocks"][number], { type: "columns" }> =>
+        b.id === targetParent.parentBlockId && b.type === "columns"
+    );
+    if (!columnsBlock) {
+      return null;
+    }
+    const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
+    const currentTotalSpan =
+      columnsBlock.blocks.reduce((sum, child) => sum + child.span, 0) || 1;
+    const assumedNewWidth = Math.max(1, targetWidth * 0.45);
+    const newSpan = Math.max(
+      0.1,
+      currentTotalSpan * (assumedNewWidth / Math.max(1, targetWidth))
+    );
+    const destination: MoveBlockUpdate["destination"] = {
+      container: "columns",
+      parentBlockId: targetParent.parentBlockId,
+      index: targetParent.index + (targetBox.type === "right" ? 1 : 0),
+      span: newSpan,
+    };
+    return applyInsertNewBlockAtDestination(document, newBlock, destination);
+  }
+
+  const next = cloneDocument(document);
+  next.blocks.push(newBlock);
+
+  const targetParentMutable = findParentRef(next, targetBox.blockId);
+  if (!targetParentMutable) {
+    return null;
+  }
+
+  const newColumnsId = createClientId({ kind: "columns" });
+  const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
+  const assumedNewWidth = Math.max(1, targetWidth * 0.45);
+  const movingSpan = Math.max(0.1, assumedNewWidth / Math.max(1, targetWidth));
+  const targetSpan = 1;
+  const orderedChildren =
+    targetBox.type === "left"
+      ? [
+          { blockId: newBlock.id, span: movingSpan },
+          { blockId: targetBox.blockId, span: targetSpan },
+        ]
+      : [
+          { blockId: targetBox.blockId, span: targetSpan },
+          { blockId: newBlock.id, span: movingSpan },
+        ];
+
+  const newColumnsBlock: Extract<
+    Document["blocks"][number],
+    { type: "columns" }
+  > = {
+    type: "columns",
+    id: newColumnsId,
+    blocks: orderedChildren,
+  };
+  next.blocks.push(newColumnsBlock);
+
+  if (targetParentMutable.container === "document") {
+    next.layout[targetParentMutable.index] = newColumnsId;
+  } else {
+    const parentBlock = next.blocks.find(
+      (b) => b.id === targetParentMutable.parentBlockId
+    );
+    if (!parentBlock) {
+      return null;
+    }
+    if (
+      targetParentMutable.container === "section" &&
+      parentBlock.type === "section"
+    ) {
+      parentBlock.blocks[targetParentMutable.index] = newColumnsId;
+    } else if (
+      targetParentMutable.container === "list" &&
+      parentBlock.type === "list"
+    ) {
+      parentBlock.blocks[targetParentMutable.index] = newColumnsId;
+    } else {
+      return null;
+    }
+  }
+
+  return next;
+}
+
 /**
  * The single in-flight user interaction with the document.
  *
@@ -624,8 +771,8 @@ export type DocumentStoreAction =
       blockType: "text" | "list";
       current: {
         position: Pos;
-        blockIds: string[];
       } | null;
+      targetBlock: BlockTreeReorderBoundingBox | null;
     };
 
 export type DocumentStoreEditBlockAction = Extract<
@@ -726,7 +873,7 @@ export function selectActiveBlockId(state: DocumentStoreState): string | null {
     case "move-block":
       return action.current.blockIds[0] ?? null;
     case "add-block":
-      return action.current?.blockIds[0] ?? null;
+      return null;
   }
 }
 

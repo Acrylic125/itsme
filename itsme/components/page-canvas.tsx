@@ -1,16 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Layer, Rect, Group, Stage } from "react-konva";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Layer, Rect, Group, Stage, Text } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { getPageLayoutMetrics } from "@/blocks/renderer";
-import { asMoveBlockAction, selectMoveBlockAction, useDocument } from "@/blocks/document-context";
-import { useShallow } from "zustand/react/shallow";
+import type { BlockTreeReorderBoundingBox } from "@/blocks/renderer-types";
+import {
+  asAddBlockAction,
+  asMoveBlockAction,
+  buildNextDocumentForAddBlockPlacement,
+  selectAddBlockAction,
+  selectMoveBlockAction,
+  useDocument,
+} from "@/blocks/document-context";
 import { useStore } from "zustand/react";
-import { Button } from "./ui/button";
-import { ListBulletIcon, TextIcon } from "@radix-ui/react-icons";
-import { FavIcon } from "./icon/favicon";
+import { cn } from "@/lib/utils";
+import { CanvasReorderTargetLayer } from "./canvas-reorder-target-layer";
+import { PageCanvasToolbar } from "./page-canvas-toolbar";
 
 export function PageCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -24,7 +31,31 @@ export function PageCanvas() {
     dpr: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
   });
 
-  const { blocks, dpi, document } = useDocument();
+  const { blocks, dpi, document, documentStore } = useDocument();
+  const [canvasPointerInside, setCanvasPointerInside] = useState(false);
+  const isAddPlacementMode = useStore(
+    documentStore,
+    (s) => asAddBlockAction(s.action) != null
+  );
+
+  const toggleAddBlockMode = useCallback(
+    (blockType: "text" | "list") => {
+      const { action } = documentStore.getState();
+      const cur = asAddBlockAction(action);
+      documentStore.setState({
+        action:
+          cur?.blockType === blockType
+            ? null
+            : {
+                type: "add-block",
+                blockType,
+                current: null,
+                targetBlock: null,
+              },
+      });
+    },
+    [documentStore]
+  );
   const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(() => {
     if (!document) {
       return {
@@ -82,35 +113,18 @@ export function PageCanvas() {
 
   return (
     <div className="flex-1 h-screen-safe relative overflow-y-auto flex flex-col w-full items-center">
-      <div className="w-full flex flex-row justify-between items-center sticky top-0 z-10 bg-background border-b p-2">
-        <div className="flex-1 flex flex-row gap-1.5 items-center px-2">
-          <div className="size-6">
-            <FavIcon />
-          </div>
-          <p className="font-extrabold">ITSME</p>
-        </div>
-        <div className="flex-1 flex flex-row gap-2 items-center justify-center">
-          <Button variant="outline">
-            <div className="flex flex-row items-center gap-2">
-              <TextIcon />
-              <span>Text</span>
-            </div>
-          </Button>
-          <Button variant="outline">
-            <div className="flex flex-row items-center gap-2">
-              <ListBulletIcon />
-              <span>List</span>
-            </div>
-          </Button>
-        </div>
-        <div className="flex-1 flex flex-row gap-1 justify-end">
-          <Button variant="outline">Refine</Button>
-          <Button>Download</Button>
-        </div>
-      </div>
+      <PageCanvasToolbar
+        onToggleAddText={() => toggleAddBlockMode("text")}
+        onToggleAddList={() => toggleAddBlockMode("list")}
+      />
       <div
-        className="w-full max-w-7xl overflow-x-hidden h-fit absolute mt-10"
+        className={cn(
+          "w-full max-w-7xl overflow-x-hidden h-fit absolute mt-10",
+          isAddPlacementMode && canvasPointerInside && "cursor-crosshair"
+        )}
         ref={containerRef}
+        onMouseEnter={() => setCanvasPointerInside(true)}
+        onMouseLeave={() => setCanvasPointerInside(false)}
       >
         <Stage
           width={stageWidth * scale}
@@ -150,7 +164,12 @@ export function PageCanvas() {
               {blocks.map((block) => (
                 <Group key={block.id}>{block.component()}</Group>
               ))}
-              <ReorderLayer />
+              <MoveReorderLayer />
+              <AddBlockPlacementLayer
+                scale={scale}
+                stageWidth={stageWidth}
+                stageHeight={stageHeight}
+              />
             </Group>
           </Layer>
         </Stage>
@@ -159,191 +178,162 @@ export function PageCanvas() {
   );
 }
 
-function ReorderLayer() {
-  const { blockTree, documentStore } = useDocument();
-  const { moveAction, setAction } = useStore(
-    documentStore,
-    useShallow((s) => ({
-      moveAction: selectMoveBlockAction(s),
-      setAction: s.setAction,
-    }))
-  );
-  const reorderCurrent = moveAction?.current ?? null;
-  const reorderTarget = moveAction?.targetBlock ?? null;
-  const boxes = blockTree.getReorderBoundingBoxes();
-  const [targetIndex, setTargetIndex] = useState(0);
+function MoveReorderLayer() {
+  const { documentStore } = useDocument();
+  const moveAction = useStore(documentStore, selectMoveBlockAction);
+  const setAction = useStore(documentStore, (s) => s.setAction);
 
-  const intersectionTargets = useMemo(() => {
-    const targets: (typeof boxes)[number][] = [];
-    if (reorderCurrent === null) {
-      return targets;
-    }
-
-    for (let i = boxes.length - 1; i >= 0; i -= 1) {
-      const box = boxes[i];
-      if (
-        reorderCurrent.position.x >= box.target.from.x &&
-        reorderCurrent.position.x <= box.target.to.x &&
-        reorderCurrent.position.y >= box.target.from.y &&
-        reorderCurrent.position.y <= box.target.to.y
-      ) {
-        targets.push(box);
-      }
-    }
-    return targets;
-  }, [boxes, reorderCurrent]);
-
-  const intersectionSignature = useMemo(
-    () =>
-      intersectionTargets
-        .map(
-          (box) =>
-            `${box.blockId}:${box.type}:${box.target.from.x}:${box.target.from.y}:${box.target.to.x}:${box.target.to.y}`
-        )
-        .join("|"),
-    [intersectionTargets]
-  );
-
-  useEffect(() => {
-    const resetTimer = window.setTimeout(() => {
-      setTargetIndex(0);
-    }, 0);
-    if (intersectionTargets.length <= 1) {
-      return () => window.clearTimeout(resetTimer);
-    }
-    const timer = window.setInterval(() => {
-      setTargetIndex((prev) => {
-        if (prev >= intersectionTargets.length - 1) {
-          window.clearInterval(timer);
-          return prev;
-        }
-        return prev + 1;
+  const syncMoveTarget = useCallback(
+    (target: BlockTreeReorderBoundingBox | null) => {
+      setAction((current) => {
+        const m = asMoveBlockAction(current);
+        if (!m) return current;
+        if (m.targetBlock === target) return current;
+        return { ...m, targetBlock: target };
       });
-    }, 600);
-    return () => {
-      window.clearTimeout(resetTimer);
-      window.clearInterval(timer);
-    };
-  }, [intersectionSignature, intersectionTargets.length]);
+    },
+    [setAction]
+  );
 
-  const nextReorderTarget =
-    intersectionTargets[
-      Math.min(targetIndex, intersectionTargets.length - 1)
-    ] ?? null;
+  if (!moveAction) {
+    return null;
+  }
 
-  useEffect(() => {
-    setAction((current) => {
-      const moveAction = asMoveBlockAction(current);
-      if (!moveAction) return current;
-      if (moveAction.targetBlock === nextReorderTarget) return current;
-      return { ...moveAction, targetBlock: nextReorderTarget };
+  return (
+    <CanvasReorderTargetLayer
+      pointerCanvasPos={moveAction.current.position}
+      onActiveTargetChange={syncMoveTarget}
+    />
+  );
+}
+
+function AddBlockPlacementLayer({
+  scale,
+  stageWidth,
+  stageHeight,
+}: {
+  scale: number;
+  stageWidth: number;
+  stageHeight: number;
+}) {
+  const { documentStore, updateBlocks, blockTree, document } = useDocument();
+  const addAction = useStore(documentStore, selectAddBlockAction);
+  const setAction = useStore(documentStore, (s) => s.setAction);
+
+  const pointer = addAction?.current?.position ?? null;
+  const blockLabel = addAction?.blockType === "list" ? "List" : "Text";
+
+  const syncAddTarget = useCallback(
+    (target: BlockTreeReorderBoundingBox | null) => {
+      setAction((c) => {
+        const a = asAddBlockAction(c);
+        if (!a) return c;
+        if (a.targetBlock === target) return c;
+        return { ...a, targetBlock: target };
+      });
+    },
+    [setAction]
+  );
+
+  const commitPlacement = useCallback(() => {
+    const add = asAddBlockAction(documentStore.getState().action);
+    if (!document || !add?.targetBlock) {
+      return;
+    }
+    const targetBox = add.targetBlock;
+    const blockType = add.blockType;
+    updateBlocks((current) => {
+      const docForPlace = {
+        name: current.document.name,
+        pageSize: document.pageSize,
+        styleSheet: document.styleSheet,
+        blocks: current.blocks,
+        layout: current.layout,
+      };
+      const nextDoc = buildNextDocumentForAddBlockPlacement({
+        document: docForPlace,
+        blockTree,
+        blockType,
+        targetBox,
+      });
+      if (!nextDoc) {
+        return current;
+      }
+      return {
+        ...current,
+        blocks: nextDoc.blocks,
+        layout: nextDoc.layout as typeof current.layout,
+      };
     });
-  }, [nextReorderTarget, setAction]);
+    setAction(null);
+  }, [blockTree, document, documentStore, setAction, updateBlocks]);
 
-  /** Block ids whose full layout rect contains the pointer (not only edge target strips). */
-  const blocksUnderPointer = useMemo(() => {
-    const set = new Set<string>();
-    if (reorderCurrent === null) {
-      return set;
-    }
-    const byId = new Map<string, (typeof boxes)[number][]>();
-    for (const b of boxes) {
-      const list = byId.get(b.blockId);
-      if (list) {
-        list.push(b);
-      } else {
-        byId.set(b.blockId, [b]);
-      }
-    }
-    const { x: px, y: py } = reorderCurrent.position;
-    for (const [, blockBoxes] of byId) {
-      const top = blockBoxes.find((b) => b.type === "top");
-      const bottom = blockBoxes.find((b) => b.type === "bottom");
-      if (!top || !bottom) continue;
-      const x0 = top.visual.from.x;
-      const y0 = top.visual.from.y;
-      const x1 = bottom.visual.to.x;
-      const y1 = bottom.visual.to.y;
-      if (px >= x0 && px <= x1 && py >= y0 && py <= y1) {
-        set.add(top.blockId);
-      }
-    }
-    return set;
-  }, [boxes, reorderCurrent]);
-
-  if (reorderCurrent === null) {
+  if (!addAction) {
     return null;
   }
 
   return (
     <>
-      {/* Any block the pointer is over: show edge strips that are not hit targets / not active */}
-      {boxes.map((box) => {
-        if (!blocksUnderPointer.has(box.blockId)) {
-          return null;
-        }
-        if (
-          intersectionTargets.some(
-            (t) => t.blockId === box.blockId && t.type === box.type
-          )
-        ) {
-          return null;
-        }
-        const isActive =
-          reorderTarget != null &&
-          reorderTarget.blockId === box.blockId &&
-          reorderTarget.type === box.type;
-        if (isActive) {
-          return null;
-        }
-        return (
+      <CanvasReorderTargetLayer
+        pointerCanvasPos={pointer}
+        onActiveTargetChange={syncAddTarget}
+      />
+      {pointer && (
+        <Group x={pointer.x + 14} y={pointer.y + 14} listening={false}>
           <Rect
-            key={`hover-edge-${box.blockId}-${box.type}`}
-            x={box.visual.from.x}
-            y={box.visual.from.y}
-            width={box.visual.to.x - box.visual.from.x}
-            height={box.visual.to.y - box.visual.from.y}
-            fill="#51A2FF"
-            perfectDrawEnabled={false}
-            listening={false}
+            width={140}
+            height={40}
+            stroke="#ea580c"
+            strokeWidth={2}
+            dash={[5, 5]}
+            cornerRadius={4}
+            fill="rgba(255,255,255,0.92)"
           />
-        );
-      })}
-      {/* Edge target strips currently under the pointer (excluding active — drawn last) */}
-      {intersectionTargets.map((box) => {
-        const isActive =
-          reorderTarget != null &&
-          reorderTarget.blockId === box.blockId &&
-          reorderTarget.type === box.type;
-        if (isActive) {
-          return null;
-        }
-        return (
-          <Rect
-            key={`potential-${box.blockId}-${box.type}`}
-            x={box.visual.from.x}
-            y={box.visual.from.y}
-            width={box.visual.to.x - box.visual.from.x}
-            height={box.visual.to.y - box.visual.from.y}
-            fill="#51A2FF"
-            perfectDrawEnabled={false}
-            listening={false}
+          <Text
+            text={blockLabel}
+            width={140}
+            height={40}
+            align="center"
+            verticalAlign="middle"
+            fontSize={24}
+            fontFamily="system-ui, sans-serif"
+            fill="#0f172a"
           />
-        );
-      })}
-      {reorderTarget && (
-        <Rect
-          key={`active-${reorderTarget.blockId}-${reorderTarget.type}`}
-          x={reorderTarget.visual.from.x}
-          y={reorderTarget.visual.from.y}
-          width={reorderTarget.visual.to.x - reorderTarget.visual.from.x}
-          height={reorderTarget.visual.to.y - reorderTarget.visual.from.y}
-          fill="#ea580c"
-          opacity={0.9}
-          perfectDrawEnabled={false}
-          listening={false}
-        />
+        </Group>
       )}
+      <Rect
+        x={0}
+        y={0}
+        width={stageWidth}
+        height={stageHeight}
+        fill="transparent"
+        onMouseMove={(e) => {
+          const stage = e.target.getStage();
+          const p = stage?.getPointerPosition();
+          if (!p) return;
+          setAction((c) => {
+            const a = asAddBlockAction(c);
+            if (!a) return c;
+            return {
+              ...a,
+              current: {
+                position: { x: p.x / scale, y: p.y / scale },
+              },
+            };
+          });
+        }}
+        onMouseLeave={() => {
+          setAction((c) => {
+            const a = asAddBlockAction(c);
+            if (!a) return c;
+            return { ...a, current: null, targetBlock: null };
+          });
+        }}
+        onClick={(e) => {
+          e.cancelBubble = true;
+          commitPlacement();
+        }}
+      />
     </>
   );
 }

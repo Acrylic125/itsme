@@ -30,6 +30,9 @@ import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
 import { useDebouncedCallback } from "use-debounce";
 
+/** Shown only when `block.text` is empty; not persisted and not used as edit initial value. */
+const EMPTY_TEXT_DISPLAY = "Click to set text";
+
 export function EditTextModal({
   closePopup,
   block,
@@ -185,13 +188,13 @@ function TextBlockComponent({
           y={0}
           width={dimensions.width}
           height={dimensions.height}
-          text={block.text}
+          text={block.text === "" ? EMPTY_TEXT_DISPLAY : block.text}
           fontFamily={style.fontFamily}
           fontSize={fontSizePx}
           lineHeight={style.lineHeight}
           fontStyle={style.fontWeight === "bold" ? "bold" : "normal"}
           align={block.align}
-          fill="#000000"
+          fill={block.text === "" ? "#9a9a9a" : "#000000"}
           perfectDrawEnabled={false}
         />
         {anchor && isEditingThisBlock && (
@@ -246,8 +249,10 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     const style = ctx.styleSheet.text[block.style];
     // Text styles are authored in points; renderer layout works in canvas pixels.
     const fontSizePx = (style.fontSize * ctx.dpi) / 72;
+    const layoutSourceText =
+      block.text === "" ? EMPTY_TEXT_DISPLAY : block.text;
     const prepared = prepare(
-      block.text,
+      layoutSourceText,
       `${style.fontWeight} ${fontSizePx}px ${style.fontFamily}`
     );
     const { lineCount } = layout(prepared, relativeTo.width, style.lineHeight);

@@ -402,3 +402,112 @@ export function applyBlockMove(
 
   return next;
 }
+
+function clampInsertIndex(index: number, length: number): number {
+  return Math.max(0, Math.min(index, length));
+}
+
+/** Inserts a new block row and splices its id into the destination container (no move/remove). */
+export function applyInsertNewBlockAtDestination(
+  doc: Document,
+  newBlock: Document["blocks"][number],
+  destination: MoveBlockUpdate["destination"]
+): Document {
+  const next: Document = {
+    ...doc,
+    layout: [...doc.layout],
+    blocks: doc.blocks.map((block) => {
+      switch (block.type) {
+        case "section":
+        case "list":
+          return { ...block, blocks: [...block.blocks] };
+        case "columns":
+          return {
+            ...block,
+            blocks: block.blocks.map((child) => ({ ...child })),
+          };
+        case "text":
+          return block;
+      }
+    }),
+  };
+
+  next.blocks.push(newBlock);
+
+  const maxIndexForInsert = (() => {
+    switch (destination.container) {
+      case "document":
+        return next.layout.length;
+      case "section": {
+        const p = next.blocks.find(
+          (
+            b
+          ): b is Extract<
+            Document["blocks"][number],
+            { type: "section" }
+          > =>
+            b.id === destination.parentBlockId && b.type === "section"
+        );
+        return p?.blocks.length ?? 0;
+      }
+      case "list": {
+        const p = next.blocks.find(
+          (
+            b
+          ): b is Extract<Document["blocks"][number], { type: "list" }> =>
+            b.id === destination.parentBlockId && b.type === "list"
+        );
+        return p?.blocks.length ?? 0;
+      }
+      case "columns": {
+        const p = next.blocks.find(
+          (
+            b
+          ): b is Extract<
+            Document["blocks"][number],
+            { type: "columns" }
+          > =>
+            b.id === destination.parentBlockId && b.type === "columns"
+        );
+        return p?.blocks.length ?? 0;
+      }
+    }
+  })();
+
+  const idx = clampInsertIndex(destination.index, maxIndexForInsert);
+
+  switch (destination.container) {
+    case "document":
+      next.layout.splice(idx, 0, newBlock.id);
+      break;
+    case "section": {
+      const parent = next.blocks.find(
+        (b) => b.id === destination.parentBlockId && b.type === "section"
+      );
+      if (!parent || parent.type !== "section") return doc;
+      parent.blocks.splice(idx, 0, newBlock.id);
+      break;
+    }
+    case "list": {
+      const parent = next.blocks.find(
+        (b) => b.id === destination.parentBlockId && b.type === "list"
+      );
+      if (!parent || parent.type !== "list") return doc;
+      parent.blocks.splice(idx, 0, newBlock.id);
+      break;
+    }
+    case "columns": {
+      const parent = next.blocks.find(
+        (b) => b.id === destination.parentBlockId && b.type === "columns"
+      );
+      if (!parent || parent.type !== "columns") return doc;
+      parent.blocks.splice(idx, 0, {
+        blockId: newBlock.id,
+        span: destination.span,
+      });
+      break;
+    }
+  }
+
+  return next;
+}
