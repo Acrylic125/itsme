@@ -24,6 +24,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
 import type { DocumentStoreState } from "@/blocks/document-context";
+import { useDebouncedCallback } from "use-debounce";
 
 export function EditTextModal({
   closePopup,
@@ -35,35 +36,50 @@ export function EditTextModal({
   const { updateBlocks } = useDocument();
   const [text, setText] = useState(block.text);
 
-  const handleSave = useCallback(() => {
-    updateBlocks((current) => {
-      const nextBlocks = current.blocks.map((b) => {
-        if (b.id !== block.id) return b;
-        if (b.type !== "text") return b;
-        return {
-          ...b,
-          text,
-          align: block.align,
-          style: block.style,
-        };
+  const debouncedSave = useDebouncedCallback(
+    (nextText: string) => {
+      updateBlocks((current) => {
+        const nextBlocks = current.blocks.map((b) => {
+          if (b.id !== block.id) return b;
+          if (b.type !== "text") return b;
+          return {
+            ...b,
+            text: nextText,
+            align: block.align,
+            style: block.style,
+          };
+        });
+        return { ...current, blocks: nextBlocks };
       });
-      return { ...current, blocks: nextBlocks };
-    });
-    closePopup();
-  }, [updateBlocks, block.id, block.align, block.style, text, closePopup]);
+    },
+    500,
+    { maxWait: 1500 }
+  );
+
+  useEffect(() => {
+    return () => {
+      // Ensure latest edits are persisted when closing/unmounting.
+      debouncedSave.flush();
+    };
+  }, [debouncedSave]);
+
+  const handleChange = useCallback(
+    (nextText: string) => {
+      setText(nextText);
+      debouncedSave(nextText);
+    },
+    [debouncedSave]
+  );
 
   return (
     <div className="flex flex-col gap-2 border border-border bg-card p-4 rounded-xl shadow-xl">
       <Textarea
         className="w-full"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => handleChange(e.target.value)}
         rows={6}
       />
       <div className="flex gap-2">
-        <Button className="w-fit" type="button" onClick={handleSave}>
-          Save
-        </Button>
         <Button
           className="w-fit"
           type="button"
