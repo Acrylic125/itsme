@@ -50,6 +50,64 @@ type UpdateDocumentBlocksInput = {
 };
 type BlockSyncAction = UpdateDocumentBlocksInput["blocks"][number];
 
+const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
+
+function isClientId(id: string): boolean {
+  return id.startsWith(CLIENT_ID_PREFIX);
+}
+
+function createClientId(args: { kind: string }): string {
+  const token =
+    typeof nanoid === "function"
+      ? nanoid()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${CLIENT_ID_PREFIX}${args.kind}-${token}`;
+}
+
+function reconcileSnapshotClientIds(
+  snapshot: DocumentBlocksSnapshot,
+  mapping: Map<string, string>
+): DocumentBlocksSnapshot {
+  if (mapping.size === 0) return snapshot;
+
+  const remap = (id: string): string => mapping.get(id) ?? id;
+
+  return {
+    ...snapshot,
+    layout: snapshot.layout.map((id) => remap(id)) as Id<"blocks">[],
+    blocks: snapshot.blocks.map((block) => {
+      const id = remap(block.id);
+      const ref = block.ref ? remap(block.ref) : undefined;
+      switch (block.type) {
+        case "text":
+          return { ...block, id, ...(ref ? { ref } : {}) };
+        case "section":
+        case "list":
+          return {
+            ...block,
+            id,
+            blocks: block.blocks.map((childId) => remap(childId)),
+            ...(ref ? { ref } : {}),
+          };
+        case "columns":
+          return {
+            ...block,
+            id,
+            blocks: block.blocks.map((child) => ({
+              ...child,
+              blockId: remap(child.blockId),
+            })),
+            ...(ref ? { ref } : {}),
+          };
+      }
+    }),
+    document: {
+      ...snapshot.document,
+      id: remap(snapshot.document.id) as Id<"documents">,
+    },
+  };
+}
+
 function areBlocksEqual(a: Block, b: Block): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -122,26 +180,26 @@ type ConvexBlockRowData =
       text: string;
       align: "left" | "center" | "right";
       style: "default" | "h1" | "h2" | "h3";
-      ref?: Id<"blocks">;
+      ref?: string;
     }
   | {
       type: "section";
-      children: Id<"blocks">[];
-      ref?: Id<"blocks">;
+      children: string[];
+      ref?: string;
     }
   | {
       type: "columns";
-      children: { span: number; blockId: Id<"blocks"> }[];
-      ref?: Id<"blocks">;
+      children: { span: number; blockId: string }[];
+      ref?: string;
     }
   | {
       type: "list";
-      children: Id<"blocks">[];
+      children: string[];
       bulletType: "normal" | "alphabetical" | "numerical";
       bulletValue?: string;
       leftSpace?: number;
       rightSpace?: number;
-      ref?: Id<"blocks">;
+      ref?: string;
     };
 
 function clientBlockToConvexData(block: Block): ConvexBlockRowData {
@@ -152,43 +210,43 @@ function clientBlockToConvexData(block: Block): ConvexBlockRowData {
         text: block.text,
         align: block.align,
         style: block.style,
-        ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+        ref: block.ref ? block.ref : undefined,
       };
     case "section":
       return {
         type: "section",
-        children: block.blocks.map((id) => id as Id<"blocks">),
-        ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+        children: block.blocks,
+        ref: block.ref ? block.ref : undefined,
       };
     case "columns":
       return {
         type: "columns",
         children: block.blocks.map((c) => ({
           span: c.span,
-          blockId: c.blockId as Id<"blocks">,
+          blockId: c.blockId,
         })),
-        ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+        ref: block.ref ? block.ref : undefined,
       };
     case "list": {
       const bullet = block.bullet;
       if (bullet.type === "normal") {
         return {
           type: "list",
-          children: block.blocks.map((id) => id as Id<"blocks">),
+          children: block.blocks,
           bulletType: "normal" as const,
           bulletValue: bullet.value,
           leftSpace: block.leftSpace,
           rightSpace: block.rightSpace,
-          ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+          ref: block.ref ? block.ref : undefined,
         };
       }
       return {
         type: "list",
-        children: block.blocks.map((id) => id as Id<"blocks">),
+        children: block.blocks,
         bulletType: bullet.type,
         leftSpace: block.leftSpace,
         rightSpace: block.rightSpace,
-        ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+        ref: block.ref ? block.ref : undefined,
       };
     }
     default: {
@@ -199,7 +257,7 @@ function clientBlockToConvexData(block: Block): ConvexBlockRowData {
 }
 
 type UpdateDocumentBlocksAction =
-  | { type: "create"; data: ConvexBlockRowData }
+  | { type: "create"; clientId?: string; data: ConvexBlockRowData }
   | { type: "update"; blockId: Id<"blocks">; data: ConvexBlockRowData }
   | { type: "delete"; blockId: Id<"blocks"> };
 
@@ -217,7 +275,11 @@ function blockSyncActionsToMutationActions(
     }
     const data = clientBlockToConvexData(action.block);
     if (action.type === "create") {
-      out.push({ type: "create", data });
+      out.push({
+        type: "create",
+        ...(isClientId(action.block.id) ? { clientId: action.block.id } : {}),
+        data,
+      });
     } else {
       out.push({
         type: "update",
@@ -483,10 +545,7 @@ export function buildMoveUpdatesForReorder(args: {
     return null;
   }
 
-  const newColumnsId =
-    typeof nanoid === "function"
-      ? `columns-${nanoid()}`
-      : `columns-${Date.now()}`;
+  const newColumnsId = createClientId({ kind: "columns" });
   const movingWidth = getBlockWidthPx(blockTree, movingBlockId);
   const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
   const movingSpan = Math.max(0.1, movingWidth / Math.max(1, targetWidth));
@@ -590,9 +649,7 @@ export type DocumentStoreState = {
     action:
       | DocumentStoreAction
       | null
-      | ((
-          current: DocumentStoreAction | null
-        ) => DocumentStoreAction | null)
+      | ((current: DocumentStoreAction | null) => DocumentStoreAction | null)
   ) => void;
 };
 
@@ -723,6 +780,9 @@ export function DocumentStoresProvider({
   const commitTimerRef = useRef<ReturnType<
     typeof globalThis.setTimeout
   > | null>(null);
+  const inFlightCommitRef = useRef<Promise<unknown> | null>(null);
+  const pendingCommitRef = useRef(false);
+  const clientIdToBlockIdRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     modifiedBlocksRef.current = modifiedBlocks;
@@ -734,6 +794,8 @@ export function DocumentStoresProvider({
     }
   }, [blocksQuery.status, blocksQuery.data]);
 
+  const commitModifiedBlocksRef = useRef<(() => void) | null>(null);
+
   const commitModifiedBlocks = useCallback(() => {
     const modified = modifiedBlocksRef.current;
     const server = blocksQueryDataRef.current;
@@ -741,18 +803,31 @@ export function DocumentStoresProvider({
       return;
     }
 
+    // Serialize commits so we can reconcile client ids (CLIENT_ID:...) as soon as
+    // the server responds with real ids, before computing the next diff.
+    if (inFlightCommitRef.current) {
+      pendingCommitRef.current = true;
+      return;
+    }
+
+    const mapping = clientIdToBlockIdRef.current;
+    const reconciledModified = reconcileSnapshotClientIds(modified, mapping);
+
     const serverDoc = toDiffDocument(server);
-    const modifiedDoc = toDiffDocument(modified);
+    const modifiedDoc = toDiffDocument(reconciledModified);
     const blockActions = buildDocumentBlockDiff(serverDoc, modifiedDoc);
     const mutationActions = blockSyncActionsToMutationActions(blockActions);
-    const layoutPatch = layoutPatchIfChanged(server.layout, modified.layout);
+    const layoutPatch = layoutPatchIfChanged(
+      server.layout,
+      reconciledModified.layout
+    );
 
     if (mutationActions.length === 0 && layoutPatch === undefined) {
       setModifiedBlocks(null);
       return;
     }
 
-    const optimisticSnapshot = structuredClone(modified);
+    const optimisticSnapshot = structuredClone(reconciledModified);
 
     const run = updateDocumentBlocksMutation.withOptimisticUpdate(
       (localStore) => {
@@ -772,16 +847,44 @@ export function DocumentStoresProvider({
       }
     );
 
-    void run({
+    const promise = run({
       documentId: convexDocumentId,
       actions: mutationActions,
       ...(layoutPatch !== undefined ? { layout: layoutPatch } : {}),
-    }).catch((error) => {
-      console.error("Failed to update document blocks", error);
-    });
+    })
+      .then((result) => {
+        // If the server returns client-id mappings, persist them so the next
+        // debounced commit will use real ids.
+        const maybe = result as {
+          clientIdToBlockId?: Record<string, string>;
+        } | null;
+        const next = maybe?.clientIdToBlockId;
+        if (next) {
+          for (const [clientId, blockId] of Object.entries(next)) {
+            if (isClientId(clientId)) {
+              clientIdToBlockIdRef.current.set(clientId, blockId);
+            }
+          }
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to update document blocks", error);
+      })
+      .finally(() => {
+        inFlightCommitRef.current = null;
+        if (pendingCommitRef.current) {
+          pendingCommitRef.current = false;
+          commitModifiedBlocksRef.current?.();
+        }
+      });
+    inFlightCommitRef.current = promise;
 
     setModifiedBlocks(null);
   }, [convexDocumentId, updateDocumentBlocksMutation]);
+
+  useEffect(() => {
+    commitModifiedBlocksRef.current = commitModifiedBlocks;
+  }, [commitModifiedBlocks]);
 
   const scheduleCommit = useCallback(() => {
     if (commitTimerRef.current !== null) {

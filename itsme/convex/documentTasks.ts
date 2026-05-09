@@ -28,7 +28,15 @@ const listBulletType = v.union(
   v.literal("numerical")
 );
 
-const blockDataValidator = v.union(
+const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
+
+function isClientId(id: string): boolean {
+  return id.startsWith(CLIENT_ID_PREFIX);
+}
+
+const blockIdLike = v.string();
+
+export const blockDataValidator = v.union(
   v.object({
     type: v.literal("text"),
     text: v.string(),
@@ -62,9 +70,111 @@ const blockDataValidator = v.union(
   })
 );
 
+// Same shape as `blockDataValidator`, but accepts client-generated ids as strings.
+const blockDataWithClientIdsValidator = v.union(
+  v.object({
+    type: v.literal("text"),
+    text: v.string(),
+    align: textAlign,
+    style: textStyle,
+    ref: v.optional(blockIdLike),
+  }),
+  v.object({
+    type: v.literal("section"),
+    children: v.array(blockIdLike),
+    ref: v.optional(blockIdLike),
+  }),
+  v.object({
+    type: v.literal("columns"),
+    children: v.array(
+      v.object({
+        span: v.number(),
+        blockId: blockIdLike,
+      })
+    ),
+    ref: v.optional(blockIdLike),
+  }),
+  v.object({
+    type: v.literal("list"),
+    children: v.array(blockIdLike),
+    bulletType: listBulletType,
+    bulletValue: v.optional(v.string()),
+    leftSpace: v.optional(v.float64()),
+    rightSpace: v.optional(v.float64()),
+    ref: v.optional(blockIdLike),
+  })
+);
+
+function collectReferencedIdsFromBlockData(
+  data: (typeof blockDataWithClientIdsValidator)["type"]
+): string[] {
+  if (data.type === "text") return data.ref ? [data.ref] : [];
+  if (data.type === "section" || data.type === "list") {
+    return [...data.children, ...(data.ref ? [data.ref] : [])];
+  }
+  return [
+    ...data.children.map((c) => c.blockId),
+    ...(data.ref ? [data.ref] : []),
+  ];
+}
+
+function remapBlockDataClientIds(args: {
+  data: (typeof blockDataWithClientIdsValidator)["type"];
+  idMap: Map<string, Id<"blocks">>;
+}): (typeof blockDataValidator)["type"] {
+  const remap = (id: string | undefined): Id<"blocks"> | undefined => {
+    if (!id) return undefined;
+    if (isClientId(id)) {
+      const mapped = args.idMap.get(id);
+      if (!mapped) {
+        throw new Error(`Unresolved client id '${id}'.`);
+      }
+      return mapped;
+    }
+    return id as Id<"blocks">;
+  };
+
+  if (args.data.type === "text") {
+    return {
+      type: "text",
+      text: args.data.text,
+      align: args.data.align,
+      style: args.data.style,
+      ref: remap(args.data.ref),
+    };
+  }
+  if (args.data.type === "section") {
+    return {
+      type: "section",
+      children: args.data.children.map((id) => remap(id)!) as Id<"blocks">[],
+      ref: remap(args.data.ref),
+    };
+  }
+  if (args.data.type === "columns") {
+    return {
+      type: "columns",
+      children: args.data.children.map((c) => ({
+        span: c.span,
+        blockId: remap(c.blockId)!,
+      })),
+      ref: remap(args.data.ref),
+    };
+  }
+  return {
+    type: "list",
+    children: args.data.children.map((id) => remap(id)!) as Id<"blocks">[],
+    bulletType: args.data.bulletType,
+    bulletValue: args.data.bulletValue,
+    leftSpace: args.data.leftSpace,
+    rightSpace: args.data.rightSpace,
+    ref: remap(args.data.ref),
+  };
+}
+
 async function requireIdentity(ctx: {
   auth: { getUserIdentity: () => Promise<unknown | null> };
 }) {
+  void ctx;
   // const identity = await ctx.auth.getUserIdentity();
   // if (!identity) {
   //   throw new Error("Not authenticated.");
@@ -671,21 +781,22 @@ export const deleteDocument = mutation({
 export const updateDocumentBlocks = mutation({
   args: {
     documentId: v.id("documents"),
-    layout: v.optional(v.array(v.id("blocks"))),
+    layout: v.optional(v.array(blockIdLike)),
     actions: v.array(
       v.union(
         v.object({
           type: v.literal("create"),
-          data: blockDataValidator,
+          clientId: v.optional(v.string()),
+          data: blockDataWithClientIdsValidator,
         }),
         v.object({
           type: v.literal("update"),
-          blockId: v.id("blocks"),
-          data: blockDataValidator,
+          blockId: blockIdLike,
+          data: blockDataWithClientIdsValidator,
         }),
         v.object({
           type: v.literal("delete"),
-          blockId: v.id("blocks"),
+          blockId: blockIdLike,
         })
       )
     ),
@@ -699,6 +810,7 @@ export const updateDocumentBlocks = mutation({
         updated: 0,
         deleted: 0,
         createdBlockIds: [] as Id<"blocks">[],
+        clientIdToBlockId: {} as Record<string, Id<"blocks">>,
       };
     }
 
@@ -706,38 +818,117 @@ export const updateDocumentBlocks = mutation({
     if (!doc) throw new Error("Document not found.");
 
     const createdBlockIds: Id<"blocks">[] = [];
+    const clientIdToBlockId = new Map<string, Id<"blocks">>();
     let created = 0;
     let updated = 0;
     let deleted = 0;
 
-    for (const action of args.actions) {
-      if (action.type === "create") {
+    const creates = args.actions.filter(
+      (a): a is Extract<(typeof args.actions)[number], { type: "create" }> =>
+        a.type === "create"
+    );
+    const updates = args.actions.filter(
+      (a): a is Extract<(typeof args.actions)[number], { type: "update" }> =>
+        a.type === "update"
+    );
+    const deletes = args.actions.filter(
+      (a): a is Extract<(typeof args.actions)[number], { type: "delete" }> =>
+        a.type === "delete"
+    );
+
+    // Insert create actions in dependency order (parents before children) so
+    // any client ids referenced by children are mapped first.
+    const pendingCreates = creates.slice();
+    while (pendingCreates.length > 0) {
+      const before = pendingCreates.length;
+
+      for (let i = pendingCreates.length - 1; i >= 0; i--) {
+        const action = pendingCreates[i]!;
+        const referenced = collectReferencedIdsFromBlockData(
+          action.data
+        ).filter((id) => isClientId(id));
+        const unresolved = referenced.filter(
+          (cid) => !clientIdToBlockId.has(cid)
+        );
+        if (unresolved.length > 0) continue;
+
+        const mappedData = remapBlockDataClientIds({
+          data: action.data,
+          idMap: clientIdToBlockId,
+        });
+
         const id = await ctx.db.insert("blocks", {
           documentId: args.documentId,
-          data: action.data,
+          data: mappedData,
         });
         createdBlockIds.push(id);
         created += 1;
-        continue;
+
+        if (action.clientId && isClientId(action.clientId)) {
+          clientIdToBlockId.set(action.clientId, id);
+        }
+
+        pendingCreates.splice(i, 1);
       }
 
-      const block = await ctx.db.get(action.blockId);
+      if (pendingCreates.length === before) {
+        const sample = pendingCreates
+          .slice(0, 3)
+          .map((c) => c.clientId ?? "(missing clientId)");
+        throw new Error(
+          `Could not resolve create dependencies for client ids: ${sample.join(
+            ", "
+          )}`
+        );
+      }
+    }
+
+    for (const action of updates) {
+      const mappedBlockId = isClientId(action.blockId)
+        ? clientIdToBlockId.get(action.blockId)
+        : (action.blockId as Id<"blocks">);
+      if (!mappedBlockId) {
+        throw new Error(`Unresolved client id '${action.blockId}' for update.`);
+      }
+
+      const block = await ctx.db.get(mappedBlockId);
       if (!block || block.documentId !== args.documentId) {
         throw new Error("updateDocumentBlocks only supports one document.");
       }
 
-      if (action.type === "update") {
-        await ctx.db.patch(action.blockId, { data: action.data });
-        updated += 1;
-        continue;
+      await ctx.db.patch(mappedBlockId, {
+        data: remapBlockDataClientIds({
+          data: action.data,
+          idMap: clientIdToBlockId,
+        }),
+      });
+      updated += 1;
+    }
+
+    for (const action of deletes) {
+      const mappedBlockId = isClientId(action.blockId)
+        ? clientIdToBlockId.get(action.blockId)
+        : (action.blockId as Id<"blocks">);
+      if (!mappedBlockId) {
+        throw new Error(`Unresolved client id '${action.blockId}' for delete.`);
       }
 
-      await ctx.db.delete(action.blockId);
+      const block = await ctx.db.get(mappedBlockId);
+      if (!block || block.documentId !== args.documentId) {
+        throw new Error("updateDocumentBlocks only supports one document.");
+      }
+      await ctx.db.delete(mappedBlockId);
       deleted += 1;
     }
 
     if (args.layout) {
-      await ctx.db.patch(args.documentId, { layout: args.layout });
+      const mappedLayout = args.layout.map((id) => {
+        if (!isClientId(id)) return id as Id<"blocks">;
+        const mapped = clientIdToBlockId.get(id);
+        if (!mapped) throw new Error(`Unresolved client id '${id}' in layout.`);
+        return mapped;
+      });
+      await ctx.db.patch(args.documentId, { layout: mappedLayout });
     } else if (createdBlockIds.length > 0) {
       // Default: append newly created blocks to the document layout.
       await ctx.db.patch(args.documentId, {
@@ -745,7 +936,18 @@ export const updateDocumentBlocks = mutation({
       });
     }
 
-    return { created, updated, deleted, createdBlockIds };
+    const clientIdToBlockIdRecord: Record<string, Id<"blocks">> = {};
+    for (const [clientId, blockId] of clientIdToBlockId) {
+      clientIdToBlockIdRecord[clientId] = blockId;
+    }
+
+    return {
+      created,
+      updated,
+      deleted,
+      createdBlockIds,
+      clientIdToBlockId: clientIdToBlockIdRecord,
+    };
   },
 });
 

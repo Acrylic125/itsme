@@ -31,6 +31,55 @@ import {
 } from "./project-documents";
 
 const USER_ID = "USER";
+const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
+
+function isClientId(id: string): boolean {
+  return id.startsWith(CLIENT_ID_PREFIX);
+}
+
+function createProjectId() {
+  return `p_${nanoid(22)}`;
+}
+
+function createDocumentId() {
+  return `d_${nanoid(22)}`;
+}
+
+function createBlockId() {
+  return `b_${nanoid(22)}`;
+}
+
+function remapBlockIdsInBlock(args: {
+  block: Block;
+  idMap: Map<string, string>;
+}): Block {
+  const remap = (id: string) => args.idMap.get(id) ?? id;
+  const id = remap(args.block.id);
+  const ref = args.block.ref ? remap(args.block.ref) : undefined;
+
+  switch (args.block.type) {
+    case "text":
+      return { ...args.block, id, ...(ref ? { ref } : {}) };
+    case "section":
+    case "list":
+      return {
+        ...args.block,
+        id,
+        blocks: args.block.blocks.map((childId) => remap(childId)),
+        ...(ref ? { ref } : {}),
+      };
+    case "columns":
+      return {
+        ...args.block,
+        id,
+        blocks: args.block.blocks.map((child) => ({
+          ...child,
+          blockId: remap(child.blockId),
+        })),
+        ...(ref ? { ref } : {}),
+      };
+  }
+}
 
 function getProjectNameFromBlocks(
   blocks: Awaited<ReturnType<typeof pdfToBlocks>>
@@ -538,7 +587,19 @@ export const resumesRouter = router({
     .input(UpdateDocumentBlocksInputSchema)
     .mutation(async ({ input }) => {
       if (input.blocks.length === 0) {
-        return { created: 0, updated: 0, deleted: 0 };
+        return { created: 0, updated: 0, deleted: 0, clientIdToBlockId: {} };
+      }
+
+      // Build a mapping for any CLIENT_ID:* blocks in this request.
+      // We generate real ids server-side and return the mapping to the client so
+      // subsequent requests can reconcile optimistic client ids.
+      const clientIdToBlockId = new Map<string, string>();
+      for (const action of input.blocks) {
+        if (action.type === "delete") continue;
+        const maybeClientId = action.block.id;
+        if (isClientId(maybeClientId) && !clientIdToBlockId.has(maybeClientId)) {
+          clientIdToBlockId.set(maybeClientId, createBlockId());
+        }
       }
 
       const upserts = input.blocks.filter(
@@ -558,12 +619,26 @@ export const resumesRouter = router({
             { type: "delete" }
           > => action.type === "delete"
         )
-        .map((action) => action.blockId);
+        .map((action) => clientIdToBlockId.get(action.blockId) ?? action.blockId);
+
+      // Remap ids inside blocks now that we have the mapping.
+      const remappedUpserts = upserts.map((action) => {
+        const remappedBlock = remapBlockIdsInBlock({
+          block: action.block,
+          idMap: clientIdToBlockId,
+        });
+
+        // If the client sent an update for a CLIENT_ID block, treat it as a create.
+        if (action.type === "update" && isClientId(action.block.id)) {
+          return { type: "create" as const, block: remappedBlock };
+        }
+        return { ...action, block: remappedBlock } as typeof action;
+      });
 
       const touchedBlockIds = [
-        ...upserts.map((action) => action.block.id),
+        ...remappedUpserts.map((action) => action.block.id),
         ...deleteIds,
-      ];
+      ].filter((id) => !isClientId(id));
 
       const existingRows =
         touchedBlockIds.length === 0
@@ -586,14 +661,14 @@ export const resumesRouter = router({
       }
       const inferredDocumentId = existingRows[0]?.documentId ?? null;
 
-      const hasCreate = upserts.some((action) => action.type === "create");
+      const hasCreate = remappedUpserts.some((action) => action.type === "create");
       if (hasCreate && !inferredDocumentId) {
         throw new Error(
           "Could not infer documentId for create actions. Include at least one existing block action in the same request."
         );
       }
 
-      for (const action of upserts) {
+      for (const action of remappedUpserts) {
         if (action.type === "update" && !existingById.has(action.block.id)) {
           throw new Error(
             `Cannot update missing block '${action.block.id}'. Use type='create' instead.`
@@ -607,7 +682,7 @@ export const resumesRouter = router({
           -1
         ) + 1;
 
-      const createActions = upserts.filter(
+      const createActions = remappedUpserts.filter(
         (
           action
         ): action is Extract<
@@ -615,7 +690,7 @@ export const resumesRouter = router({
           { type: "create" }
         > => action.type === "create"
       );
-      const updateActions = upserts.filter(
+      const updateActions = remappedUpserts.filter(
         (
           action
         ): action is Extract<
@@ -661,7 +736,7 @@ export const resumesRouter = router({
         statements.push(db.insert(blocks).values(batch));
       }
 
-      const blocksToPersist = upserts.map((action) => action.block);
+      const blocksToPersist = remappedUpserts.map((action) => action.block);
       const blocksToPersistIds = blocksToPersist.map((block) => block.id);
 
       if (blocksToPersistIds.length > 0) {
@@ -829,14 +904,22 @@ export const resumesRouter = router({
       console.log(
         "input.blocks",
         input.blocks.length,
-        upserts.length,
+        remappedUpserts.length,
         deleteIds.length
       );
 
+      const clientIdToBlockIdRecord: Record<string, string> = {};
+      for (const [clientId, blockId] of clientIdToBlockId.entries()) {
+        clientIdToBlockIdRecord[clientId] = blockId;
+      }
+
       return {
-        created: upserts.filter((action) => action.type === "create").length,
-        updated: upserts.filter((action) => action.type === "update").length,
+        created: remappedUpserts.filter((action) => action.type === "create")
+          .length,
+        updated: remappedUpserts.filter((action) => action.type === "update")
+          .length,
         deleted: deleteIds.length,
+        clientIdToBlockId: clientIdToBlockIdRecord,
       };
     }),
   createProjectFromPdf: publicProcedure
