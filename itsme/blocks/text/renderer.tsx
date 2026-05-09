@@ -18,11 +18,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AnchorRect } from "@/components/dom-popup";
-import { useDocument, useDocumentStore } from "@/blocks/document-context";
+import { useDocument } from "@/blocks/document-context";
 import { useCallback, useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
+import type { DocumentStoreState } from "@/blocks/document-context";
 
 export function EditTextModal({
   closePopup,
@@ -31,33 +32,25 @@ export function EditTextModal({
   closePopup: () => void;
   block: z.infer<typeof TextBlockSchema>;
 }) {
-  const { documentId, patchDocument } = useDocumentStore(
-    useShallow((s) => ({
-      documentId: s.documentId,
-      patchDocument: s.update,
-    }))
-  );
+  const { updateBlocks } = useDocument();
   const [text, setText] = useState(block.text);
 
   const handleSave = useCallback(() => {
-    patchDocument({
-      type: "text",
-      documentId,
-      blockId: block.id,
-      text,
-      align: block.align,
-      style: block.style,
+    updateBlocks((current) => {
+      const nextBlocks = current.blocks.map((b) => {
+        if (b.id !== block.id) return b;
+        if (b.type !== "text") return b;
+        return {
+          ...b,
+          text,
+          align: block.align,
+          style: block.style,
+        };
+      });
+      return { ...current, blocks: nextBlocks };
     });
     closePopup();
-  }, [
-    patchDocument,
-    documentId,
-    block.id,
-    block.align,
-    block.style,
-    text,
-    closePopup,
-  ]);
+  }, [updateBlocks, block.id, block.align, block.style, text, closePopup]);
 
   return (
     <div className="flex flex-col gap-2 border border-border bg-card p-4 rounded-xl shadow-xl">
@@ -112,7 +105,7 @@ function TextBlockComponent({
   const { documentStore, blockTree } = useDocument();
   const { focusBlock, focusBlockId } = useStore(
     documentStore,
-    useShallow((s) => ({
+    useShallow((s: DocumentStoreState) => ({
       focusBlock: s.focusBlock,
       focusBlockId: s.focusBlockId,
     }))
@@ -121,7 +114,7 @@ function TextBlockComponent({
 
   const closeTextEditor = useCallback(() => {
     setAnchor(null);
-    focusBlock((cur) => (cur === block.id ? null : cur));
+    focusBlock((cur: string | null) => (cur === block.id ? null : cur));
   }, [block.id, focusBlock]);
 
   const handleClick = useCallback(
