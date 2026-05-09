@@ -32,7 +32,11 @@ export default defineSchema({
     name: v.string(),
     projectId: v.id("projects"),
     layout: v.array(v.id("blocks")),
-    masterDocumentId: v.id("documents"),
+  }).index("by_projectId", ["projectId"]),
+
+  projectMasterDocuments: defineTable({
+    projectId: v.id("projects"),
+    documentId: v.id("documents"),
   }).index("by_projectId", ["projectId"]),
 
   blocks: defineTable({

@@ -4,8 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Group, Stage } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
-import { DocumentSchema, getPageLayoutMetrics } from "@/blocks/renderer";
-import { z } from "zod";
+import { getPageLayoutMetrics } from "@/blocks/renderer";
 import { useDocument } from "@/blocks/document-context";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
@@ -13,13 +12,7 @@ import { Button } from "./ui/button";
 import { ListBulletIcon, TextIcon } from "@radix-ui/react-icons";
 import { FavIcon } from "./icon/favicon";
 
-export function PageCanvas({
-  document,
-  dpi = 300,
-}: {
-  document: z.infer<typeof DocumentSchema> & { id: string };
-  dpi?: number;
-}) {
+export function PageCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<KonvaStage | null>(null);
   const layerRef = useRef<KonvaLayer | null>(null);
@@ -31,11 +24,18 @@ export function PageCanvas({
     dpr: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
   });
 
-  const { blocks } = useDocument();
-  const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(
-    () => getPageLayoutMetrics(document, dpi),
-    [document, dpi]
-  );
+  const { blocks, dpi, document } = useDocument();
+  const { pageWidthPx, pageHeightPx, gapPx, pageStridePx } = useMemo(() => {
+    if (!document) {
+      return {
+        pageWidthPx: 0,
+        pageHeightPx: 0,
+        gapPx: 0,
+        pageStridePx: 0,
+      };
+    }
+    return getPageLayoutMetrics(document, dpi);
+  }, [document, dpi]);
 
   const pageWidth = pageWidthPx;
   const pageHeight = pageHeightPx;

@@ -2,9 +2,12 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
-import { DEFAULT_STYLE_SHEET } from "../blocks/blocks";
+import { Block, DEFAULT_STYLE_SHEET, StyleSheetSchema } from "../blocks/blocks";
+import { TextStyleSheetSchema } from "../blocks/text/schema";
 import { pdfToBlocks } from "../lib/pdf-to-blocks/server";
 import { CreateProjectFromPdfInputSchema } from "@/lib/pdf-to-blocks/schema";
+import type { z } from "zod";
+import type { Doc } from "./_generated/dataModel";
 
 const textStyle = v.union(
   v.literal("default"),
@@ -62,11 +65,11 @@ const blockDataValidator = v.union(
 async function requireIdentity(ctx: {
   auth: { getUserIdentity: () => Promise<unknown | null> };
 }) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new Error("Not authenticated.");
-  }
-  return identity;
+  // const identity = await ctx.auth.getUserIdentity();
+  // if (!identity) {
+  //   throw new Error("Not authenticated.");
+  // }
+  // return identity;
 }
 
 function getProjectNameFromImportedBlocks(args: {
@@ -163,6 +166,210 @@ function mapBlockDataIds(args: {
   };
 }
 
+type StyleSheet = z.infer<typeof StyleSheetSchema>;
+
+/** Maps a Convex block row to the client `Block` union (same shape as `mapBlocks` in `blocks/retriever.ts`). */
+export function convexBlockToClientBlock(row: Doc<"blocks">): Block {
+  const d = row.data;
+  const id = row._id;
+
+  if (d.type === "text") {
+    return {
+      id,
+      type: "text",
+      text: d.text,
+      align: d.align,
+      style: d.style,
+      ref: d.ref ?? undefined,
+    };
+  }
+
+  if (d.type === "section") {
+    return {
+      id,
+      type: "section",
+      blocks: [...d.children],
+      ref: d.ref ?? undefined,
+    };
+  }
+
+  if (d.type === "columns") {
+    return {
+      id,
+      type: "columns",
+      blocks: d.children.map((c) => ({
+        span: c.span,
+        blockId: c.blockId,
+      })),
+      ref: d.ref ?? undefined,
+    };
+  }
+
+  const bullet =
+    d.bulletType === "normal"
+      ? {
+          type: "normal" as const,
+          value: d.bulletValue ?? "-",
+        }
+      : ({
+          type: d.bulletType,
+        } as const);
+
+  return {
+    id,
+    type: "list",
+    blocks: [...d.children],
+    bullet,
+    leftSpace: d.leftSpace ?? undefined,
+    rightSpace: d.rightSpace ?? undefined,
+    ref: d.ref ?? undefined,
+  };
+}
+
+function mapStylesFromDocumentRows(args: {
+  pageStyles: {
+    gap: number;
+    marginTop: number;
+    marginBottom: number;
+    marginLeft: number;
+    marginRight: number;
+  } | null;
+  textStyles: Array<{
+    style: "default" | "h1" | "h2" | "h3";
+    fontSize: number;
+    fontWeight: "normal" | "bold";
+    fontFamily: string;
+    lineHeight: number;
+  }>;
+  listStyles: { leftSpace: number; rightSpace: number } | null;
+}): StyleSheet {
+  const textStyles = JSON.parse(
+    JSON.stringify(DEFAULT_STYLE_SHEET.text)
+  ) as z.infer<typeof TextStyleSheetSchema>;
+
+  for (const style of args.textStyles) {
+    textStyles[style.style] = {
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      fontFamily: style.fontFamily,
+      lineHeight: style.lineHeight,
+    };
+  }
+
+  return {
+    page: args.pageStyles
+      ? {
+          gap: args.pageStyles.gap,
+          margins: {
+            top: args.pageStyles.marginTop,
+            bottom: args.pageStyles.marginBottom,
+            left: args.pageStyles.marginLeft,
+            right: args.pageStyles.marginRight,
+          },
+        }
+      : DEFAULT_STYLE_SHEET.page,
+    text: textStyles,
+    list: args.listStyles
+      ? {
+          leftSpace: args.listStyles.leftSpace,
+          rightSpace: args.listStyles.rightSpace,
+        }
+      : DEFAULT_STYLE_SHEET.list,
+  };
+}
+
+export const getDocumentBlocks = query({
+  args: {
+    documentId: v.id("documents"),
+  },
+  handler: async (ctx, args) => {
+    await requireIdentity(ctx);
+
+    const document = await ctx.db.get(args.documentId);
+    if (!document) {
+      throw new Error(`Document ${args.documentId} not found`);
+    }
+
+    const blockRows = await ctx.db
+      .query("blocks")
+      .withIndex("by_documentId", (q) => q.eq("documentId", args.documentId))
+      .collect();
+
+    const blocks = blockRows.map((row) => convexBlockToClientBlock(row));
+
+    return {
+      document: {
+        id: document._id,
+        name: document.name,
+      },
+      layout: [...document.layout],
+      blocks,
+    };
+  },
+});
+
+export const getDocumentStyles = query({
+  args: {
+    documentId: v.id("documents"),
+  },
+  handler: async (ctx, args) => {
+    await requireIdentity(ctx);
+
+    const document = await ctx.db.get(args.documentId);
+    if (!document) {
+      throw new Error(`Document ${args.documentId} not found`);
+    }
+
+    const [pageRow, listRow, textRows] = await Promise.all([
+      ctx.db
+        .query("documentPageStyles")
+        .withIndex("by_documentId", (q) => q.eq("documentId", args.documentId))
+        .first(),
+      ctx.db
+        .query("documentListStyles")
+        .withIndex("by_documentId", (q) => q.eq("documentId", args.documentId))
+        .first(),
+      ctx.db
+        .query("documentTextStyles")
+        .withIndex("by_documentId", (q) => q.eq("documentId", args.documentId))
+        .collect(),
+    ]);
+
+    const styleSheet = mapStylesFromDocumentRows({
+      pageStyles: pageRow
+        ? {
+            gap: pageRow.gap,
+            marginTop: pageRow.marginTop,
+            marginBottom: pageRow.marginBottom,
+            marginLeft: pageRow.marginLeft,
+            marginRight: pageRow.marginRight,
+          }
+        : null,
+      textStyles: textRows.map((r) => ({
+        style: r.style,
+        fontSize: r.fontSize,
+        fontWeight: r.fontWeight,
+        fontFamily: r.fontFamily,
+        lineHeight: r.lineHeight,
+      })),
+      listStyles: listRow
+        ? {
+            leftSpace: listRow.leftSpace,
+            rightSpace: listRow.rightSpace,
+          }
+        : null,
+    });
+
+    return {
+      document: {
+        id: document._id,
+        name: document.name,
+      },
+      styleSheet,
+    };
+  },
+});
+
 export const getProjectDocuments = query({
   args: {
     projectId: v.id("projects"),
@@ -175,11 +382,75 @@ export const getProjectDocuments = query({
       .withIndex("by_projectId", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    const masterDocumentId = docs[0]?.masterDocumentId ?? null;
+    const masterDocumentId =
+      (
+        await ctx.db
+          .query("projectMasterDocuments")
+          .withIndex("by_projectId", (q) => q.eq("projectId", args.projectId))
+          .first()
+      )?.documentId ?? null;
 
     return {
       documents: docs.map((d) => ({ id: d._id, name: d.name })),
       masterDocumentId,
+    };
+  },
+});
+
+const MOCK_USER_ID = "USER";
+
+export const getUserProjects = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireIdentity(ctx);
+
+    const rows = await ctx.db
+      .query("projects")
+      .withIndex("by_userId", (q) => q.eq("userId", MOCK_USER_ID))
+      .collect();
+
+    const masterRows = await Promise.all(
+      rows.map((p) =>
+        ctx.db
+          .query("projectMasterDocuments")
+          .withIndex("by_projectId", (q) => q.eq("projectId", p._id))
+          .first()
+      )
+    );
+    const masterByProjectId = new Map(
+      masterRows
+        .filter((r) => r != null)
+        .map((r) => [r!.projectId, r!.documentId] as const)
+    );
+
+    return {
+      projects: rows
+        .map((p) => ({
+          id: p._id,
+          name: p.name,
+          masterDocumentId: masterByProjectId.get(p._id) ?? null,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  },
+});
+
+export const getProject = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, args) => {
+    await requireIdentity(ctx);
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) {
+      return null;
+    }
+    if (project.userId !== MOCK_USER_ID) {
+      throw new Error("Project not found.");
+    }
+    return {
+      project: { id: project._id, name: project.name },
     };
   },
 });
@@ -206,7 +477,10 @@ export const duplicateDocument = mutation({
       name: `${sourceDocument.name} Copy`,
       projectId: args.projectId,
       layout: [],
-      masterDocumentId: sourceDocument.masterDocumentId,
+    });
+    await ctx.db.insert("projectMasterDocuments", {
+      projectId: args.projectId,
+      documentId: duplicatedDocumentId,
     });
 
     // 1) Create a new block for every source block (placeholder refs/children).
@@ -341,7 +615,15 @@ export const deleteDocument = mutation({
       throw new Error("Document not found.");
     }
 
-    if (doc.masterDocumentId === doc._id) {
+    const masterDocumentId =
+      (
+        await ctx.db
+          .query("projectMasterDocuments")
+          .withIndex("by_projectId", (q) => q.eq("projectId", args.projectId))
+          .first()
+      )?.documentId ?? null;
+
+    if (masterDocumentId === doc._id) {
       throw new Error("Master resume cannot be deleted.");
     }
 
@@ -469,8 +751,6 @@ export const updateDocumentBlocks = mutation({
 
 export const createProjectFromPdf = mutation({
   args: {
-    // Convex can't validate Zod schemas directly; we accept the raw structure.
-    // This mirrors `CreateProjectFromPdfInputSchema` closely enough for runtime use.
     input: v.any(),
   },
   handler: async (ctx, args) => {
@@ -481,7 +761,7 @@ export const createProjectFromPdf = mutation({
     const importedBlocks = await pdfToBlocks(input);
 
     const projectName = getProjectNameFromImportedBlocks({
-      blocks: importedBlocks as never[],
+      blocks: importedBlocks,
     });
 
     const projectId = await ctx.db.insert("projects", {
@@ -493,10 +773,11 @@ export const createProjectFromPdf = mutation({
       name: "Master Resume",
       projectId,
       layout: [],
-      // Temporarily set to itself; patched once we have the id.
-      masterDocumentId: projectId as unknown as Id<"documents">,
     });
-    await ctx.db.patch(documentId, { masterDocumentId: documentId });
+    await ctx.db.insert("projectMasterDocuments", {
+      projectId,
+      documentId,
+    });
 
     // Stylesheet defaults.
     await ctx.db.insert("documentPageStyles", {

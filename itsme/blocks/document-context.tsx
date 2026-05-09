@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -9,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useMutation } from "convex/react";
 import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand/react";
 import z from "zod";
@@ -27,7 +29,11 @@ import {
 } from "./apply-block-move";
 import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
 import { nanoid } from "nanoid";
-import { useTRPCClient } from "@/server/utils";
+import { useQueryWithStatus } from "@/components/convex-hooks";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { DEFAULT_STYLE_SHEET, PAGE_SIZE } from "./blocks";
+import { Loader2 } from "lucide-react";
 
 export type DocumentId = string;
 
@@ -77,117 +83,150 @@ function buildDocumentBlockDiff(
   return [...createOrUpdate, ...deletes];
 }
 
-function removeEmptyContainers(doc: Document): Document {
-  const next: Document = {
-    ...doc,
-    layout: [...doc.layout],
-    blocks: doc.blocks.map((block) => {
-      switch (block.type) {
-        case "section":
-        case "list":
-          return { ...block, blocks: [...block.blocks] };
-        case "columns":
-          return {
-            ...block,
-            blocks: block.blocks.map((child) => ({ ...child })),
-          };
-        case "text":
-          return block;
-      }
-    }),
+/** Snapshot shape returned by `documentTasks.getDocumentBlocks`. */
+export type DocumentBlocksSnapshot = {
+  document: { id: Id<"documents">; name: string };
+  layout: Id<"blocks">[];
+  blocks: Block[];
+};
+
+function toDiffDocument(snapshot: DocumentBlocksSnapshot): Document {
+  return {
+    name: snapshot.document.name,
+    pageSize: PAGE_SIZE,
+    styleSheet: DEFAULT_STYLE_SHEET,
+    blocks: snapshot.blocks,
+    layout: snapshot.layout,
   };
-
-  let changed = false;
-  while (true) {
-    const emptyIds = new Set(
-      next.blocks
-        .filter(
-          (block): block is Extract<Block, { type: "section" | "list" }> =>
-            (block.type === "section" || block.type === "list") &&
-            block.blocks.length === 0
-        )
-        .map((block) => block.id)
-    );
-    if (emptyIds.size === 0) break;
-    changed = true;
-
-    next.layout = next.layout.filter((id) => !emptyIds.has(id));
-    next.blocks = next.blocks
-      .filter((block) => !emptyIds.has(block.id))
-      .map((block) => {
-        switch (block.type) {
-          case "section":
-          case "list":
-            return {
-              ...block,
-              blocks: block.blocks.filter((id) => !emptyIds.has(id)),
-            };
-          case "columns":
-            return {
-              ...block,
-              blocks: block.blocks.filter(
-                (child) => !emptyIds.has(child.blockId)
-              ),
-            };
-          case "text":
-            return block;
-        }
-      });
-  }
-
-  return changed ? next : doc;
 }
 
-function applyBlockUpdate(doc: Document, update: BlockUpdate): Document {
-  switch (update.type) {
-    case "move":
-      return removeEmptyContainers(applyBlockMove(doc, update));
-    case "columns_spans": {
-      let changed = false;
-      const blocks: Block[] = doc.blocks.map((b) => {
-        if (b.id !== update.columnsBlockId || b.type !== "columns") {
-          return b;
-        }
-        if (update.spans.length !== b.blocks.length) {
-          return b;
-        }
-        changed = true;
-        return {
-          ...b,
-          blocks: b.blocks.map((child, i) => ({
-            ...child,
-            span: update.spans[i]!,
-          })),
-        };
-      });
-      if (!changed) {
-        return doc;
-      }
-      return removeEmptyContainers({ ...doc, blocks });
-    }
-    case "text":
-      break;
+function layoutPatchIfChanged(
+  serverLayout: Id<"blocks">[],
+  modifiedLayout: Id<"blocks">[]
+): Id<"blocks">[] | undefined {
+  if (serverLayout.length !== modifiedLayout.length) {
+    return modifiedLayout as Id<"blocks">[];
   }
-
-  let changed = false;
-  const blocks: Block[] = doc.blocks.map((b) => {
-    if (b.id !== update.blockId || b.type !== "text") {
-      return b;
+  for (let i = 0; i < serverLayout.length; i++) {
+    if (serverLayout[i] !== modifiedLayout[i]) {
+      return modifiedLayout as Id<"blocks">[];
     }
-    changed = true;
-    return {
-      ...b,
-      text: update.text,
-      align: update.align,
-      style: update.style,
+  }
+  return undefined;
+}
+
+/** Row `data` shape for `blocks` table — matches Convex `blockDataValidator`. */
+type ConvexBlockRowData =
+  | {
+      type: "text";
+      text: string;
+      align: "left" | "center" | "right";
+      style: "default" | "h1" | "h2" | "h3";
+      ref?: Id<"blocks">;
+    }
+  | {
+      type: "section";
+      children: Id<"blocks">[];
+      ref?: Id<"blocks">;
+    }
+  | {
+      type: "columns";
+      children: { span: number; blockId: Id<"blocks"> }[];
+      ref?: Id<"blocks">;
+    }
+  | {
+      type: "list";
+      children: Id<"blocks">[];
+      bulletType: "normal" | "alphabetical" | "numerical";
+      bulletValue?: string;
+      leftSpace?: number;
+      rightSpace?: number;
+      ref?: Id<"blocks">;
     };
-  });
 
-  if (!changed) {
-    return doc;
+function clientBlockToConvexData(block: Block): ConvexBlockRowData {
+  switch (block.type) {
+    case "text":
+      return {
+        type: "text",
+        text: block.text,
+        align: block.align,
+        style: block.style,
+        ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+      };
+    case "section":
+      return {
+        type: "section",
+        children: block.blocks.map((id) => id as Id<"blocks">),
+        ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+      };
+    case "columns":
+      return {
+        type: "columns",
+        children: block.blocks.map((c) => ({
+          span: c.span,
+          blockId: c.blockId as Id<"blocks">,
+        })),
+        ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+      };
+    case "list": {
+      const bullet = block.bullet;
+      if (bullet.type === "normal") {
+        return {
+          type: "list",
+          children: block.blocks.map((id) => id as Id<"blocks">),
+          bulletType: "normal" as const,
+          bulletValue: bullet.value,
+          leftSpace: block.leftSpace,
+          rightSpace: block.rightSpace,
+          ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+        };
+      }
+      return {
+        type: "list",
+        children: block.blocks.map((id) => id as Id<"blocks">),
+        bulletType: bullet.type,
+        leftSpace: block.leftSpace,
+        rightSpace: block.rightSpace,
+        ref: block.ref ? (block.ref as Id<"blocks">) : undefined,
+      };
+    }
+    default: {
+      const _x: never = block;
+      return _x;
+    }
   }
+}
 
-  return removeEmptyContainers({ ...doc, blocks });
+type UpdateDocumentBlocksAction =
+  | { type: "create"; data: ConvexBlockRowData }
+  | { type: "update"; blockId: Id<"blocks">; data: ConvexBlockRowData }
+  | { type: "delete"; blockId: Id<"blocks"> };
+
+function blockSyncActionsToMutationActions(
+  actions: BlockSyncAction[]
+): UpdateDocumentBlocksAction[] {
+  const out: UpdateDocumentBlocksAction[] = [];
+  for (const action of actions) {
+    if (action.type === "delete") {
+      out.push({
+        type: "delete",
+        blockId: action.blockId as Id<"blocks">,
+      });
+      continue;
+    }
+    const data = clientBlockToConvexData(action.block);
+    if (action.type === "create") {
+      out.push({ type: "create", data });
+    } else {
+      out.push({
+        type: "update",
+        blockId: action.block.id as Id<"blocks">,
+        data,
+      });
+    }
+  }
+  return out;
 }
 
 type ParentRef =
@@ -289,7 +328,7 @@ function applyMoveUpdates(doc: Document, updates: MoveBlockUpdate[]): Document {
   return updates.reduce((acc, update) => applyBlockMove(acc, update), doc);
 }
 
-function buildMoveUpdatesForReorder(args: {
+export function buildMoveUpdatesForReorder(args: {
   document: Document;
   documentId: string;
   reorder: NonNullable<DocumentStoreState["reorder"]>;
@@ -502,9 +541,6 @@ function buildMoveUpdatesForReorder(args: {
 }
 
 export type DocumentStoreState = {
-  documentId: DocumentId;
-  document: Document;
-  serverDocument: Document;
   focusBlockId: string | null;
   reorder: {
     current: {
@@ -513,7 +549,6 @@ export type DocumentStoreState = {
     } | null;
     targetBlock: BlockTreeReorderBoundingBox | null;
   };
-  update: (update: BlockUpdate) => void;
   focusBlock: (
     blockId: string | ((current: string | null) => string | null) | null
   ) => void;
@@ -523,22 +558,15 @@ export type DocumentStoreState = {
       blockIds: string[];
     } | null
   ) => void;
-  setServerDocument: (document: Document) => void;
   setReorderTarget: (targetBlock: BlockTreeReorderBoundingBox | null) => void;
-  commitReorder: (blockTree: BlockTree) => BlockUpdate[];
 };
 
 export type DocumentStore = ReturnType<typeof createDocumentStore>;
 
-export function createDocumentStore(
-  documentId: DocumentId,
-  initialDocument: Document
-) {
-  const initialServerDocument = cloneDocument(initialDocument);
+export function createDocumentStore() {
+  // documentId: DocumentId,
+  // initialDocument: Document
   return createStore<DocumentStoreState>((set, get) => ({
-    documentId,
-    document: initialDocument,
-    serverDocument: initialServerDocument,
     focusBlockId: null,
     reorder: {
       current: null,
@@ -566,11 +594,6 @@ export function createDocumentStore(
         },
       });
     },
-    setServerDocument: (serverDocument) => {
-      set({
-        serverDocument: cloneDocument(serverDocument),
-      });
-    },
     setReorderTarget: (targetBlock) => {
       const current = get().reorder;
       if (!current) {
@@ -583,128 +606,266 @@ export function createDocumentStore(
         },
       });
     },
-    commitReorder: (blockTree) => {
-      const { documentId: activeId, document: doc, reorder } = get();
-      if (!reorder) {
-        return [];
-      }
-      const result = buildMoveUpdatesForReorder({
-        document: doc,
-        documentId: activeId,
-        reorder,
-        blockTree,
-      });
-      set({
-        reorder: {
-          current: null,
-          targetBlock: null,
-        },
-      });
-      if (!result) {
-        return [];
-      }
-      const nextDocument = removeEmptyContainers(result.nextDocument);
-      if (nextDocument !== doc) {
-        set({
-          documentId: activeId,
-          document: nextDocument,
-        });
-      }
-      return result.updates;
-    },
-    update: (update) => {
-      const parsed = BlockUpdateSchema.safeParse(update);
-      if (!parsed.success) {
-        return;
-      }
-      const patch = parsed.data;
-      const { documentId: activeId, document: doc } = get();
-      if (patch.documentId !== activeId) {
-        return;
-      }
-      const next = applyBlockUpdate(doc, patch);
-      if (next === doc) {
-        return;
-      }
-      set({
-        documentId: activeId,
-        document: next,
-      });
-    },
+    // commitReorder: (blockTree) => {
+    //   const { documentId: activeId, document: doc, reorder } = get();
+    //   if (!reorder) {
+    //     return [];
+    //   }
+    //   const result = buildMoveUpdatesForReorder({
+    //     document: doc,
+    //     documentId: activeId,
+    //     reorder,
+    //     blockTree,
+    //   });
+    //   set({
+    //     reorder: {
+    //       current: null,
+    //       targetBlock: null,
+    //     },
+    //   });
+    //   if (!result) {
+    //     return [];
+    //   }
+    //   const nextDocument = removeEmptyContainers(result.nextDocument);
+    //   if (nextDocument !== doc) {
+    //     set({
+    //       documentId: activeId,
+    //       document: nextDocument,
+    //     });
+    //   }
+    //   return result.updates;
+    // },
+    // update: (update) => {
+    //   const parsed = BlockUpdateSchema.safeParse(update);
+    //   if (!parsed.success) {
+    //     return;
+    //   }
+    //   const patch = parsed.data;
+    //   const { documentId: activeId, document: doc } = get();
+    //   if (patch.documentId !== activeId) {
+    //     return;
+    //   }
+    //   const next = applyBlockUpdate(doc, patch);
+    //   if (next === doc) {
+    //     return;
+    //   }
+    //   set({
+    //     documentId: activeId,
+    //     document: next,
+    //   });
+    // },
   }));
-}
-
-function documentPayloadFromWithId(doc: DocumentWithId): Document {
-  const { id, ...rest } = doc;
-  void id;
-  return DocumentSchema.parse(rest);
 }
 
 type DocumentContextValue = {
   blocks: RenderedLayoutBlock[];
   blockTree: BlockTree;
   documentStore: DocumentStore;
+  document: z.infer<typeof DocumentSchema> | null;
+  /** Apply a pure transform to the current blocks snapshot; changes debounce then sync to Convex. */
+  updateBlocks: (
+    transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot
+  ) => void;
+  dpi: number;
 };
 
 const DocumentContext = createContext<DocumentContextValue | null>(null);
 
 export function DocumentStoresProvider({
-  document,
+  documentId,
   children,
   dpi,
 }: {
-  document: DocumentWithId;
+  documentId: string;
   children: ReactNode;
   dpi: number;
 }) {
-  const trpcClient = useTRPCClient();
-  const [documentStore] = useState(() =>
-    createDocumentStore(document.id, documentPayloadFromWithId(document))
+  // const trpcClient = useTRPCClient();
+  const [documentStore] = useState(() => createDocumentStore());
+  // const isSyncingRef = useRef(false);
+
+  // useEffect(() => {
+  //   const interval = window.setInterval(() => {
+  //     if (isSyncingRef.current) {
+  //       return;
+  //     }
+  //     const {
+  //       document: currentDocument,
+  //       serverDocument,
+  //       setServerDocument,
+  //     } = documentStore.getState();
+  //     const blocks = buildDocumentBlockDiff(serverDocument, currentDocument);
+  //     if (blocks.length === 0) {
+  //       return;
+  //     }
+  //     isSyncingRef.current = true;
+  //     trpcClient.resumes.updateDocumentBlocks
+  //       .mutate({ blocks })
+  //       .then(() => {
+  //         setServerDocument(currentDocument);
+  //       })
+  //       .catch((error) => {
+  //         // Keep serverDocument unchanged on failed sync; next loop retries.
+  //         console.error("Failed to sync document blocks", error);
+  //       })
+  //       .finally(() => {
+  //         isSyncingRef.current = false;
+  //       });
+  //   }, 500);
+
+  //   return () => {
+  //     window.clearInterval(interval);
+  //   };
+  // }, [documentStore, trpcClient]);
+
+  const convexDocumentId = documentId as Id<"documents">;
+
+  const blocksQuery = useQueryWithStatus(
+    api.documentTasks.getDocumentBlocks,
+    documentId ? { documentId: convexDocumentId } : "skip"
   );
-  const isSyncingRef = useRef(false);
+
+  const stylesQuery = useQueryWithStatus(
+    api.documentTasks.getDocumentStyles,
+    documentId ? { documentId: convexDocumentId } : "skip"
+  );
+
+  const updateDocumentBlocksMutation = useMutation(
+    api.documentTasks.updateDocumentBlocks
+  );
+
+  const [modifiedBlocks, setModifiedBlocks] =
+    useState<DocumentBlocksSnapshot | null>(null);
+  const modifiedBlocksRef = useRef<DocumentBlocksSnapshot | null>(null);
+  const blocksQueryDataRef = useRef<NonNullable<
+    (typeof blocksQuery)["data"]
+  > | null>(null);
+  const commitTimerRef = useRef<ReturnType<
+    typeof globalThis.setTimeout
+  > | null>(null);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (isSyncingRef.current) {
-        return;
-      }
-      const {
-        document: currentDocument,
-        serverDocument,
-        setServerDocument,
-      } = documentStore.getState();
-      const blocks = buildDocumentBlockDiff(serverDocument, currentDocument);
-      if (blocks.length === 0) {
-        return;
-      }
-      isSyncingRef.current = true;
-      trpcClient.resumes.updateDocumentBlocks
-        .mutate({ blocks })
-        .then(() => {
-          setServerDocument(currentDocument);
-        })
-        .catch((error) => {
-          // Keep serverDocument unchanged on failed sync; next loop retries.
-          console.error("Failed to sync document blocks", error);
-        })
-        .finally(() => {
-          isSyncingRef.current = false;
-        });
-    }, 500);
+    modifiedBlocksRef.current = modifiedBlocks;
+  }, [modifiedBlocks]);
 
+  useEffect(() => {
+    if (blocksQuery.status === "success" && blocksQuery.data) {
+      blocksQueryDataRef.current = blocksQuery.data;
+    }
+  }, [blocksQuery.status, blocksQuery.data]);
+
+  const commitModifiedBlocks = useCallback(() => {
+    const modified = modifiedBlocksRef.current;
+    const server = blocksQueryDataRef.current;
+    if (!modified || !server) {
+      return;
+    }
+
+    const serverDoc = toDiffDocument(server);
+    const modifiedDoc = toDiffDocument(modified);
+    const blockActions = buildDocumentBlockDiff(serverDoc, modifiedDoc);
+    const mutationActions = blockSyncActionsToMutationActions(blockActions);
+    const layoutPatch = layoutPatchIfChanged(server.layout, modified.layout);
+
+    if (mutationActions.length === 0 && layoutPatch === undefined) {
+      setModifiedBlocks(null);
+      return;
+    }
+
+    const optimisticSnapshot = structuredClone(modified);
+
+    const run = updateDocumentBlocksMutation.withOptimisticUpdate(
+      (localStore) => {
+        const current = localStore.getQuery(
+          api.documentTasks.getDocumentBlocks,
+          {
+            documentId: convexDocumentId,
+          }
+        );
+        if (current !== undefined) {
+          localStore.setQuery(
+            api.documentTasks.getDocumentBlocks,
+            { documentId: convexDocumentId },
+            optimisticSnapshot
+          );
+        }
+      }
+    );
+
+    void run({
+      documentId: convexDocumentId,
+      actions: mutationActions,
+      ...(layoutPatch !== undefined ? { layout: layoutPatch } : {}),
+    }).catch((error) => {
+      console.error("Failed to update document blocks", error);
+    });
+
+    setModifiedBlocks(null);
+  }, [convexDocumentId, updateDocumentBlocksMutation]);
+
+  const scheduleCommit = useCallback(() => {
+    if (commitTimerRef.current !== null) {
+      globalThis.clearTimeout(commitTimerRef.current);
+    }
+    commitTimerRef.current = globalThis.setTimeout(() => {
+      commitTimerRef.current = null;
+      commitModifiedBlocks();
+    }, 1000);
+  }, [commitModifiedBlocks]);
+
+  const updateBlocks = useCallback(
+    (transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot) => {
+      setModifiedBlocks((prev) => {
+        const queryData = blocksQueryDataRef.current;
+        if (!queryData) {
+          return prev;
+        }
+
+        const base: DocumentBlocksSnapshot = prev
+          ? prev
+          : structuredClone(queryData);
+        return transform(base);
+      });
+
+      scheduleCommit();
+    },
+    [scheduleCommit]
+  );
+
+  useEffect(() => {
     return () => {
-      window.clearInterval(interval);
+      if (commitTimerRef.current !== null) {
+        globalThis.clearTimeout(commitTimerRef.current);
+      }
     };
-  }, [documentStore, trpcClient]);
+  }, []);
+
+  const renderedDocument = useMemo(() => {
+    if (blocksQuery.status !== "success" || stylesQuery.status !== "success") {
+      return null;
+    }
+
+    const source =
+      modifiedBlocks ??
+      (blocksQuery.data as NonNullable<typeof blocksQuery.data>);
+
+    return {
+      id: source.document.id,
+      name: source.document.name,
+      blocks: source.blocks,
+      layout: source.layout,
+      styleSheet: stylesQuery.data.styleSheet,
+      pageSize: PAGE_SIZE,
+    };
+  }, [blocksQuery, modifiedBlocks, stylesQuery.status, stylesQuery.data]);
 
   const canMeasureText =
     typeof window !== "undefined" &&
     (typeof OffscreenCanvas !== "undefined" ||
       (!!window.document &&
         !!window.document.createElement("canvas").getContext("2d")));
-  const renderedDocument = useStore(documentStore, (s) => s.document);
   const rendered = useMemo(() => {
-    if (canMeasureText) {
+    if (canMeasureText && renderedDocument) {
       return renderDocumentLayout({ document: renderedDocument, dpi });
     }
     return {
@@ -718,8 +879,21 @@ export function DocumentStoresProvider({
       blocks: rendered.rendered,
       blockTree: rendered.blockTree,
       documentStore,
+      document: renderedDocument,
+      updateBlocks,
+      dpi,
     };
-  }, [documentStore, rendered]);
+  }, [rendered, dpi, renderedDocument, documentStore, updateBlocks]);
+
+  const isLoading =
+    blocksQuery.status === "pending" || stylesQuery.status === "pending";
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <Loader2 className="w-4 h-4 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <DocumentContext.Provider value={value}>

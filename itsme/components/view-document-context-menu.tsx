@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -11,7 +11,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { useTRPC } from "@/server/utils";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export function ViewDocumentContextMenu({
   children,
@@ -24,70 +25,36 @@ export function ViewDocumentContextMenu({
   documentId: string;
   isDeleteDisabled?: boolean;
 }) {
-  const trpc = useTRPC();
   const router = useRouter();
-  const queryClient = useQueryClient();
+  const inFlightRef = React.useRef(false);
 
-  const projectDocumentsQueryKey = trpc.resumes.getProjectDocuments.queryKey({
-    projectId,
-  });
+  const duplicateDocument = useMutation(api.documentTasks.duplicateDocument);
+  const deleteDocument = useMutation(api.documentTasks.deleteDocument);
 
-  const duplicateResumeMutation = useMutation(
-    trpc.resumes.duplicateResume.mutationOptions({
-      onSuccess: (result) => {
-        queryClient.setQueryData(projectDocumentsQueryKey, (current) => {
-          if (!current) return current;
-          const nextDocument = {
-            id: result.documentId,
-            name: result.documentName,
-          };
-          const documents = [...current.documents, nextDocument].sort((a, b) =>
-            a.name.localeCompare(b.name)
-          );
-          return { ...current, documents };
-        });
-        router.push(`/projects/${projectId}/resume/${result.documentId}`);
-      },
-    })
-  );
-
-  const deleteResumeMutation = useMutation(
-    trpc.resumes.deleteResume.mutationOptions({
-      onSuccess: (result) => {
-        queryClient.setQueryData(projectDocumentsQueryKey, (current) => {
-          if (!current) return current;
-          return {
-            ...current,
-            documents: current.documents.filter(
-              (doc) => doc.id !== result.deletedDocumentId
-            ),
-          };
-        });
-        if (result.nextDocumentId) {
-          router.push(`/projects/${projectId}/resume/${result.nextDocumentId}`);
-        } else {
-          router.push(`/projects/${projectId}`);
-        }
-      },
-    })
-  );
-
-  const isBusy =
-    duplicateResumeMutation.isPending || deleteResumeMutation.isPending;
+  const convexProjectId = projectId as Id<"projects">;
+  const convexDocumentId = documentId as Id<"documents">;
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem
-          disabled={isBusy}
           onSelect={(e) => {
             e.preventDefault();
-            if (isBusy) return;
-            duplicateResumeMutation.mutate({
-              projectId,
-              documentId,
-            });
+            if (inFlightRef.current) return;
+            inFlightRef.current = true;
+            void duplicateDocument({
+              projectId: convexProjectId,
+              documentId: convexDocumentId,
+            })
+              .then((result) => {
+                router.push(
+                  `/projects/${projectId}/resume/${result.documentId}`
+                );
+              })
+              .finally(() => {
+                inFlightRef.current = false;
+              });
           }}
         >
           Duplicate
@@ -95,14 +62,27 @@ export function ViewDocumentContextMenu({
         <ContextMenuSeparator />
         <ContextMenuItem
           variant="destructive"
-          disabled={isDeleteDisabled || isBusy}
+          disabled={isDeleteDisabled}
           onSelect={(e) => {
             e.preventDefault();
-            if (isDeleteDisabled || isBusy) return;
-            deleteResumeMutation.mutate({
-              projectId,
-              documentId,
-            });
+            if (isDeleteDisabled || inFlightRef.current) return;
+            inFlightRef.current = true;
+            void deleteDocument({
+              projectId: convexProjectId,
+              documentId: convexDocumentId,
+            })
+              .then((result) => {
+                if (result.nextDocumentId) {
+                  router.push(
+                    `/projects/${projectId}/resume/${result.nextDocumentId}`
+                  );
+                } else {
+                  router.push(`/projects/${projectId}`);
+                }
+              })
+              .finally(() => {
+                inFlightRef.current = false;
+              });
           }}
         >
           Delete

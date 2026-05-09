@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { TRPCProvider } from "@/server/utils";
 import { ThemeProvider } from "./theme-provider";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
+
+const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -53,9 +56,11 @@ export function Providers({
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-        <ThemeProvider className={className}>{children}</ThemeProvider>
-      </TRPCProvider>
+      <ConvexProvider client={convex}>
+        <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+          <ThemeProvider className={className}>{children}</ThemeProvider>
+        </TRPCProvider>
+      </ConvexProvider>
     </QueryClientProvider>
   );
 }

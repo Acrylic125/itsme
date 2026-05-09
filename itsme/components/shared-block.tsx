@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
-import { BlockTree, type ColumnsResizeContext } from "@/blocks/renderer-types";
+import {
+  BlockTree,
+  BlockTreeReorderBoundingBox,
+  type ColumnsResizeContext,
+} from "@/blocks/renderer-types";
 import {
   useDocument,
-  type DocumentStore,
+  buildMoveUpdatesForReorder,
   type DocumentStoreState,
 } from "@/blocks/document-context";
 import { useStore } from "zustand/react";
@@ -139,15 +143,14 @@ function patchColumnSpansAfterResizeDrag(args: {
   dx: number;
   resizeKind: "left" | "right";
   resizeCtx: ColumnsResizeContext;
-  documentStore: DocumentStore;
-  documentId: string;
-  patchDocument: DocumentStoreState["update"];
+  documentBlocks: NonNullable<ReturnType<typeof useDocument>["document"]>;
+  updateBlocks: ReturnType<typeof useDocument>["updateBlocks"];
 }): void {
   const W = args.resizeCtx.columnRowWidthPx;
-  const { dx, resizeKind, resizeCtx, documentStore } = args;
+  const { dx, resizeKind, resizeCtx } = args;
   if (W <= 0 || dx === 0) return;
 
-  const doc = documentStore.getState().document;
+  const doc = args.documentBlocks;
   const colBlock = doc.blocks.find(
     (b) => b.id === resizeCtx.columnsBlockId && b.type === "columns"
   );
@@ -192,11 +195,21 @@ function patchColumnSpansAfterResizeDrag(args: {
     nextSpans.every((s, idx) => s === spans[idx]);
   if (unchanged) return;
 
-  args.patchDocument({
-    type: "columns_spans",
-    documentId: args.documentId,
-    columnsBlockId: resizeCtx.columnsBlockId,
-    spans: nextSpans,
+  args.updateBlocks((current) => {
+    return {
+      ...current,
+      blocks: current.blocks.map((b) => {
+        if (b.type !== "columns" || b.id !== resizeCtx.columnsBlockId) return b;
+        if (b.blocks.length !== resizeCtx.siblingCount) return b;
+        return {
+          ...b,
+          blocks: b.blocks.map((child, iChild) => ({
+            ...child,
+            span: nextSpans[iChild] ?? child.span,
+          })),
+        };
+      }),
+    };
   });
 }
 
@@ -299,13 +312,13 @@ function useInteractableBlockController(args: {
     anchor: NormalizedAnchorRect;
   }) => void;
   columnsResizeContext?: ColumnsResizeContext;
-  documentStore: DocumentStore;
-  blockTree: BlockTree;
-  patchDocument: DocumentStoreState["update"];
-  documentId: string;
   setReorder: DocumentStoreState["setReorderCurrent"];
-  setReorderTarget: DocumentStoreState["setReorderTarget"];
-  commitReorder: DocumentStoreState["commitReorder"];
+  setReorderTarget: (targetBlock: BlockTreeReorderBoundingBox | null) => void;
+  commitReorder: () => void;
+  updateBlocks: ReturnType<typeof useDocument>["updateBlocks"];
+  documentBlocks: NonNullable<
+    ReturnType<typeof useDocument>["document"]
+  > | null;
 }) {
   const {
     blockId,
@@ -317,13 +330,11 @@ function useInteractableBlockController(args: {
     onContextMenu,
     onClick,
     columnsResizeContext,
-    documentStore,
-    blockTree,
-    patchDocument,
-    documentId,
     setReorder,
     setReorderTarget,
     commitReorder,
+    updateBlocks,
+    documentBlocks,
   } = args;
 
   const groupRef = useRef<Konva.Group | null>(null);
@@ -519,29 +530,27 @@ function useInteractableBlockController(args: {
         const ptrEnd = getPointerCanvasPosition(node);
         resetNodeDragPosition(node, dragStartPosition.current);
         if (ptrEnd) {
+          if (!documentBlocks) return;
           patchColumnSpansAfterResizeDrag({
             dx: ptrEnd.x - ptrStart.x,
             resizeKind,
             resizeCtx,
-            documentStore,
-            documentId,
-            patchDocument,
+            documentBlocks,
+            updateBlocks,
           });
         }
         return;
       }
 
-      commitReorder(blockTree);
+      commitReorder();
       resetNodeDragPosition(node, dragStartPosition.current);
     },
     [
       commitReorder,
-      blockTree,
       columnsResizeContext,
-      documentStore,
-      documentId,
-      patchDocument,
       getPointerCanvasPosition,
+      documentBlocks,
+      updateBlocks,
     ]
   );
 
@@ -639,21 +648,48 @@ export function InteractableBlock({
     anchor: { left: number; top: number; width: number; height: number };
   }) => void;
 }) {
-  const { documentStore, blockTree } = useDocument();
-  const {
-    setReorder,
-    setReorderTarget,
-    commitReorder,
-    documentId,
-    patchDocument,
-  } = useStore(
+  const { documentStore, blockTree, updateBlocks, document } = useDocument();
+
+  const commitReorder = useCallback(() => {
+    if (!document) return;
+    const state = documentStore.getState();
+    if (!state.reorder.current || !state.reorder.targetBlock) {
+      state.setReorderCurrent(null);
+      state.setReorderTarget(null);
+      return;
+    }
+
+    updateBlocks((current) => {
+      const docForMove = {
+        name: current.document.name,
+        pageSize: document.pageSize,
+        styleSheet: document.styleSheet,
+        blocks: current.blocks,
+        layout: current.layout,
+      };
+      const result = buildMoveUpdatesForReorder({
+        document: docForMove,
+        documentId: current.document.id,
+        reorder: state.reorder,
+        blockTree,
+      });
+      if (!result) return current;
+      return {
+        ...current,
+        blocks: result.nextDocument.blocks,
+        layout: result.nextDocument.layout as typeof current.layout,
+      };
+    });
+
+    state.setReorderCurrent(null);
+    state.setReorderTarget(null);
+  }, [document, documentStore, updateBlocks, blockTree]);
+
+  const { setReorder, setReorderTarget } = useStore(
     documentStore,
     useShallow((s) => ({
       setReorder: s.setReorderCurrent,
       setReorderTarget: s.setReorderTarget,
-      commitReorder: s.commitReorder,
-      documentId: s.documentId,
-      patchDocument: s.update,
     }))
   );
 
@@ -692,13 +728,11 @@ export function InteractableBlock({
     onContextMenu,
     onClick,
     columnsResizeContext,
-    documentStore,
-    blockTree,
-    patchDocument,
-    documentId,
     setReorder,
     setReorderTarget,
     commitReorder,
+    updateBlocks,
+    documentBlocks: document,
   });
 
   return (

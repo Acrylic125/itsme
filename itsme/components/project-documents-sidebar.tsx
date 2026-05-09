@@ -1,29 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "./ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ViewDocumentContextMenu } from "@/components/view-document-context-menu";
-import { useTRPC } from "@/server/utils";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { useQueryWithStatus } from "./convex-hooks";
 
 export function ProjectDocumentsSidebar({
   projectId,
   activeDocumentId,
-  projectName,
 }: {
   projectId: string;
   activeDocumentId: string;
-  projectName: string;
 }) {
-  const trpc = useTRPC();
-  const projectDocumentsQuery = useQuery(
-    trpc.resumes.getProjectDocuments.queryOptions({ projectId })
+  const convexProjectId = projectId as Id<"projects">;
+  const projectQuery = useQueryWithStatus(api.documentTasks.getProject, {
+    projectId: convexProjectId,
+  });
+  const projectDocumentsQuery = useQueryWithStatus(
+    api.documentTasks.getProjectDocuments,
+    { projectId: convexProjectId }
   );
 
   let documentEntriesEle = null;
-  if (projectDocumentsQuery.isPending) {
+  if (projectDocumentsQuery.status === "pending") {
     documentEntriesEle = (
       <div className="flex flex-col gap-1">
         <Skeleton className="w-full h-10" />
@@ -33,7 +36,7 @@ export function ProjectDocumentsSidebar({
         <Skeleton className="w-full h-10" />
       </div>
     );
-  } else if (projectDocumentsQuery.isError) {
+  } else if (projectDocumentsQuery.status === "error") {
     documentEntriesEle = (
       <p className="px-2 py-1 text-destructive">Failed to load documents.</p>
     );
@@ -83,7 +86,11 @@ export function ProjectDocumentsSidebar({
             <span className="font-bold">My Projects</span>
           </Link>
         </Button>
-        <h1 className="px-2 text-2xl font-bold line-clamp-2">{projectName}</h1>
+        <h1 className="px-2 text-2xl font-bold line-clamp-2">
+          {projectQuery.status === "success"
+            ? (projectQuery.data?.project.name ?? "Project")
+            : "Project"}
+        </h1>
       </div>
       <div className="flex flex-col gap-2">
         <h2 className="text-muted-foreground text-sm px-2">Documents</h2>
