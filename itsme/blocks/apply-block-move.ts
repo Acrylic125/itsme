@@ -1,4 +1,5 @@
 import z from "zod";
+import { nanoid } from "nanoid";
 import { DocumentSchema } from "./renderer";
 
 /** Discriminant from drag-and-drop; defined here so block logic does not depend on UI modules. */
@@ -38,6 +39,13 @@ export const MoveBlockUpdateSchema = z.object({
 
 type Document = z.infer<typeof DocumentSchema>;
 export type MoveBlockUpdate = z.infer<typeof MoveBlockUpdateSchema>;
+
+const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
+
+function createClientIdForDuplicate(kind: string): string {
+  const token = nanoid(12);
+  return `${CLIENT_ID_PREFIX}${kind}-${token}`;
+}
 
 type ParentRef =
   | {
@@ -548,4 +556,229 @@ export function applyInsertNewBlockAtDestination(
   }
 
   return next;
+}
+
+/**
+ * Removes `blockId` and every nested block referenced beneath it from `doc`,
+ * and removes the root reference from its parent container.
+ */
+export function deleteBlockFromDocument(
+  doc: Document,
+  blockId: string
+): Document | null {
+  const source = findParentRef(doc, blockId);
+  if (!source) {
+    return null;
+  }
+
+  const blockById = new Map(doc.blocks.map((block) => [block.id, block]));
+  if (!blockById.get(blockId)) {
+    return null;
+  }
+
+  const collectSubtreeIds = (id: string, into: Set<string>) => {
+    into.add(id);
+    const block = blockById.get(id);
+    if (!block) return;
+    for (const childId of getChildBlockIds(block)) {
+      collectSubtreeIds(childId, into);
+    }
+  };
+
+  const toRemove = new Set<string>();
+  collectSubtreeIds(blockId, toRemove);
+
+  const next: Document = {
+    ...doc,
+    layout: [...doc.layout],
+    blocks: doc.blocks.map((block) => {
+      switch (block.type) {
+        case "section":
+        case "list":
+          return { ...block, blocks: [...block.blocks] };
+        case "columns":
+          return {
+            ...block,
+            blocks: block.blocks.map((child) => ({ ...child })),
+          };
+        case "text":
+          return block;
+      }
+    }),
+  };
+
+  const nextBlockById = new Map(next.blocks.map((block) => [block.id, block]));
+
+  const removeFromSource = () => {
+    switch (source.container) {
+      case "document":
+        next.layout.splice(source.index, 1);
+        break;
+      case "section": {
+        const parent = nextBlockById.get(source.parentBlockId);
+        if (!parent || parent.type !== "section") return;
+        parent.blocks.splice(source.index, 1);
+        break;
+      }
+      case "list": {
+        const parent = nextBlockById.get(source.parentBlockId);
+        if (!parent || parent.type !== "list") return;
+        parent.blocks.splice(source.index, 1);
+        break;
+      }
+      case "columns": {
+        const parent = nextBlockById.get(source.parentBlockId);
+        if (!parent || parent.type !== "columns") return;
+        parent.blocks.splice(source.index, 1);
+        break;
+      }
+    }
+  };
+
+  removeFromSource();
+
+  next.blocks = next.blocks.filter((block) => !toRemove.has(block.id));
+
+  return pruneStaleLayoutReferences(next);
+}
+
+/** Deep-copies the subtree at `blockId` with fresh ids and inserts it below that block. */
+export function duplicateBlockBelowInDocument(
+  doc: Document,
+  blockId: string
+): { document: Document; newRootId: string } | null {
+  const parentRef = findParentRef(doc, blockId);
+  if (!parentRef) {
+    return null;
+  }
+
+  const blockById = new Map(doc.blocks.map((block) => [block.id, block]));
+  if (!blockById.get(blockId)) {
+    return null;
+  }
+
+  const orderedIds: string[] = [];
+  const collect = (id: string) => {
+    orderedIds.push(id);
+    const block = blockById.get(id);
+    if (!block) return;
+    for (const childId of getChildBlockIds(block)) {
+      collect(childId);
+    }
+  };
+  collect(blockId);
+
+  const oldToNew = new Map<string, string>();
+  for (const id of orderedIds) {
+    const block = blockById.get(id);
+    if (!block) continue;
+    oldToNew.set(id, createClientIdForDuplicate(block.type));
+  }
+
+  const remapId = (id: string) => oldToNew.get(id) ?? id;
+
+  const newBlocks: Document["blocks"] = orderedIds.map((id) => {
+    const b = blockById.get(id)!;
+    switch (b.type) {
+      case "text":
+        return {
+          ...b,
+          id: remapId(b.id),
+          ...(b.ref ? { ref: remapId(b.ref) } : {}),
+        };
+      case "section":
+      case "list":
+        return {
+          ...b,
+          id: remapId(b.id),
+          blocks: b.blocks.map((cid) => remapId(cid)),
+          ...(b.ref ? { ref: remapId(b.ref) } : {}),
+        };
+      case "columns":
+        return {
+          ...b,
+          id: remapId(b.id),
+          blocks: b.blocks.map((c) => ({
+            ...c,
+            blockId: remapId(c.blockId),
+          })),
+          ...(b.ref ? { ref: remapId(b.ref) } : {}),
+        };
+    }
+  });
+
+  const next: Document = {
+    ...doc,
+    layout: [...doc.layout],
+    blocks: [
+      ...doc.blocks.map((block) => {
+        switch (block.type) {
+          case "section":
+          case "list":
+            return { ...block, blocks: [...block.blocks] };
+          case "columns":
+            return {
+              ...block,
+              blocks: block.blocks.map((child) => ({ ...child })),
+            };
+          case "text":
+            return block;
+        }
+      }),
+      ...newBlocks,
+    ],
+  };
+
+  const newRootId = remapId(blockId);
+  const insertIndex = parentRef.index + 1;
+
+  const nextBlockById = new Map(next.blocks.map((block) => [block.id, block]));
+
+  switch (parentRef.container) {
+    case "document":
+      next.layout.splice(
+        clampInsertIndex(insertIndex, next.layout.length),
+        0,
+        newRootId
+      );
+      break;
+    case "section": {
+      const parent = nextBlockById.get(parentRef.parentBlockId);
+      if (!parent || parent.type !== "section") return null;
+      parent.blocks.splice(
+        clampInsertIndex(insertIndex, parent.blocks.length),
+        0,
+        newRootId
+      );
+      break;
+    }
+    case "list": {
+      const parent = nextBlockById.get(parentRef.parentBlockId);
+      if (!parent || parent.type !== "list") return null;
+      parent.blocks.splice(
+        clampInsertIndex(insertIndex, parent.blocks.length),
+        0,
+        newRootId
+      );
+      break;
+    }
+    case "columns": {
+      const parent = nextBlockById.get(parentRef.parentBlockId);
+      if (!parent || parent.type !== "columns") return null;
+      parent.blocks.splice(
+        clampInsertIndex(insertIndex, parent.blocks.length),
+        0,
+        {
+          blockId: newRootId,
+          span: parentRef.span,
+        }
+      );
+      break;
+    }
+  }
+
+  return {
+    document: pruneStaleLayoutReferences(next),
+    newRootId,
+  };
 }

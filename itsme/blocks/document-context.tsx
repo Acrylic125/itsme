@@ -462,8 +462,7 @@ export function createDocumentStore() {
     action: null,
     setAction: (input) => {
       set((state) => {
-        const next =
-          typeof input === "function" ? input(state.action) : input;
+        const next = typeof input === "function" ? input(state.action) : input;
         return { action: next };
       });
     },
@@ -777,12 +776,7 @@ export function DocumentStoresProvider({
       styleSheet: stylesQuery.data.styleSheet,
       pageSize: PAGE_SIZE,
     };
-  }, [
-    blocksQuery,
-    modifiedBlocks,
-    stylesQuery,
-    clientIdMappings,
-  ]);
+  }, [blocksQuery, modifiedBlocks, stylesQuery, clientIdMappings]);
 
   const canMeasureText =
     typeof window !== "undefined" &&

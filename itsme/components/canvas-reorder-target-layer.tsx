@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Group, Rect, Text } from "react-konva";
 import {
   applyBlockMove,
@@ -471,13 +471,18 @@ export function buildMoveUpdatesForReorder(args: {
   return finalizeSnapshotAfterReorder(next);
 }
 
+export type AddBlockPlacementResult = {
+  snapshot: DocumentBlocksSnapshot;
+  insertedBlockId: string;
+};
+
 /** Places a new text/list block using the same drop targets as block reorder (merge excluded). */
 export function buildNextDocumentForAddBlockPlacement(args: {
   snapshot: DocumentBlocksSnapshot;
   blockTree: BlockTree;
   blockType: "text" | "list";
   targetBox: BlockTreeReorderBoundingBox;
-}): DocumentBlocksSnapshot | null {
+}): AddBlockPlacementResult | null {
   const { snapshot, blockTree, blockType, targetBox } = args;
   const newId = createClientId({ kind: blockType });
   const newBlock: Block =
@@ -522,7 +527,10 @@ export function buildNextDocumentForAddBlockPlacement(args: {
       blocks: phase1.blocks,
       layout: phase1.layout as DocumentBlocksSnapshot["layout"],
     };
-    return finalizeSnapshotAfterReorder(phase1Snapshot);
+    return {
+      snapshot: finalizeSnapshotAfterReorder(phase1Snapshot),
+      insertedBlockId: newId,
+    };
   }
 
   const targetParent = findParentRefFromBlockTree(
@@ -571,7 +579,10 @@ export function buildNextDocumentForAddBlockPlacement(args: {
       blocks: phase1.blocks,
       layout: phase1.layout as DocumentBlocksSnapshot["layout"],
     };
-    return finalizeSnapshotAfterReorder(phase1Snapshot);
+    return {
+      snapshot: finalizeSnapshotAfterReorder(phase1Snapshot),
+      insertedBlockId: newId,
+    };
   }
 
   if (targetParent.container === "columns") {
@@ -606,7 +617,10 @@ export function buildNextDocumentForAddBlockPlacement(args: {
       blocks: phase1.blocks,
       layout: phase1.layout as DocumentBlocksSnapshot["layout"],
     };
-    return finalizeSnapshotAfterReorder(phase1Snapshot);
+    return {
+      snapshot: finalizeSnapshotAfterReorder(phase1Snapshot),
+      insertedBlockId: newId,
+    };
   }
 
   const next = cloneSnapshot(snapshot);
@@ -671,7 +685,10 @@ export function buildNextDocumentForAddBlockPlacement(args: {
     }
   }
 
-  return finalizeSnapshotAfterReorder(next);
+  return {
+    snapshot: finalizeSnapshotAfterReorder(next),
+    insertedBlockId: newId,
+  };
 }
 
 /**
@@ -902,6 +919,8 @@ export function AddBlockPlacementLayer({
 
   const pointer = addAction?.current?.position ?? null;
   const blockLabel = addAction?.blockType === "list" ? "List" : "Text";
+  /** Dev Strict Mode may invoke state updaters twice; cache one placement result per commit. */
+  const placementSnapshotCacheRef = useRef<DocumentBlocksSnapshot | null>(null);
 
   const syncAddTarget = useCallback(
     (target: BlockTreeReorderBoundingBox | null) => {
@@ -922,19 +941,33 @@ export function AddBlockPlacementLayer({
     }
     const targetBox = add.targetBlock;
     const blockType = add.blockType;
+    let insertedBlockId: string | null = null;
+    placementSnapshotCacheRef.current = null;
     updateBlocks((current) => {
-      const next = buildNextDocumentForAddBlockPlacement({
+      const cached = placementSnapshotCacheRef.current;
+      if (cached) {
+        return cached;
+      }
+      const placed = buildNextDocumentForAddBlockPlacement({
         snapshot: current,
         blockTree,
         blockType,
         targetBox,
       });
-      if (!next) {
+      if (!placed) {
         return current;
       }
-      return next;
+      insertedBlockId = placed.insertedBlockId;
+      placementSnapshotCacheRef.current = placed.snapshot;
+      return placed.snapshot;
     });
     setAction(null);
+    if (blockType === "text" && insertedBlockId) {
+      documentStore.getState().setAction({
+        type: "edit-block",
+        blockId: insertedBlockId,
+      });
+    }
   }, [blockTree, document, documentStore, setAction, updateBlocks]);
 
   if (!addAction) {

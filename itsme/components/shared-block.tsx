@@ -6,11 +6,18 @@ import Konva from "konva";
 import { BlockTree, type ColumnsResizeContext } from "@/blocks/renderer-types";
 import { buildMoveUpdatesForReorder } from "@/components/canvas-reorder-target-layer";
 import {
+  deleteBlockFromDocument,
+  duplicateBlockBelowInDocument,
+} from "@/blocks/apply-block-move";
+import {
   useDocument,
+  asEditBlockAction,
   asMoveBlockAction,
   asResizeColumnAction,
+  documentBlocksSnapshotToDocument,
   selectMoveBlockAction,
   selectResizeColumnAction,
+  type DocumentBlocksSnapshot,
   type DocumentStoreResizeColumnAction,
   type DocumentStoreState,
 } from "@/blocks/document-context";
@@ -97,7 +104,7 @@ function transferSpansBetweenNeighbors(
   return out;
 }
 
-function normalizedAnchorRectForNode(
+export function getNormalizedAnchorRectForKonvaNode(
   node: Konva.Node
 ): NormalizedAnchorRect | null {
   const stage = node.getStage();
@@ -322,6 +329,7 @@ function useInteractableBlockController(args: {
   documentBlocks: NonNullable<
     ReturnType<typeof useDocument>["document"]
   > | null;
+  onKonvaGroupRef?: (node: Konva.Group | null) => void;
 }) {
   const {
     blockId,
@@ -338,12 +346,17 @@ function useInteractableBlockController(args: {
     commitReorder,
     updateBlocks,
     documentBlocks,
+    onKonvaGroupRef,
   } = args;
 
   const groupRef = useRef<Konva.Group | null>(null);
-  const assignGroupRef = useCallback((n: Konva.Group | null) => {
-    groupRef.current = n;
-  }, []);
+  const assignGroupRef = useCallback(
+    (n: Konva.Group | null) => {
+      groupRef.current = n;
+      onKonvaGroupRef?.(n);
+    },
+    [onKonvaGroupRef]
+  );
   const [hovered, setHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPosition = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -370,7 +383,7 @@ function useInteractableBlockController(args: {
       if (!onContextMenu) return;
       const node = groupRef.current;
       if (!node) return;
-      const anchor = normalizedAnchorRectForNode(node);
+      const anchor = getNormalizedAnchorRectForKonvaNode(node);
       if (!anchor) return;
       onContextMenu({ event, anchor });
     },
@@ -386,7 +399,7 @@ function useInteractableBlockController(args: {
       if (!onClick) return;
       const node = groupRef.current;
       if (!node) return;
-      const anchor = normalizedAnchorRectForNode(node);
+      const anchor = getNormalizedAnchorRectForKonvaNode(node);
       if (!anchor) return;
       onClick({ event, anchor });
     },
@@ -628,6 +641,75 @@ function useInteractableBlockController(args: {
   );
   const resizeGripY = (height - resizeGripHeight) / 2;
 
+  useEffect(() => {
+    if (!inFocus || disabled || !documentBlocks) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const active = document.activeElement;
+      if (
+        active &&
+        (active.tagName === "TEXTAREA" ||
+          active.tagName === "INPUT" ||
+          (active instanceof HTMLElement && active.isContentEditable))
+      ) {
+        return;
+      }
+
+      if (event.key === "Delete") {
+        event.preventDefault();
+        let didDelete = false;
+        updateBlocks((current) => {
+          const doc = documentBlocksSnapshotToDocument(current);
+          const nextDoc = deleteBlockFromDocument(doc, blockId);
+          if (!nextDoc) return current;
+          didDelete = true;
+          return {
+            ...current,
+            blocks: nextDoc.blocks,
+            layout: nextDoc.layout as DocumentBlocksSnapshot["layout"],
+          };
+        });
+        if (didDelete) {
+          setAction((current) => {
+            const edit = asEditBlockAction(current);
+            if (edit?.blockId === blockId) return null;
+            return current;
+          });
+        }
+        return;
+      }
+
+      const duplicateChord =
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "d";
+      if (duplicateChord) {
+        event.preventDefault();
+        updateBlocks((current) => {
+          const doc = documentBlocksSnapshotToDocument(current);
+          const dup = duplicateBlockBelowInDocument(doc, blockId);
+          if (!dup) return current;
+          return {
+            ...current,
+            blocks: dup.document.blocks,
+            layout: dup.document.layout as DocumentBlocksSnapshot["layout"],
+          };
+        });
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    blockId,
+    disabled,
+    documentBlocks,
+    inFocus,
+    setAction,
+    updateBlocks,
+  ]);
+
   return {
     assignGroupRef,
     handleContextMenu,
@@ -669,6 +751,7 @@ export function InteractableBlock({
   inFocus = false,
   disabled = false,
   columnsResizeContext,
+  onKonvaGroupRef,
 }: {
   blockId: string;
   x: number;
@@ -679,6 +762,7 @@ export function InteractableBlock({
   inFocus?: boolean;
   disabled?: boolean;
   columnsResizeContext?: ColumnsResizeContext;
+  onKonvaGroupRef?: (node: Konva.Group | null) => void;
   children: React.ReactNode;
   onContextMenu?: (args: {
     event: Konva.KonvaEventObject<MouseEvent>;
@@ -759,6 +843,7 @@ export function InteractableBlock({
     commitReorder,
     updateBlocks,
     documentBlocks: document,
+    onKonvaGroupRef,
   });
 
   return (

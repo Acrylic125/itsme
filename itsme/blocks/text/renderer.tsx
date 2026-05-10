@@ -12,6 +12,7 @@ import {
   REORDER_BOUNDING_BOX_VISUAL_SIZE,
 } from "../renderer-types";
 import {
+  getNormalizedAnchorRectForKonvaNode,
   InteractableBlock,
   useInteractableBlock,
 } from "@/components/shared-block";
@@ -24,7 +25,8 @@ import {
   selectEditBlockAction,
   useDocument,
 } from "@/blocks/document-context";
-import { useCallback, useEffect, useState } from "react";
+import Konva from "konva";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
@@ -41,7 +43,12 @@ export function EditTextModal({
   block: z.infer<typeof TextBlockSchema>;
 }) {
   const { updateBlocks } = useDocument();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState(block.text);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   const debouncedSave = useDebouncedCallback(
     (nextText: string) => {
@@ -81,6 +88,7 @@ export function EditTextModal({
   return (
     <div className="flex flex-col gap-2 border border-border bg-card p-4 rounded-xl shadow-xl">
       <Textarea
+        ref={textareaRef}
         className="w-full"
         value={text}
         onChange={(e) => handleChange(e.target.value)}
@@ -136,6 +144,20 @@ function TextBlockComponent({
   );
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const isEditingThisBlock = editAction?.blockId === block.id;
+  const canvasGroupRef = useRef<Konva.Group | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isEditingThisBlock || anchor) return;
+    const syncAnchor = () => {
+      const node = canvasGroupRef.current;
+      if (!node) return;
+      const rect = getNormalizedAnchorRectForKonvaNode(node);
+      if (rect) setAnchor(rect);
+    };
+    syncAnchor();
+    const frame = requestAnimationFrame(syncAnchor);
+    return () => cancelAnimationFrame(frame);
+  }, [anchor, block.id, isEditingThisBlock]);
 
   const closeTextEditor = useCallback(() => {
     setAnchor(null);
@@ -181,6 +203,9 @@ function TextBlockComponent({
         disabled={isDisabled}
         inFocus={isEditingThisBlock}
         columnsResizeContext={columnsResizeContext}
+        onKonvaGroupRef={(node) => {
+          canvasGroupRef.current = node;
+        }}
         onClick={handleClick}
       >
         <Text

@@ -929,12 +929,10 @@ export const updateDocumentBlocks = mutation({
         return mapped;
       });
       await ctx.db.patch(args.documentId, { layout: mappedLayout });
-    } else if (createdBlockIds.length > 0) {
-      // Default: append newly created blocks to the document layout.
-      await ctx.db.patch(args.documentId, {
-        layout: [...doc.layout, ...createdBlockIds],
-      });
     }
+    // Do not append created rows to `layout` when `layout` is omitted. Nested
+    // creates (e.g. text inside a list) only update parent block data; the
+    // client intentionally skips `layout` when the root order is unchanged.
 
     const clientIdToBlockIdRecord: Record<string, Id<"blocks">> = {};
     for (const [clientId, blockId] of clientIdToBlockId) {
