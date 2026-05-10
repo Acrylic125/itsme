@@ -99,3 +99,78 @@ export function caretOffsetFromLocalPoint(args: {
   const withinLine = utf16OffsetWithinLine(line.text, clampedX, font);
   return Math.min(args.text.length, lineStartGlobal + withinLine);
 }
+
+function expandNonWhitespaceRun(
+  text: string,
+  offset: number
+): { start: number; end: number } {
+  if (text.length === 0) return { start: 0, end: 0 };
+  let lo = Math.min(Math.max(offset, 0), text.length - 1);
+  let hi = offset;
+
+  if (/\s/.test(text[lo] ?? "")) {
+    let i = offset;
+    while (i < text.length && /\s/.test(text[i]!)) i++;
+    if (i < text.length) {
+      lo = i;
+      hi = i;
+    } else {
+      let j = Math.min(offset, text.length - 1);
+      while (j >= 0 && /\s/.test(text[j]!)) j--;
+      if (j < 0) return { start: offset, end: offset };
+      lo = hi = j;
+    }
+  }
+
+  while (lo > 0 && /\S/.test(text[lo - 1]!)) lo--;
+  while (hi < text.length && /\S/.test(text[hi]!)) hi++;
+  return { start: lo, end: hi };
+}
+
+/**
+ * UTF-16 range for double-click “word” selection (prefers `Intl.Segmenter`
+ * word segments when available).
+ */
+export function wordUtf16RangeAt(
+  text: string,
+  utf16Offset: number
+): { start: number; end: number } {
+  if (text.length === 0) return { start: 0, end: 0 };
+
+  const o = Math.min(Math.max(utf16Offset, 0), text.length);
+  const probeIndex = o === text.length ? text.length - 1 : o;
+
+  try {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: "word" });
+
+    for (const seg of segmenter.segment(text)) {
+      const start = seg.index;
+      const end = start + seg.segment.length;
+      const inSeg =
+        (o >= start && o < end) ||
+        (o === text.length && end === text.length && start <= o);
+      if (!inSeg) continue;
+      if (seg.isWordLike) return { start, end };
+      break;
+    }
+
+    let best: { start: number; end: number } | null = null;
+    let bestDist = Infinity;
+    for (const seg of segmenter.segment(text)) {
+      if (!seg.isWordLike) continue;
+      const start = seg.index;
+      const end = start + seg.segment.length;
+      const mid = (start + end) / 2;
+      const d = Math.abs(mid - probeIndex);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { start, end };
+      }
+    }
+    if (best) return best;
+  } catch {
+    // fall through
+  }
+
+  return expandNonWhitespaceRun(text, probeIndex);
+}

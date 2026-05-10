@@ -363,17 +363,13 @@ function useInteractableBlockController(args: {
 
   /** Derived from the global `resize-column` action — only present for the originating block. */
   const activeColumnResize = useMemo(() => {
-    if (
-      !resizeColumnAction ||
-      resizeColumnAction.blockId !== blockId
-    ) {
+    if (!resizeColumnAction || resizeColumnAction.blockId !== blockId) {
       return null;
     }
     return {
       kind: resizeColumnAction.kind,
       dx:
-        resizeColumnAction.pointerCurrent.x -
-        resizeColumnAction.pointerStart.x,
+        resizeColumnAction.pointerCurrent.x - resizeColumnAction.pointerStart.x,
     };
   }, [resizeColumnAction, blockId]);
 
@@ -645,15 +641,15 @@ function useInteractableBlockController(args: {
     if (!inFocus || disabled || !documentBlocks) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      const active = document.activeElement;
-      if (
-        active &&
-        (active.tagName === "TEXTAREA" ||
-          active.tagName === "INPUT" ||
-          (active instanceof HTMLElement && active.isContentEditable))
-      ) {
-        return;
-      }
+      // const active = document.activeElement;
+      // if (
+      //   active &&
+      //   (active.tagName === "TEXTAREA" ||
+      //     active.tagName === "INPUT" ||
+      //     (active instanceof HTMLElement && active.isContentEditable))
+      // ) {
+      //   return;
+      // }
 
       if (event.key === "Delete") {
         event.preventDefault();
@@ -701,14 +697,7 @@ function useInteractableBlockController(args: {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    blockId,
-    disabled,
-    documentBlocks,
-    inFocus,
-    setAction,
-    updateBlocks,
-  ]);
+  }, [blockId, disabled, documentBlocks, inFocus, setAction, updateBlocks]);
 
   return {
     assignGroupRef,
