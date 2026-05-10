@@ -26,11 +26,18 @@ import {
   useDocument,
 } from "@/blocks/document-context";
 import Konva from "konva";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
 import { useDebouncedCallback } from "use-debounce";
+import { caretOffsetFromLocalPoint } from "./caret-from-pointer";
 
 /** Shown only when `block.text` is empty; not persisted and not used as edit initial value. */
 const EMPTY_TEXT_DISPLAY = "Click to set text";
@@ -38,17 +45,24 @@ const EMPTY_TEXT_DISPLAY = "Click to set text";
 export function EditTextModal({
   closePopup,
   block,
+  initialCaretOffset,
 }: {
   closePopup: () => void;
   block: z.infer<typeof TextBlockSchema>;
+  /** UTF-16 offset in `block.text`; clamped on mount to textarea bounds. */
+  initialCaretOffset: number;
 }) {
   const { updateBlocks } = useDocument();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState(block.text);
 
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
+  useLayoutEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.focus();
+    const at = Math.max(0, Math.min(initialCaretOffset, ta.value.length));
+    ta.setSelectionRange(at, at);
+  }, [initialCaretOffset]);
 
   const debouncedSave = useDebouncedCallback(
     (nextText: string) => {
@@ -143,6 +157,7 @@ function TextBlockComponent({
     }))
   );
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
+  const [initialCaretOffset, setInitialCaretOffset] = useState(0);
   const isEditingThisBlock = editAction?.blockId === block.id;
   const canvasGroupRef = useRef<Konva.Group | null>(null);
 
@@ -161,6 +176,7 @@ function TextBlockComponent({
 
   const closeTextEditor = useCallback(() => {
     setAnchor(null);
+    setInitialCaretOffset(0);
     setAction((current) => {
       const editAction = asEditBlockAction(current);
       return editAction?.blockId === block.id ? null : current;
@@ -169,10 +185,37 @@ function TextBlockComponent({
 
   const handleClick = useCallback(
     (args: { anchor: AnchorRect }) => {
-      setAction({ type: "edit-block", blockId: block.id });
+      const node = canvasGroupRef.current;
+      const local = node?.getRelativePointerPosition();
+      const caret =
+        local != null
+          ? caretOffsetFromLocalPoint({
+              text: block.text,
+              widthPx: dimensions.width,
+              fontSizePx,
+              lineHeight: style.lineHeight,
+              fontFamily: style.fontFamily,
+              fontWeight: style.fontWeight,
+              align: block.align,
+              localX: local.x,
+              localY: local.y,
+            })
+          : 0;
       setAnchor(args.anchor);
+      setInitialCaretOffset(caret);
+      setAction({ type: "edit-block", blockId: block.id });
     },
-    [block.id, setAction]
+    [
+      block.align,
+      block.id,
+      block.text,
+      dimensions.width,
+      fontSizePx,
+      setAction,
+      style.fontFamily,
+      style.fontWeight,
+      style.lineHeight,
+    ]
   );
 
   useEffect(() => {
@@ -244,9 +287,9 @@ function TextBlockComponent({
             }}
           >
             <EditTextModal
-              // key={popupKey}
               block={block}
               closePopup={closeTextEditor}
+              initialCaretOffset={initialCaretOffset}
             />
             {/* <div className="h-1 w-full bg-amber-300" /> */}
           </Html>

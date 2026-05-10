@@ -154,6 +154,21 @@ export function pruneStaleLayoutReferences(doc: Document): Document {
   return { ...doc, layout: nextLayout };
 }
 
+/**
+ * Root `layout` must only reference top-level blocks that exist in `blocks`.
+ * Applies {@link pruneStaleLayoutReferences}, then drops orphan ids (e.g. stale
+ * Convex layout rows after deletes, or duplicate root entries left by older bugs).
+ */
+export function sanitizeRootLayout(doc: Document): Document {
+  const pruned = pruneStaleLayoutReferences(doc);
+  const blockIds = new Set(pruned.blocks.map((b) => b.id));
+  const nextLayout = pruned.layout.filter((id) => blockIds.has(id));
+  if (nextLayout.length === pruned.layout.length) {
+    return pruned;
+  }
+  return { ...pruned, layout: nextLayout };
+}
+
 function getChildBlockIds(block: Document["blocks"][number]): string[] {
   switch (block.type) {
     case "section":
@@ -486,33 +501,21 @@ export function applyInsertNewBlockAtDestination(
         return next.layout.length;
       case "section": {
         const p = next.blocks.find(
-          (
-            b
-          ): b is Extract<
-            Document["blocks"][number],
-            { type: "section" }
-          > =>
+          (b): b is Extract<Document["blocks"][number], { type: "section" }> =>
             b.id === destination.parentBlockId && b.type === "section"
         );
         return p?.blocks.length ?? 0;
       }
       case "list": {
         const p = next.blocks.find(
-          (
-            b
-          ): b is Extract<Document["blocks"][number], { type: "list" }> =>
+          (b): b is Extract<Document["blocks"][number], { type: "list" }> =>
             b.id === destination.parentBlockId && b.type === "list"
         );
         return p?.blocks.length ?? 0;
       }
       case "columns": {
         const p = next.blocks.find(
-          (
-            b
-          ): b is Extract<
-            Document["blocks"][number],
-            { type: "columns" }
-          > =>
+          (b): b is Extract<Document["blocks"][number], { type: "columns" }> =>
             b.id === destination.parentBlockId && b.type === "columns"
         );
         return p?.blocks.length ?? 0;

@@ -19,6 +19,7 @@ import {
   renderDocumentLayout,
   RenderedLayoutBlock,
 } from "./renderer";
+import { sanitizeRootLayout } from "./apply-block-move";
 import type { Block } from "./blocks";
 import { BlockUpdateSchema } from "./updater";
 import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
@@ -768,13 +769,21 @@ export function DocumentStoresProvider({
     );
     const source = modifiedBlocks ?? normalizedServer;
 
-    return {
-      id: source.document.id,
+    const cleaned = sanitizeRootLayout({
       name: source.document.name,
+      pageSize: PAGE_SIZE,
+      styleSheet: stylesQuery.data.styleSheet,
       blocks: source.blocks,
       layout: source.layout,
-      styleSheet: stylesQuery.data.styleSheet,
-      pageSize: PAGE_SIZE,
+    });
+
+    return {
+      id: source.document.id,
+      name: cleaned.name,
+      blocks: cleaned.blocks,
+      layout: cleaned.layout,
+      styleSheet: cleaned.styleSheet,
+      pageSize: cleaned.pageSize,
     };
   }, [blocksQuery, modifiedBlocks, stylesQuery, clientIdMappings]);
 
