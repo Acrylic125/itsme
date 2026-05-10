@@ -7,6 +7,7 @@ import {
   applyInsertNewBlockAtDestination,
   isMoveIntoOwnSubtree,
   isNestedInsideBlock,
+  pruneStaleLayoutReferences,
   type MoveBlockUpdate,
 } from "@/blocks/apply-block-move";
 import type { Block } from "@/blocks/blocks";
@@ -78,44 +79,47 @@ function findParentRefFromBlockTree(
   snapshot: DocumentBlocksSnapshot,
   childBlockId: string
 ): ParentRef | null {
+  // Prefer tree parent over `layout` so nested placement wins if ids are
+  // duplicated (stale layout + column child).
+  const parentId = blockTree.getDirectParentOf(childBlockId);
+  if (parentId !== null) {
+    const parent = snapshot.blocks.find((b) => b.id === parentId);
+    if (!parent) {
+      return null;
+    }
+    switch (parent.type) {
+      case "section":
+      case "list": {
+        const index = parent.blocks.indexOf(childBlockId);
+        if (index < 0) return null;
+        return {
+          container: parent.type,
+          parentBlockId: parent.id,
+          index,
+        };
+      }
+      case "columns": {
+        const index = parent.blocks.findIndex((c) => c.blockId === childBlockId);
+        if (index < 0) return null;
+        return {
+          container: "columns",
+          parentBlockId: parent.id,
+          index,
+          span: parent.blocks[index].span,
+        };
+      }
+      case "text":
+        return null;
+    }
+  }
+
   const documentIndex = snapshot.layout.indexOf(
     childBlockId as (typeof snapshot.layout)[number]
   );
   if (documentIndex >= 0) {
     return { container: "document", index: documentIndex };
   }
-  const parentId = blockTree.getDirectParentOf(childBlockId);
-  if (parentId === null) {
-    return null;
-  }
-  const parent = snapshot.blocks.find((b) => b.id === parentId);
-  if (!parent) {
-    return null;
-  }
-  switch (parent.type) {
-    case "section":
-    case "list": {
-      const index = parent.blocks.indexOf(childBlockId);
-      if (index < 0) return null;
-      return {
-        container: parent.type,
-        parentBlockId: parent.id,
-        index,
-      };
-    }
-    case "columns": {
-      const index = parent.blocks.findIndex((c) => c.blockId === childBlockId);
-      if (index < 0) return null;
-      return {
-        container: "columns",
-        parentBlockId: parent.id,
-        index,
-        span: parent.blocks[index].span,
-      };
-    }
-    case "text":
-      return null;
-  }
+  return null;
 }
 
 function getBlockWidthPx(blockTree: BlockTree, blockId: string): number {
@@ -208,7 +212,14 @@ function mergeNestedColumnBlocksInSnapshot(
 function finalizeSnapshotAfterReorder(
   phase1: DocumentBlocksSnapshot
 ): DocumentBlocksSnapshot {
-  return mergeNestedColumnBlocksInSnapshot(phase1);
+  const merged = mergeNestedColumnBlocksInSnapshot(phase1);
+  const doc = documentBlocksSnapshotToDocument(merged);
+  const pruned = pruneStaleLayoutReferences(doc);
+  return {
+    ...merged,
+    blocks: pruned.blocks,
+    layout: pruned.layout as DocumentBlocksSnapshot["layout"],
+  };
 }
 
 /** Computes resulting snapshot for canvas reorder drops. */

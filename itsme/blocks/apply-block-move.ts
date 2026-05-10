@@ -57,11 +57,9 @@ type ParentRef =
     };
 
 function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
-  const documentIndex = doc.layout.indexOf(childBlockId);
-  if (documentIndex >= 0) {
-    return { container: "document", index: documentIndex };
-  }
-
+  // Prefer nested parents over `layout`. If a block is still listed in `layout`
+  // but also sits under a section/list/columns (stale state), removing only
+  // from layout would leave a duplicate reference under the nested parent.
   for (const block of doc.blocks) {
     switch (block.type) {
       case "section": {
@@ -105,7 +103,47 @@ function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
     }
   }
 
+  const documentIndex = doc.layout.indexOf(childBlockId);
+  if (documentIndex >= 0) {
+    return { container: "document", index: documentIndex };
+  }
+
   return null;
+}
+
+/**
+ * Drops layout entries for ids that already appear as children of
+ * section/list/columns. That inconsistent state can happen after races or older
+ * bugs; it makes moves think the parent is `document` and leave a duplicate
+ * reference under a nested parent.
+ */
+export function pruneStaleLayoutReferences(doc: Document): Document {
+  const nestedChildIds = new Set<string>();
+  for (const block of doc.blocks) {
+    switch (block.type) {
+      case "section":
+      case "list":
+        for (const id of block.blocks) {
+          nestedChildIds.add(id);
+        }
+        break;
+      case "columns":
+        for (const c of block.blocks) {
+          nestedChildIds.add(c.blockId);
+        }
+        break;
+      case "text":
+        break;
+    }
+  }
+  if (nestedChildIds.size === 0) {
+    return doc;
+  }
+  const nextLayout = doc.layout.filter((id) => !nestedChildIds.has(id));
+  if (nextLayout.length === doc.layout.length) {
+    return doc;
+  }
+  return { ...doc, layout: nextLayout };
 }
 
 function getChildBlockIds(block: Document["blocks"][number]): string[] {
@@ -400,7 +438,7 @@ export function applyBlockMove(
     }
   }
 
-  return next;
+  return pruneStaleLayoutReferences(next);
 }
 
 function clampInsertIndex(index: number, length: number): number {

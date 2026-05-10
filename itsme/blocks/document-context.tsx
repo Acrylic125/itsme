@@ -49,14 +49,38 @@ function isClientId(id: string): boolean {
   return id.startsWith(CLIENT_ID_PREFIX);
 }
 
-function reconcileSnapshotClientIds(
+/** Session-local bidirectional map: client-generated ids ↔ Convex block ids. */
+export type ClientIdMappings = {
+  clientToConvex: Map<string, string>;
+  convexToClient: Map<string, string>;
+};
+
+function createEmptyClientIdMappings(): ClientIdMappings {
+  return {
+    clientToConvex: new Map(),
+    convexToClient: new Map(),
+  };
+}
+
+function mergeClientIdMappingRecord(
+  prev: ClientIdMappings,
+  record: Record<string, string>
+): ClientIdMappings {
+  const clientToConvex = new Map(prev.clientToConvex);
+  const convexToClient = new Map(prev.convexToClient);
+  for (const [clientId, convexId] of Object.entries(record)) {
+    if (!isClientId(clientId)) continue;
+    clientToConvex.set(clientId, convexId);
+    convexToClient.set(convexId, clientId);
+  }
+  return { clientToConvex, convexToClient };
+}
+
+/** Replace ids using `remap(id)`; unknown ids stay unchanged. */
+function remapSnapshotIds(
   snapshot: DocumentBlocksSnapshot,
-  mapping: Map<string, string>
+  remap: (id: string) => string
 ): DocumentBlocksSnapshot {
-  if (mapping.size === 0) return snapshot;
-
-  const remap = (id: string): string => mapping.get(id) ?? id;
-
   return {
     ...snapshot,
     layout: snapshot.layout.map((id) => remap(id)) as Id<"blocks">[],
@@ -91,6 +115,60 @@ function reconcileSnapshotClientIds(
       id: remap(snapshot.document.id) as Id<"documents">,
     },
   };
+}
+
+/** Convex → client ids for display and for diffing against local snapshots. */
+function snapshotConvexToClient(
+  snapshot: DocumentBlocksSnapshot,
+  convexToClient: Map<string, string>
+): DocumentBlocksSnapshot {
+  if (convexToClient.size === 0) return snapshot;
+  return remapSnapshotIds(snapshot, (id) => convexToClient.get(id) ?? id);
+}
+
+function mapBlockIdForMutation(
+  id: string,
+  clientToConvex: Map<string, string>
+): string {
+  if (isClientId(id)) {
+    return clientToConvex.get(id) ?? id;
+  }
+  return id;
+}
+
+function remapConvexBlockRowData(
+  data: ConvexBlockRowData,
+  clientToConvex: Map<string, string>
+): ConvexBlockRowData {
+  const m = (id: string) => mapBlockIdForMutation(id, clientToConvex);
+  switch (data.type) {
+    case "text":
+      return {
+        ...data,
+        ref: data.ref ? m(data.ref) : undefined,
+      };
+    case "section":
+      return {
+        ...data,
+        children: data.children.map(m),
+        ref: data.ref ? m(data.ref) : undefined,
+      };
+    case "columns":
+      return {
+        ...data,
+        children: data.children.map((c) => ({
+          ...c,
+          blockId: m(c.blockId),
+        })),
+        ref: data.ref ? m(data.ref) : undefined,
+      };
+    case "list":
+      return {
+        ...data,
+        children: data.children.map(m),
+        ref: data.ref ? m(data.ref) : undefined,
+      };
+  }
 }
 
 function areBlocksEqual(a: Block, b: Block): boolean {
@@ -253,18 +331,25 @@ type UpdateDocumentBlocksAction =
   | { type: "delete"; blockId: Id<"blocks"> };
 
 function blockSyncActionsToMutationActions(
-  actions: BlockSyncAction[]
+  actions: BlockSyncAction[],
+  clientToConvex: Map<string, string>
 ): UpdateDocumentBlocksAction[] {
   const out: UpdateDocumentBlocksAction[] = [];
   for (const action of actions) {
     if (action.type === "delete") {
       out.push({
         type: "delete",
-        blockId: action.blockId as Id<"blocks">,
+        blockId: mapBlockIdForMutation(
+          action.blockId,
+          clientToConvex
+        ) as Id<"blocks">,
       });
       continue;
     }
-    const data = clientBlockToConvexData(action.block);
+    const data = remapConvexBlockRowData(
+      clientBlockToConvexData(action.block),
+      clientToConvex
+    );
     if (action.type === "create") {
       out.push({
         type: "create",
@@ -274,7 +359,10 @@ function blockSyncActionsToMutationActions(
     } else {
       out.push({
         type: "update",
-        blockId: action.block.id as Id<"blocks">,
+        blockId: mapBlockIdForMutation(
+          action.block.id,
+          clientToConvex
+        ) as Id<"blocks">,
         data,
       });
     }
@@ -362,19 +450,31 @@ export type DocumentStoreState = {
       | null
       | ((current: DocumentStoreAction | null) => DocumentStoreAction | null)
   ) => void;
+  /** Bidirectional client id ↔ Convex block id for this session (this document). */
+  clientIdMappings: ClientIdMappings;
+  mergeClientIdMappings: (record: Record<string, string>) => void;
 };
 
 export type DocumentStore = ReturnType<typeof createDocumentStore>;
 
 export function createDocumentStore() {
-  return createStore<DocumentStoreState>((set, get) => ({
+  return createStore<DocumentStoreState>((set) => ({
     action: null,
     setAction: (input) => {
-      if (typeof input === "function") {
-        set({ action: input(get().action) });
-      } else {
-        set({ action: input });
-      }
+      set((state) => {
+        const next =
+          typeof input === "function" ? input(state.action) : input;
+        return { action: next };
+      });
+    },
+    clientIdMappings: createEmptyClientIdMappings(),
+    mergeClientIdMappings: (record) => {
+      set((state) => ({
+        clientIdMappings: mergeClientIdMappingRecord(
+          state.clientIdMappings,
+          record
+        ),
+      }));
     },
   }));
 }
@@ -500,7 +600,8 @@ export function DocumentStoresProvider({
   const [modifiedBlocks, setModifiedBlocks] =
     useState<DocumentBlocksSnapshot | null>(null);
   const modifiedBlocksRef = useRef<DocumentBlocksSnapshot | null>(null);
-  const blocksQueryDataRef = useRef<NonNullable<
+  /** Latest Convex payload (always real ids). */
+  const blocksQueryRawRef = useRef<NonNullable<
     (typeof blocksQuery)["data"]
   > | null>(null);
   const commitTimerRef = useRef<ReturnType<
@@ -508,7 +609,8 @@ export function DocumentStoresProvider({
   > | null>(null);
   const inFlightCommitRef = useRef<Promise<unknown> | null>(null);
   const pendingCommitRef = useRef(false);
-  const clientIdToBlockIdRef = useRef<Map<string, string>>(new Map());
+
+  const clientIdMappings = useStore(documentStore, (s) => s.clientIdMappings);
 
   useEffect(() => {
     modifiedBlocksRef.current = modifiedBlocks;
@@ -516,7 +618,7 @@ export function DocumentStoresProvider({
 
   useEffect(() => {
     if (blocksQuery.status === "success" && blocksQuery.data) {
-      blocksQueryDataRef.current = blocksQuery.data;
+      blocksQueryRawRef.current = blocksQuery.data;
     }
   }, [blocksQuery.status, blocksQuery.data]);
 
@@ -524,36 +626,44 @@ export function DocumentStoresProvider({
 
   const commitModifiedBlocks = useCallback(() => {
     const modified = modifiedBlocksRef.current;
-    const server = blocksQueryDataRef.current;
-    if (!modified || !server) {
+    const rawServer = blocksQueryRawRef.current;
+    if (!modified || !rawServer) {
       return;
     }
 
-    // Serialize commits so we can reconcile client ids (CLIENT_ID:...) as soon as
-    // the server responds with real ids, before computing the next diff.
     if (inFlightCommitRef.current) {
       pendingCommitRef.current = true;
       return;
     }
 
-    const mapping = clientIdToBlockIdRef.current;
-    const reconciledModified = reconcileSnapshotClientIds(modified, mapping);
+    const { clientToConvex, convexToClient } =
+      documentStore.getState().clientIdMappings;
+    const serverNormalized = snapshotConvexToClient(rawServer, convexToClient);
 
-    const serverDoc = toDiffDocument(server);
-    const modifiedDoc = toDiffDocument(reconciledModified);
+    const serverDoc = toDiffDocument(serverNormalized);
+    const modifiedDoc = toDiffDocument(modified);
     const blockActions = buildDocumentBlockDiff(serverDoc, modifiedDoc);
-    const mutationActions = blockSyncActionsToMutationActions(blockActions);
-    const layoutPatch = layoutPatchIfChanged(
-      server.layout,
-      reconciledModified.layout
+    const mutationActions = blockSyncActionsToMutationActions(
+      blockActions,
+      clientToConvex
     );
+    const layoutPatch = layoutPatchIfChanged(
+      serverNormalized.layout,
+      modified.layout
+    );
+    const layoutForMutation =
+      layoutPatch !== undefined
+        ? (layoutPatch.map((id) =>
+            mapBlockIdForMutation(id, clientToConvex)
+          ) as Id<"blocks">[])
+        : undefined;
 
-    if (mutationActions.length === 0 && layoutPatch === undefined) {
+    if (mutationActions.length === 0 && layoutForMutation === undefined) {
       setModifiedBlocks(null);
       return;
     }
 
-    const optimisticSnapshot = structuredClone(reconciledModified);
+    const optimisticSnapshot = structuredClone(modified);
 
     const run = updateDocumentBlocksMutation.withOptimisticUpdate(
       (localStore) => {
@@ -576,21 +686,15 @@ export function DocumentStoresProvider({
     const promise = run({
       documentId: convexDocumentId,
       actions: mutationActions,
-      ...(layoutPatch !== undefined ? { layout: layoutPatch } : {}),
+      ...(layoutForMutation !== undefined ? { layout: layoutForMutation } : {}),
     })
       .then((result) => {
-        // If the server returns client-id mappings, persist them so the next
-        // debounced commit will use real ids.
         const maybe = result as {
           clientIdToBlockId?: Record<string, string>;
         } | null;
         const next = maybe?.clientIdToBlockId;
-        if (next) {
-          for (const [clientId, blockId] of Object.entries(next)) {
-            if (isClientId(clientId)) {
-              clientIdToBlockIdRef.current.set(clientId, blockId);
-            }
-          }
+        if (next && Object.keys(next).length > 0) {
+          documentStore.getState().mergeClientIdMappings(next);
         }
       })
       .catch((error) => {
@@ -606,7 +710,7 @@ export function DocumentStoresProvider({
     inFlightCommitRef.current = promise;
 
     setModifiedBlocks(null);
-  }, [convexDocumentId, updateDocumentBlocksMutation]);
+  }, [convexDocumentId, documentStore, updateDocumentBlocksMutation]);
 
   useEffect(() => {
     commitModifiedBlocksRef.current = commitModifiedBlocks;
@@ -627,20 +731,22 @@ export function DocumentStoresProvider({
       transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot
     ) => {
       setModifiedBlocks((prev) => {
-        const queryData = blocksQueryDataRef.current;
-        if (!queryData) {
+        const raw = blocksQueryRawRef.current;
+        if (!raw) {
           return prev;
         }
 
+        const { convexToClient } = documentStore.getState().clientIdMappings;
+        const normalized = snapshotConvexToClient(raw, convexToClient);
         const base: DocumentBlocksSnapshot = prev
           ? prev
-          : structuredClone(queryData);
+          : structuredClone(normalized);
         return transform(base);
       });
 
       scheduleCommit();
     },
-    [scheduleCommit]
+    [documentStore, scheduleCommit]
   );
 
   useEffect(() => {
@@ -656,9 +762,12 @@ export function DocumentStoresProvider({
       return null;
     }
 
-    const source =
-      modifiedBlocks ??
-      (blocksQuery.data as NonNullable<typeof blocksQuery.data>);
+    const raw = blocksQuery.data as NonNullable<typeof blocksQuery.data>;
+    const normalizedServer = snapshotConvexToClient(
+      raw,
+      clientIdMappings.convexToClient
+    );
+    const source = modifiedBlocks ?? normalizedServer;
 
     return {
       id: source.document.id,
@@ -668,7 +777,12 @@ export function DocumentStoresProvider({
       styleSheet: stylesQuery.data.styleSheet,
       pageSize: PAGE_SIZE,
     };
-  }, [blocksQuery, modifiedBlocks, stylesQuery.status, stylesQuery.data]);
+  }, [
+    blocksQuery,
+    modifiedBlocks,
+    stylesQuery,
+    clientIdMappings,
+  ]);
 
   const canMeasureText =
     typeof window !== "undefined" &&
