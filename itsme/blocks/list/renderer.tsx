@@ -1,7 +1,7 @@
 "use client";
 
 import { z } from "zod";
-import { Group, Text } from "react-konva";
+import { Group, Rect, Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
 import type { ColumnsResizeContext } from "../renderer-types";
 import {
@@ -10,7 +10,7 @@ import {
   REORDER_BOUNDING_BOX_TARGET_SIZE,
   REORDER_BOUNDING_BOX_VISUAL_SIZE,
 } from "../renderer-types";
-import { BlockSchema } from "../blocks";
+import { BlockSchema, DEFAULT_STYLE_SHEET } from "../blocks";
 import { ListBulletSchema } from "./schema";
 import {
   InteractableBlock,
@@ -23,6 +23,83 @@ import {
   selectFocusBlockId,
   useDocument,
 } from "../document-context";
+
+function EmptyListBlockComponent({
+  blockId,
+  dimensions,
+  pos,
+  parents,
+  columnsResizeContext,
+}: {
+  blockId: string;
+  dimensions: { width: number; height: number };
+  pos: { x: number; y: number };
+  parents: string[];
+  columnsResizeContext?: ColumnsResizeContext;
+}) {
+  const { documentStore, blockTree, document, dpi } = useDocument();
+  const defaultTextStyle =
+    document?.styleSheet.text.default ?? DEFAULT_STYLE_SHEET.text.default;
+  const fontSizePx = (defaultTextStyle.fontSize * dpi) / 72;
+  const { setAction, focusBlockId, activeBlockId } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      setAction: s.setAction,
+      focusBlockId: selectFocusBlockId(s),
+      activeBlockId: selectActiveBlockId(s),
+    }))
+  );
+
+  const isDisabled = useInteractableBlock({
+    activeBlockId,
+    parents,
+    blockId,
+    blockTree,
+  });
+
+  return (
+    <InteractableBlock
+      blockId={blockId}
+      x={pos.x}
+      y={pos.y}
+      width={dimensions.width}
+      height={dimensions.height}
+      disabled={isDisabled}
+      inFocus={focusBlockId === blockId}
+      columnsResizeContext={columnsResizeContext}
+      onClick={() => setAction({ type: "edit-block", blockId })}
+    >
+      <Rect
+        x={0}
+        y={0}
+        width={dimensions.width}
+        height={dimensions.height}
+        fill="#ffffff"
+        stroke="#8a8a8a"
+        strokeWidth={2}
+        dash={[5, 5]}
+        perfectDrawEnabled={false}
+        listening={false}
+      />
+      <Text
+        x={0}
+        y={0}
+        width={dimensions.width}
+        height={dimensions.height}
+        text="Drag or add text block here"
+        fontFamily={defaultTextStyle.fontFamily}
+        fontSize={fontSizePx}
+        lineHeight={defaultTextStyle.lineHeight}
+        fontStyle={defaultTextStyle.fontWeight === "bold" ? "bold" : "normal"}
+        align="center"
+        verticalAlign="middle"
+        fill="#9a9a9a"
+        perfectDrawEnabled={false}
+        listening={false}
+      />
+    </InteractableBlock>
+  );
+}
 
 function ListBlockComponent({
   blockId,
@@ -105,6 +182,70 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
     const childBlocks = block.blocks
       .map((id) => ctx.allBlocks.find((b) => b.id === id))
       .filter((b): b is z.infer<typeof BlockSchema> => b != null);
+    if (childBlocks.length === 0) {
+      const listStartPosition = {
+        ...ctx.getNextPosition(),
+        blockId: block.id,
+        width: relativeTo.width,
+      };
+      const placeholderHeight = 96;
+      ctx.claimBlockSpace(placeholderHeight);
+
+      const dimensions = {
+        width: relativeTo.width,
+        height: placeholderHeight,
+      };
+      const listPosRelativeTo = {
+        x: listStartPosition.x - relativeTo.x,
+        y: listStartPosition.y - relativeTo.y,
+      };
+
+      const boundingBoxes = getEdgeReorderBoundingBoxes({
+        blockId: block.id,
+        from: { x: listStartPosition.x, y: listStartPosition.y },
+        to: {
+          x: listStartPosition.x + dimensions.width,
+          y: listStartPosition.y + dimensions.height,
+        },
+        visualSize: REORDER_BOUNDING_BOX_VISUAL_SIZE,
+        targetSize: REORDER_BOUNDING_BOX_TARGET_SIZE,
+      });
+      // Add inner bounding box.
+      boundingBoxes.push({
+        blockId: block.id,
+        type: "inner",
+        visual: {
+          from: { x: listStartPosition.x, y: listStartPosition.y },
+          to: {
+            x: listStartPosition.x + dimensions.width,
+            y: listStartPosition.y + dimensions.height,
+          },
+        },
+        target: {
+          from: { x: listStartPosition.x, y: listStartPosition.y },
+          to: {
+            x: listStartPosition.x + dimensions.width,
+            y: listStartPosition.y + dimensions.height,
+          },
+        },
+      });
+
+      return {
+        blockId: block.id,
+        estimatedDimensions: dimensions,
+        boundingBoxes,
+        children: [],
+        component: () => (
+          <EmptyListBlockComponent
+            blockId={block.id}
+            dimensions={dimensions}
+            pos={listPosRelativeTo}
+            parents={relativeTo.parents}
+            columnsResizeContext={relativeTo.columnsResizeContext}
+          />
+        ),
+      };
+    }
 
     const listStartPosition = {
       ...ctx.getNextPosition(),

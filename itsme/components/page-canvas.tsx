@@ -1,22 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Layer, Rect, Group, Stage, Text } from "react-konva";
+import { Layer, Rect, Group, Stage } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { getPageLayoutMetrics } from "@/blocks/renderer";
-import type { BlockTreeReorderBoundingBox } from "@/blocks/renderer-types";
-import {
-  asAddBlockAction,
-  asMoveBlockAction,
-  buildNextDocumentForAddBlockPlacement,
-  selectAddBlockAction,
-  selectMoveBlockAction,
-  useDocument,
-} from "@/blocks/document-context";
+import { asAddBlockAction, useDocument } from "@/blocks/document-context";
 import { useStore } from "zustand/react";
 import { cn } from "@/lib/utils";
-import { CanvasReorderTargetLayer } from "./canvas-reorder-target-layer";
+import {
+  AddBlockPlacementLayer,
+  MoveReorderLayer,
+} from "./canvas-reorder-target-layer";
 import { PageCanvasToolbar } from "./page-canvas-toolbar";
 
 export function PageCanvas() {
@@ -175,165 +170,5 @@ export function PageCanvas() {
         </Stage>
       </div>
     </div>
-  );
-}
-
-function MoveReorderLayer() {
-  const { documentStore } = useDocument();
-  const moveAction = useStore(documentStore, selectMoveBlockAction);
-  const setAction = useStore(documentStore, (s) => s.setAction);
-
-  const syncMoveTarget = useCallback(
-    (target: BlockTreeReorderBoundingBox | null) => {
-      setAction((current) => {
-        const m = asMoveBlockAction(current);
-        if (!m) return current;
-        if (m.targetBlock === target) return current;
-        return { ...m, targetBlock: target };
-      });
-    },
-    [setAction]
-  );
-
-  if (!moveAction) {
-    return null;
-  }
-
-  return (
-    <CanvasReorderTargetLayer
-      pointerCanvasPos={moveAction.current.position}
-      onActiveTargetChange={syncMoveTarget}
-    />
-  );
-}
-
-function AddBlockPlacementLayer({
-  scale,
-  stageWidth,
-  stageHeight,
-}: {
-  scale: number;
-  stageWidth: number;
-  stageHeight: number;
-}) {
-  const { documentStore, updateBlocks, blockTree, document } = useDocument();
-  const addAction = useStore(documentStore, selectAddBlockAction);
-  const setAction = useStore(documentStore, (s) => s.setAction);
-
-  const pointer = addAction?.current?.position ?? null;
-  const blockLabel = addAction?.blockType === "list" ? "List" : "Text";
-
-  const syncAddTarget = useCallback(
-    (target: BlockTreeReorderBoundingBox | null) => {
-      setAction((c) => {
-        const a = asAddBlockAction(c);
-        if (!a) return c;
-        if (a.targetBlock === target) return c;
-        return { ...a, targetBlock: target };
-      });
-    },
-    [setAction]
-  );
-
-  const commitPlacement = useCallback(() => {
-    const add = asAddBlockAction(documentStore.getState().action);
-    if (!document || !add?.targetBlock) {
-      return;
-    }
-    const targetBox = add.targetBlock;
-    const blockType = add.blockType;
-    updateBlocks((current) => {
-      const docForPlace = {
-        name: current.document.name,
-        pageSize: document.pageSize,
-        styleSheet: document.styleSheet,
-        blocks: current.blocks,
-        layout: current.layout,
-      };
-      const nextDoc = buildNextDocumentForAddBlockPlacement({
-        document: docForPlace,
-        blockTree,
-        blockType,
-        targetBox,
-      });
-      if (!nextDoc) {
-        return current;
-      }
-      return {
-        ...current,
-        blocks: nextDoc.blocks,
-        layout: nextDoc.layout as typeof current.layout,
-      };
-    });
-    setAction(null);
-  }, [blockTree, document, documentStore, setAction, updateBlocks]);
-
-  if (!addAction) {
-    return null;
-  }
-
-  return (
-    <>
-      <CanvasReorderTargetLayer
-        pointerCanvasPos={pointer}
-        onActiveTargetChange={syncAddTarget}
-      />
-      {pointer && (
-        <Group x={pointer.x + 14} y={pointer.y + 14} listening={false}>
-          <Rect
-            width={140}
-            height={40}
-            stroke="#ea580c"
-            strokeWidth={2}
-            dash={[5, 5]}
-            cornerRadius={4}
-            fill="rgba(255,255,255,0.92)"
-          />
-          <Text
-            text={blockLabel}
-            width={140}
-            height={40}
-            align="center"
-            verticalAlign="middle"
-            fontSize={24}
-            fontFamily="system-ui, sans-serif"
-            fill="#0f172a"
-          />
-        </Group>
-      )}
-      <Rect
-        x={0}
-        y={0}
-        width={stageWidth}
-        height={stageHeight}
-        fill="transparent"
-        onMouseMove={(e) => {
-          const stage = e.target.getStage();
-          const p = stage?.getPointerPosition();
-          if (!p) return;
-          setAction((c) => {
-            const a = asAddBlockAction(c);
-            if (!a) return c;
-            return {
-              ...a,
-              current: {
-                position: { x: p.x / scale, y: p.y / scale },
-              },
-            };
-          });
-        }}
-        onMouseLeave={() => {
-          setAction((c) => {
-            const a = asAddBlockAction(c);
-            if (!a) return c;
-            return { ...a, current: null, targetBlock: null };
-          });
-        }}
-        onClick={(e) => {
-          e.cancelBubble = true;
-          commitPlacement();
-        }}
-      />
-    </>
   );
 }

@@ -4,10 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
 import { BlockTree, type ColumnsResizeContext } from "@/blocks/renderer-types";
+import { buildMoveUpdatesForReorder } from "@/components/canvas-reorder-target-layer";
 import {
   useDocument,
   asMoveBlockAction,
-  buildMoveUpdatesForReorder,
   selectMoveBlockAction,
   type DocumentStoreState,
 } from "@/blocks/document-context";
@@ -671,25 +671,13 @@ export function InteractableBlock({
     }
 
     updateBlocks((current) => {
-      const docForMove = {
-        name: current.document.name,
-        pageSize: document.pageSize,
-        styleSheet: document.styleSheet,
-        blocks: current.blocks,
-        layout: current.layout,
-      };
-      const result = buildMoveUpdatesForReorder({
-        document: docForMove,
-        documentId: current.document.id,
+      const next = buildMoveUpdatesForReorder({
+        snapshot: current,
         move: moveAction,
         blockTree,
       });
-      if (!result) return current;
-      return {
-        ...current,
-        blocks: result.nextDocument.blocks,
-        layout: result.nextDocument.layout as typeof current.layout,
-      };
+      if (!next) return current;
+      return next;
     });
 
     state.setAction((current) => (asMoveBlockAction(current) ? null : current));

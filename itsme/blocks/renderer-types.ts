@@ -23,7 +23,7 @@ type BlockRendererMap = {
 };
 
 export type BlockTreeReorderBoundingBox = {
-  type: "left" | "right" | "top" | "bottom";
+  type: "left" | "right" | "top" | "bottom" | "inner";
   target: {
     from: Pos;
     to: Pos;
