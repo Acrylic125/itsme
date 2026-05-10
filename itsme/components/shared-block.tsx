@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Group, Rect } from "react-konva";
 import Konva from "konva";
 import { BlockTree, type ColumnsResizeContext } from "@/blocks/renderer-types";
@@ -8,7 +8,10 @@ import { buildMoveUpdatesForReorder } from "@/components/canvas-reorder-target-l
 import {
   useDocument,
   asMoveBlockAction,
+  asResizeColumnAction,
   selectMoveBlockAction,
+  selectResizeColumnAction,
+  type DocumentStoreResizeColumnAction,
   type DocumentStoreState,
 } from "@/blocks/document-context";
 import { useStore } from "zustand/react";
@@ -313,6 +316,7 @@ function useInteractableBlockController(args: {
   }) => void;
   columnsResizeContext?: ColumnsResizeContext;
   setAction: DocumentStoreState["setAction"];
+  resizeColumnAction: DocumentStoreResizeColumnAction | null;
   commitReorder: () => void;
   updateBlocks: ReturnType<typeof useDocument>["updateBlocks"];
   documentBlocks: NonNullable<
@@ -330,6 +334,7 @@ function useInteractableBlockController(args: {
     onClick,
     columnsResizeContext,
     setAction,
+    resizeColumnAction,
     commitReorder,
     updateBlocks,
     documentBlocks,
@@ -340,14 +345,24 @@ function useInteractableBlockController(args: {
     groupRef.current = n;
   }, []);
   const [hovered, setHovered] = useState(false);
-  const columnResizeKindRef = useRef<null | "left" | "right">(null);
-  const pointerStartCanvasRef = useRef<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [activeColumnResize, setActiveColumnResize] = useState<{
-    kind: "left" | "right";
-    dx: number;
-  } | null>(null);
   const dragStartPosition = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  /** Derived from the global `resize-column` action — only present for the originating block. */
+  const activeColumnResize = useMemo(() => {
+    if (
+      !resizeColumnAction ||
+      resizeColumnAction.blockId !== blockId
+    ) {
+      return null;
+    }
+    return {
+      kind: resizeColumnAction.kind,
+      dx:
+        resizeColumnAction.pointerCurrent.x -
+        resizeColumnAction.pointerStart.x,
+    };
+  }, [resizeColumnAction, blockId]);
 
   const handleContextMenu = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
@@ -455,9 +470,17 @@ function useInteractableBlockController(args: {
         if (edgeKind) {
           const startPtr = getPointerCanvasPosition(node);
           if (startPtr) {
-            columnResizeKindRef.current = edgeKind;
-            pointerStartCanvasRef.current = startPtr;
-            setActiveColumnResize({ kind: edgeKind, dx: 0 });
+            setAction({
+              type: "resize-column",
+              blockId,
+              columnsBlockId: ctx.columnsBlockId,
+              childIndex: ctx.childIndex,
+              siblingCount: ctx.siblingCount,
+              kind: edgeKind,
+              columnRowWidthPx: ctx.columnRowWidthPx,
+              pointerStart: startPtr,
+              pointerCurrent: startPtr,
+            });
             return;
           }
         }
@@ -491,22 +514,23 @@ function useInteractableBlockController(args: {
       event.cancelBubble = true;
       if (disabled) return;
       const node = groupRef.current ?? event.target;
-      if (columnResizeKindRef.current) {
-        const ptrStart = pointerStartCanvasRef.current;
-        const ptrCurrent = getPointerCanvasPosition(node);
-        if (ptrStart && ptrCurrent) {
-          setActiveColumnResize({
-            kind: columnResizeKindRef.current,
-            dx: ptrCurrent.x - ptrStart.x,
-          });
-        }
-        resetNodeDragPosition(node, dragStartPosition.current);
-        return;
-      }
       const pointerCanvasPosition = getPointerCanvasPosition(node);
       if (!pointerCanvasPosition) {
         return;
       }
+
+      let isResizing = false;
+      setAction((current) => {
+        const r = asResizeColumnAction(current);
+        if (!r || r.blockId !== blockId) return current;
+        isResizing = true;
+        return { ...r, pointerCurrent: pointerCanvasPosition };
+      });
+      if (isResizing) {
+        resetNodeDragPosition(node, dragStartPosition.current);
+        return;
+      }
+
       setAction((current) => {
         const moveAction = asMoveBlockAction(current);
         if (!moveAction) return current;
@@ -525,24 +549,29 @@ function useInteractableBlockController(args: {
   const handleDragEnd = useCallback(
     (event: Konva.KonvaEventObject<DragEvent>) => {
       event.cancelBubble = true;
-      const resizeKind = columnResizeKindRef.current;
-      const resizeCtx = columnsResizeContext;
-      const ptrStart = pointerStartCanvasRef.current;
       const node = groupRef.current ?? event.target;
-      columnResizeKindRef.current = null;
-      pointerStartCanvasRef.current = null;
+
+      let endedResize: DocumentStoreResizeColumnAction | null = null;
+      setAction((current) => {
+        const r = asResizeColumnAction(current);
+        if (!r || r.blockId !== blockId) return current;
+        endedResize = r;
+        return null;
+      });
 
       setIsDragging(false);
-      setActiveColumnResize(null);
 
-      if (resizeKind && resizeCtx && ptrStart) {
+      if (endedResize) {
+        const resize: DocumentStoreResizeColumnAction = endedResize;
+        const resizeCtx = columnsResizeContext;
         const ptrEnd = getPointerCanvasPosition(node);
         resetNodeDragPosition(node, dragStartPosition.current);
-        if (ptrEnd) {
-          if (!documentBlocks) return;
+        if (resizeCtx && documentBlocks) {
+          const dx =
+            (ptrEnd?.x ?? resize.pointerCurrent.x) - resize.pointerStart.x;
           patchColumnSpansAfterResizeDrag({
-            dx: ptrEnd.x - ptrStart.x,
-            resizeKind,
+            dx,
+            resizeKind: resize.kind,
             resizeCtx,
             documentBlocks,
             updateBlocks,
@@ -555,26 +584,30 @@ function useInteractableBlockController(args: {
       resetNodeDragPosition(node, dragStartPosition.current);
     },
     [
+      blockId,
       commitReorder,
       columnsResizeContext,
       getPointerCanvasPosition,
       documentBlocks,
+      setAction,
       updateBlocks,
     ]
   );
 
-  /** Konva drag-cancel payload is unreliable; reset from refs only (no commit). */
+  /** Konva drag-cancel payload is unreliable; clear any in-flight gesture for this block. */
   const handleDragCancel = useCallback(() => {
-    columnResizeKindRef.current = null;
-    pointerStartCanvasRef.current = null;
     const node = groupRef.current;
     setIsDragging(false);
-    setActiveColumnResize(null);
-    setAction((current) => (asMoveBlockAction(current) ? null : current));
+    setAction((current) => {
+      if (asMoveBlockAction(current)) return null;
+      const r = asResizeColumnAction(current);
+      if (r && r.blockId === blockId) return null;
+      return current;
+    });
     if (node) {
       resetNodeDragPosition(node, dragStartPosition.current);
     }
-  }, [setAction]);
+  }, [blockId, setAction]);
 
   const innerStroke = 0.01 * dpi;
   const outerStroke = 0.03 * dpi;
@@ -684,6 +717,7 @@ export function InteractableBlock({
   }, [document, documentStore, updateBlocks, blockTree]);
 
   const setAction = useStore(documentStore, (s) => s.setAction);
+  const resizeColumnAction = useStore(documentStore, selectResizeColumnAction);
 
   const {
     assignGroupRef,
@@ -721,6 +755,7 @@ export function InteractableBlock({
     onClick,
     columnsResizeContext,
     setAction,
+    resizeColumnAction,
     commitReorder,
     updateBlocks,
     documentBlocks: document,

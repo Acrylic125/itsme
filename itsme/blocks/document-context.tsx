@@ -286,8 +286,9 @@ function blockSyncActionsToMutationActions(
  * The single in-flight user interaction with the document.
  *
  * At any moment the user is doing exactly one of: editing a block (focused),
- * moving a block (drag in flight), or placing a new block. These are mutually
- * exclusive, so they share one slot rather than living as parallel fields.
+ * moving a block (drag in flight), placing a new block, or resizing a column.
+ * These are mutually exclusive, so they share one slot rather than living as
+ * parallel fields.
  */
 export type DocumentStoreAction =
   | {
@@ -309,6 +310,28 @@ export type DocumentStoreAction =
         position: Pos;
       } | null;
       targetBlock: BlockTreeReorderBoundingBox | null;
+    }
+  | {
+      /**
+       * Drag-resize on a column-child boundary. Distinct from `move-block`
+       * because the gesture starts on the same block but should never trigger
+       * reorder targets / layout reflow.
+       */
+      type: "resize-column";
+      /** Direct child block being dragged. */
+      blockId: string;
+      /** Parent columns block id. */
+      columnsBlockId: string;
+      childIndex: number;
+      siblingCount: number;
+      /** Which boundary of `blockId` is being dragged. */
+      kind: "left" | "right";
+      /** Inner width of the columns row in canvas px (matches resize context). */
+      columnRowWidthPx: number;
+      /** Pointer position at drag start (canvas coords). */
+      pointerStart: Pos;
+      /** Current pointer position (canvas coords). */
+      pointerCurrent: Pos;
     };
 
 export type DocumentStoreEditBlockAction = Extract<
@@ -324,6 +347,11 @@ export type DocumentStoreMoveBlockAction = Extract<
 export type DocumentStoreAddBlockAction = Extract<
   DocumentStoreAction,
   { type: "add-block" }
+>;
+
+export type DocumentStoreResizeColumnAction = Extract<
+  DocumentStoreAction,
+  { type: "resize-column" }
 >;
 
 export type DocumentStoreState = {
@@ -369,6 +397,12 @@ export function asAddBlockAction(
   return action?.type === "add-block" ? action : null;
 }
 
+export function asResizeColumnAction(
+  action: DocumentStoreAction | null
+): DocumentStoreResizeColumnAction | null {
+  return action?.type === "resize-column" ? action : null;
+}
+
 export function selectEditBlockAction(
   state: DocumentStoreState
 ): DocumentStoreEditBlockAction | null {
@@ -387,6 +421,12 @@ export function selectAddBlockAction(
   return asAddBlockAction(state.action);
 }
 
+export function selectResizeColumnAction(
+  state: DocumentStoreState
+): DocumentStoreResizeColumnAction | null {
+  return asResizeColumnAction(state.action);
+}
+
 /** Block id currently being edited, or null when no edit is in flight. */
 export function selectFocusBlockId(state: DocumentStoreState): string | null {
   return selectEditBlockAction(state)?.blockId ?? null;
@@ -394,8 +434,9 @@ export function selectFocusBlockId(state: DocumentStoreState): string | null {
 
 /**
  * Block id the user is currently interacting with — the block being edited
- * for `edit-block`, or the block being dragged for `move-block`. Used by
- * sibling blocks to decide whether they can still respond to input.
+ * for `edit-block`, the block being dragged for `move-block`, or the column
+ * child whose boundary is being dragged for `resize-column`. Used by sibling
+ * blocks to decide whether they can still respond to input.
  *
  * Distinct from `selectFocusBlockId`, which is purely about the editing
  * focus / focus ring and is null during a drag.
@@ -408,6 +449,8 @@ export function selectActiveBlockId(state: DocumentStoreState): string | null {
       return action.blockId;
     case "move-block":
       return action.current.blockIds[0] ?? null;
+    case "resize-column":
+      return action.blockId;
     case "add-block":
       return null;
   }
