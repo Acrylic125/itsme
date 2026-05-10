@@ -12,18 +12,27 @@ import {
 import {
   useDocument,
   asEditBlockAction,
+  asFocusBlockAction,
   asMoveBlockAction,
   asResizeColumnAction,
   documentBlocksSnapshotToDocument,
   selectMoveBlockAction,
   selectResizeColumnAction,
   type DocumentBlocksSnapshot,
+  type DocumentStore,
   type DocumentStoreResizeColumnAction,
   type DocumentStoreState,
 } from "@/blocks/document-context";
 import { useStore } from "zustand/react";
 // import { useBlockDragContext } from "./block-dnd-context";
 // import { useBlockFocusContext } from "./block-focus-context";
+
+/**
+ * When `focus-block-only`, Backspace / Cmd+D only apply if the store action is
+ * `focus-block` for this block (e.g. text blocks so keys don’t fire while the
+ * textarea has `edit-block`). Otherwise also applies under `edit-block`.
+ */
+export type BlockHotkeyScope = "focus-block-only" | "focus-or-edit-block";
 
 export function useInteractableBlock({
   activeBlockId,
@@ -115,7 +124,7 @@ export function getNormalizedAnchorRectForKonvaNode(
   const r = node.getClientRect();
   return {
     left: r.x / stageRect.width,
-    top: (r.y + r.height) / stageRect.height,
+    top: r.y / stageRect.height,
     width: r.width / stageRect.width,
     height: r.height / stageRect.height,
   };
@@ -329,6 +338,9 @@ function useInteractableBlockController(args: {
   documentBlocks: NonNullable<
     ReturnType<typeof useDocument>["document"]
   > | null;
+  documentStore: DocumentStore;
+  /** @default "focus-or-edit-block" */
+  blockHotkeyScope?: BlockHotkeyScope;
   onKonvaGroupRef?: (node: Konva.Group | null) => void;
 }) {
   const {
@@ -346,8 +358,24 @@ function useInteractableBlockController(args: {
     commitReorder,
     updateBlocks,
     documentBlocks,
+    documentStore,
+    blockHotkeyScope = "focus-or-edit-block",
     onKonvaGroupRef,
   } = args;
+
+  const hotkeysTargetThis = useStore(documentStore, (s) => {
+    const a = s.action;
+    const focus = asFocusBlockAction(a);
+    const edit = asEditBlockAction(a);
+    if (focus?.blockId === blockId) return true;
+    if (
+      blockHotkeyScope === "focus-or-edit-block" &&
+      edit?.blockId === blockId
+    ) {
+      return true;
+    }
+    return false;
+  });
 
   const groupRef = useRef<Konva.Group | null>(null);
   const assignGroupRef = useCallback(
@@ -638,20 +666,19 @@ function useInteractableBlockController(args: {
   const resizeGripY = (height - resizeGripHeight) / 2;
 
   useEffect(() => {
-    if (!inFocus || disabled || !documentBlocks) return;
+    if (!hotkeysTargetThis || disabled || !documentBlocks) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      // const active = document.activeElement;
-      // if (
-      //   active &&
-      //   (active.tagName === "TEXTAREA" ||
-      //     active.tagName === "INPUT" ||
-      //     (active instanceof HTMLElement && active.isContentEditable))
-      // ) {
-      //   return;
-      // }
+      const a = documentStore.getState().action;
+      const focus = asFocusBlockAction(a);
+      const edit = asEditBlockAction(a);
+      const targetsThis =
+        focus?.blockId === blockId ||
+        (blockHotkeyScope === "focus-or-edit-block" &&
+          edit?.blockId === blockId);
+      if (!targetsThis) return;
 
-      if (event.key === "Delete") {
+      if (event.key === "Backspace") {
         event.preventDefault();
         let didDelete = false;
         updateBlocks((current) => {
@@ -669,6 +696,8 @@ function useInteractableBlockController(args: {
           setAction((current) => {
             const edit = asEditBlockAction(current);
             if (edit?.blockId === blockId) return null;
+            const focus = asFocusBlockAction(current);
+            if (focus?.blockId === blockId) return null;
             return current;
           });
         }
@@ -679,7 +708,7 @@ function useInteractableBlockController(args: {
         (event.metaKey || event.ctrlKey) &&
         !event.shiftKey &&
         !event.altKey &&
-        event.key.toLowerCase() === "d";
+        event.code === "KeyD";
       if (duplicateChord) {
         event.preventDefault();
         updateBlocks((current) => {
@@ -697,7 +726,16 @@ function useInteractableBlockController(args: {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [blockId, disabled, documentBlocks, inFocus, setAction, updateBlocks]);
+  }, [
+    blockId,
+    disabled,
+    documentBlocks,
+    blockHotkeyScope,
+    documentStore,
+    hotkeysTargetThis,
+    setAction,
+    updateBlocks,
+  ]);
 
   return {
     assignGroupRef,
@@ -741,6 +779,7 @@ export function InteractableBlock({
   disabled = false,
   columnsResizeContext,
   onKonvaGroupRef,
+  blockHotkeyScope = "focus-or-edit-block",
 }: {
   blockId: string;
   x: number;
@@ -752,6 +791,7 @@ export function InteractableBlock({
   disabled?: boolean;
   columnsResizeContext?: ColumnsResizeContext;
   onKonvaGroupRef?: (node: Konva.Group | null) => void;
+  blockHotkeyScope?: BlockHotkeyScope;
   children: React.ReactNode;
   onContextMenu?: (args: {
     event: Konva.KonvaEventObject<MouseEvent>;
@@ -832,6 +872,8 @@ export function InteractableBlock({
     commitReorder,
     updateBlocks,
     documentBlocks: document,
+    documentStore,
+    blockHotkeyScope,
     onKonvaGroupRef,
   });
 

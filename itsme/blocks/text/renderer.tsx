@@ -16,11 +16,10 @@ import {
   InteractableBlock,
   useInteractableBlock,
 } from "@/components/shared-block";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { AnchorRect } from "@/components/dom-popup";
 import {
   asEditBlockAction,
+  asFocusBlockAction,
   selectActiveBlockId,
   selectEditBlockAction,
   useDocument,
@@ -30,6 +29,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -37,30 +37,52 @@ import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
 import { useDebouncedCallback } from "use-debounce";
-import {
-  caretOffsetFromLocalPoint,
-  wordUtf16RangeAt,
-} from "./caret-from-pointer";
+import { caretOffsetFromLocalPoint } from "./caret-from-pointer";
 
 /** Shown only when `block.text` is empty; not persisted and not used as edit initial value. */
 const EMPTY_TEXT_DISPLAY = "Click to set text";
 
-/** Delay before treating a lone primary-button click as “open caret only” (allows double/triple). */
-const SINGLE_CLICK_OPEN_DELAY_MS = 280;
+/** Tailwind `p-2`: horizontal padding (left + right) in CSS px, converted to layout px via `canvasDisplayScale`. */
+const TEXTAREA_PADDING_X_CSS_PX = 16;
 
-export type InitialTextSelection =
-  | { kind: "caret"; offset: number }
-  | { kind: "range"; start: number; end: number }
-  | { kind: "all" };
+function textareaRowsFromPretext(args: {
+  text: string;
+  /** Same units as Konva / block layout (`relativeTo.width`). */
+  layoutWidthPx: number;
+  textStyle: z.infer<typeof TextStyleSchema>;
+  fontSizePx: number;
+  canvasDisplayScale: number;
+}): number {
+  const { text, layoutWidthPx, textStyle, fontSizePx, canvasDisplayScale } =
+    args;
+  const scale = Math.max(canvasDisplayScale, 1e-6);
+  const wrapWidthPx = Math.max(
+    1,
+    layoutWidthPx - TEXTAREA_PADDING_X_CSS_PX / scale
+  );
+  const prepared = prepare(
+    text,
+    `${textStyle.fontWeight} ${fontSizePx}px ${textStyle.fontFamily}`
+  );
+  const { lineCount } = layout(prepared, wrapWidthPx, textStyle.lineHeight);
+  return Math.max(1, lineCount);
+}
 
 export function EditTextModal({
-  closePopup,
   block,
-  initialSelection,
+  initialCaretOffset,
+  textStyle,
+  fontSizePx,
+  layoutWidthPx,
+  /** Konva cumulative scale (e.g. `Layer` fit-to-container); DOM CSS px must match this for parity with canvas text. */
+  canvasDisplayScale = 1,
 }: {
-  closePopup: () => void;
   block: z.infer<typeof TextBlockSchema>;
-  initialSelection: InitialTextSelection;
+  initialCaretOffset: number;
+  textStyle: z.infer<typeof TextStyleSchema>;
+  fontSizePx: number;
+  layoutWidthPx: number;
+  canvasDisplayScale?: number;
 }) {
   const { updateBlocks } = useDocument();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -71,26 +93,9 @@ export function EditTextModal({
     if (!ta) return;
     ta.focus();
     const len = ta.value.length;
-    switch (initialSelection.kind) {
-      case "caret": {
-        const at = Math.max(
-          0,
-          Math.min(initialSelection.offset, len)
-        );
-        ta.setSelectionRange(at, at);
-        break;
-      }
-      case "range": {
-        const a = Math.max(0, Math.min(initialSelection.start, len));
-        const b = Math.max(0, Math.min(initialSelection.end, len));
-        ta.setSelectionRange(Math.min(a, b), Math.max(a, b));
-        break;
-      }
-      case "all":
-        ta.setSelectionRange(0, len);
-        break;
-    }
-  }, [initialSelection]);
+    const at = Math.max(0, Math.min(initialCaretOffset, len));
+    ta.setSelectionRange(at, at);
+  }, [initialCaretOffset]);
 
   const debouncedSave = useDebouncedCallback(
     (nextText: string) => {
@@ -127,16 +132,36 @@ export function EditTextModal({
     [debouncedSave]
   );
 
+  const rows = useMemo(
+    () =>
+      textareaRowsFromPretext({
+        text,
+        layoutWidthPx,
+        textStyle,
+        fontSizePx,
+        canvasDisplayScale,
+      }),
+    [canvasDisplayScale, fontSizePx, layoutWidthPx, text, textStyle]
+  );
+
   return (
-    <div className="flex flex-col gap-2 border border-border bg-card p-4 rounded-xl shadow-xl">
-      <Textarea
+    <div className="flex flex-col gap-2 border border-primary ring-8 ring-primary/15 bg-white rounded-xl shadow-2xs">
+      <textarea
         ref={textareaRef}
-        className="w-full"
+        className="w-full bg-transparent rounded-xl p-2 outline-none text-black"
+        style={{
+          fontFamily: textStyle.fontFamily,
+          fontSize: `${fontSizePx * canvasDisplayScale}px`,
+          fontWeight: textStyle.fontWeight,
+          lineHeight: textStyle.lineHeight,
+          textAlign: block.align,
+        }}
+        placeholder="Type your text here..."
         value={text}
         onChange={(e) => handleChange(e.target.value)}
-        rows={6}
+        rows={rows}
       />
-      <div className="flex gap-2">
+      {/* <div className="flex gap-2">
         <Button
           className="w-fit"
           type="button"
@@ -145,7 +170,7 @@ export function EditTextModal({
         >
           Cancel
         </Button>
-      </div>
+      </div> */}
     </div>
   );
 }
@@ -176,30 +201,23 @@ function TextBlockComponent({
 }) {
   // const popupKey = useId();
   const { documentStore, blockTree } = useDocument();
-  const { setAction, editAction, activeBlockId } = useStore(
+  const { setAction, editAction, focusAction, activeBlockId } = useStore(
     documentStore,
     useShallow((s) => ({
       setAction: s.setAction,
       editAction: selectEditBlockAction(s),
+      focusAction: asFocusBlockAction(s.action),
       activeBlockId: selectActiveBlockId(s),
     }))
   );
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
-  const [initialSelection, setInitialSelection] = useState<InitialTextSelection>(
-    { kind: "caret", offset: 0 }
-  );
+  const [initialCaretOffset, setInitialCaretOffset] = useState(0);
   const isEditingThisBlock = editAction?.blockId === block.id;
+  const isFocusOnlyThisBlock =
+    focusAction?.blockId === block.id && !isEditingThisBlock;
+  const inFocus = isEditingThisBlock || focusAction?.blockId === block.id;
   const canvasGroupRef = useRef<Konva.Group | null>(null);
-  const singleClickOpenTimerRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-
-  const clearPendingSingleClickOpen = useCallback(() => {
-    if (singleClickOpenTimerRef.current !== null) {
-      clearTimeout(singleClickOpenTimerRef.current);
-      singleClickOpenTimerRef.current = null;
-    }
-  }, []);
+  const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
 
   useLayoutEffect(() => {
     if (!isEditingThisBlock || anchor) return;
@@ -214,19 +232,43 @@ function TextBlockComponent({
     return () => cancelAnimationFrame(frame);
   }, [anchor, block.id, isEditingThisBlock]);
 
+  /** Canvas text uses layout px × Konva absolute scale; DOM textarea fontSize must match (see `PageCanvas` layer scale). */
+  useLayoutEffect(() => {
+    if (!anchor || !isEditingThisBlock) return;
+
+    const updateScale = () => {
+      const node = canvasGroupRef.current;
+      if (!node) return;
+      const { x, y } = node.getAbsoluteScale();
+      const s = x !== 0 ? x : y;
+      setCanvasDisplayScale(Number.isFinite(s) && s !== 0 ? s : 1);
+    };
+
+    updateScale();
+
+    const container = canvasGroupRef.current?.getStage()?.container() ?? null;
+    const ro =
+      typeof ResizeObserver !== "undefined" && container
+        ? new ResizeObserver(() => updateScale())
+        : null;
+    if (container && ro) ro.observe(container);
+
+    window.addEventListener("resize", updateScale);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", updateScale);
+    };
+  }, [anchor, isEditingThisBlock]);
+
   const closeTextEditor = useCallback(() => {
-    clearPendingSingleClickOpen();
     setAnchor(null);
-    setInitialSelection({ kind: "caret", offset: 0 });
+    setInitialCaretOffset(0);
     setAction((current) => {
       const editAction = asEditBlockAction(current);
-      return editAction?.blockId === block.id ? null : current;
+      if (editAction?.blockId !== block.id) return current;
+      return { type: "focus-block", blockId: block.id };
     });
-  }, [block.id, clearPendingSingleClickOpen, setAction]);
-
-  useEffect(() => {
-    return () => clearPendingSingleClickOpen();
-  }, [clearPendingSingleClickOpen]);
+  }, [block.id, setAction]);
 
   const handleClick = useCallback(
     (args: {
@@ -250,43 +292,29 @@ function TextBlockComponent({
             })
           : 0;
 
-      const detail = args.event.evt.detail;
+      const { action } = documentStore.getState();
+      const currentEdit = asEditBlockAction(action);
+      const currentFocus = asFocusBlockAction(action);
 
-      if (detail >= 3) {
-        clearPendingSingleClickOpen();
+      if (currentEdit?.blockId === block.id) {
+        return;
+      }
+
+      if (currentFocus?.blockId === block.id) {
         setAnchor(args.anchor);
-        setInitialSelection({ kind: "all" });
+        setInitialCaretOffset(caretAtPointer);
         setAction({ type: "edit-block", blockId: block.id });
         return;
       }
 
-      if (detail === 2) {
-        clearPendingSingleClickOpen();
-        const w = wordUtf16RangeAt(block.text, caretAtPointer);
-        setAnchor(args.anchor);
-        setInitialSelection({
-          kind: "range",
-          start: w.start,
-          end: w.end,
-        });
-        setAction({ type: "edit-block", blockId: block.id });
-        return;
-      }
-
-      clearPendingSingleClickOpen();
-      singleClickOpenTimerRef.current = setTimeout(() => {
-        singleClickOpenTimerRef.current = null;
-        setAnchor(args.anchor);
-        setInitialSelection({ kind: "caret", offset: caretAtPointer });
-        setAction({ type: "edit-block", blockId: block.id });
-      }, SINGLE_CLICK_OPEN_DELAY_MS);
+      setAction({ type: "focus-block", blockId: block.id });
     },
     [
       block.align,
       block.id,
       block.text,
-      clearPendingSingleClickOpen,
       dimensions.width,
+      documentStore,
       fontSizePx,
       setAction,
       style.fontFamily,
@@ -306,6 +334,20 @@ function TextBlockComponent({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [anchor, isEditingThisBlock, closeTextEditor]);
 
+  useEffect(() => {
+    if (!isFocusOnlyThisBlock) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAction((current) => {
+          const f = asFocusBlockAction(current);
+          return f?.blockId === block.id ? null : current;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [block.id, isFocusOnlyThisBlock, setAction]);
+
   const isDisabled = useInteractableBlock({
     activeBlockId,
     parents,
@@ -321,7 +363,8 @@ function TextBlockComponent({
         width={dimensions.width}
         height={dimensions.height}
         disabled={isDisabled}
-        inFocus={isEditingThisBlock}
+        inFocus={inFocus}
+        blockHotkeyScope="focus-block-only"
         columnsResizeContext={columnsResizeContext}
         onKonvaGroupRef={(node) => {
           canvasGroupRef.current = node;
@@ -365,8 +408,11 @@ function TextBlockComponent({
           >
             <EditTextModal
               block={block}
-              closePopup={closeTextEditor}
-              initialSelection={initialSelection}
+              initialCaretOffset={initialCaretOffset}
+              textStyle={style}
+              fontSizePx={fontSizePx}
+              layoutWidthPx={dimensions.width}
+              canvasDisplayScale={canvasDisplayScale}
             />
             {/* <div className="h-1 w-full bg-amber-300" /> */}
           </Html>

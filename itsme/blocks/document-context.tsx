@@ -374,14 +374,20 @@ function blockSyncActionsToMutationActions(
 /**
  * The single in-flight user interaction with the document.
  *
- * At any moment the user is doing exactly one of: editing a block (focused),
- * moving a block (drag in flight), placing a new block, or resizing a column.
+ * At any moment the user is doing exactly one of: editing a block, selecting a
+ * block without editing (text blocks only), moving a block (drag in flight),
+ * placing a new block, or resizing a column.
  * These are mutually exclusive, so they share one slot rather than living as
  * parallel fields.
  */
 export type DocumentStoreAction =
   | {
       type: "edit-block";
+      blockId: string;
+    }
+  | {
+      /** Text blocks: selected (focus ring) but textarea not open yet. */
+      type: "focus-block";
       blockId: string;
     }
   | {
@@ -426,6 +432,11 @@ export type DocumentStoreAction =
 export type DocumentStoreEditBlockAction = Extract<
   DocumentStoreAction,
   { type: "edit-block" }
+>;
+
+export type DocumentStoreFocusBlockAction = Extract<
+  DocumentStoreAction,
+  { type: "focus-block" }
 >;
 
 export type DocumentStoreMoveBlockAction = Extract<
@@ -483,6 +494,12 @@ export function asEditBlockAction(
   action: DocumentStoreAction | null
 ): DocumentStoreEditBlockAction | null {
   return action?.type === "edit-block" ? action : null;
+}
+
+export function asFocusBlockAction(
+  action: DocumentStoreAction | null
+): DocumentStoreFocusBlockAction | null {
+  return action?.type === "focus-block" ? action : null;
 }
 
 export function asMoveBlockAction(
@@ -546,6 +563,7 @@ export function selectActiveBlockId(state: DocumentStoreState): string | null {
   if (!action) return null;
   switch (action.type) {
     case "edit-block":
+    case "focus-block":
       return action.blockId;
     case "move-block":
       return action.current.blockIds[0] ?? null;
