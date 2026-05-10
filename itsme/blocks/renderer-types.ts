@@ -113,15 +113,17 @@ export class BlockTree {
     this.childHasParent = args?.childHasParent ?? {};
     this.reorderBoundingBoxes = args?.reorderBoundingBoxes ?? [];
     // Remove duplicate reorder bounding boxes.
-    const reorderBoundingBoxDict = this.reorderBoundingBoxes.reduce(
-      (dict, box) => {
-        const key = `${box.blockId}:${box.type}`;
-        dict[key] = box;
-        return dict;
-      },
-      {} as Record<string, BlockTreeReorderBoundingBox>
-    );
-    this.reorderBoundingBoxes = Object.values(reorderBoundingBoxDict);
+    const deduped: typeof this.reorderBoundingBoxes = [];
+    const dedupeKeys = new Set<string>();
+    for (const box of this.reorderBoundingBoxes) {
+      const key = `${box.blockId}:${box.type}`;
+      if (dedupeKeys.has(key)) {
+        continue;
+      }
+      dedupeKeys.add(key);
+      deduped.push(box);
+    }
+    this.reorderBoundingBoxes = deduped;
   }
 
   isNodeChildOf(nodes: { parent: string; child: string }): boolean {
