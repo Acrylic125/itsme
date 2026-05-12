@@ -19,8 +19,16 @@ import {
   renderDocumentLayout,
   RenderedLayoutBlock,
 } from "./renderer";
-import { sanitizeRootLayout } from "./apply-block-move";
+import {
+  collectSubtreeBlocksInDocumentOrder,
+  insertSubtreeBelowInDocument,
+  sanitizeRootLayout,
+} from "./apply-block-move";
 import type { Block } from "./blocks";
+import {
+  parseCopyPasteClipboardPayload,
+  serializeCopyPasteClipboard,
+} from "./copy-paste-clipboard";
 import { BlockUpdateSchema } from "./updater";
 import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
 import { useQueryWithStatus } from "@/components/convex-hooks";
@@ -435,6 +443,14 @@ export type DocumentStoreAction =
       targetBlock: BlockTreeReorderBoundingBox | null;
     }
   | {
+      /** Place clipboard block (validated JSON) using the same targets as add-block. */
+      type: "paste-block";
+      current: {
+        position: Pos;
+      } | null;
+      targetBlock: BlockTreeReorderBoundingBox | null;
+    }
+  | {
       /**
        * Drag-resize on a column-child boundary. Distinct from `move-block`
        * because the gesture starts on the same block but should never trigger
@@ -475,6 +491,11 @@ export type DocumentStoreMoveBlockAction = Extract<
 export type DocumentStoreAddBlockAction = Extract<
   DocumentStoreAction,
   { type: "add-block" }
+>;
+
+export type DocumentStorePasteBlockAction = Extract<
+  DocumentStoreAction,
+  { type: "paste-block" }
 >;
 
 export type DocumentStoreResizeColumnAction = Extract<
@@ -542,6 +563,12 @@ export function asAddBlockAction(
   return action?.type === "add-block" ? action : null;
 }
 
+export function asPasteBlockAction(
+  action: DocumentStoreAction | null
+): DocumentStorePasteBlockAction | null {
+  return action?.type === "paste-block" ? action : null;
+}
+
 export function asResizeColumnAction(
   action: DocumentStoreAction | null
 ): DocumentStoreResizeColumnAction | null {
@@ -564,6 +591,12 @@ export function selectAddBlockAction(
   state: DocumentStoreState
 ): DocumentStoreAddBlockAction | null {
   return asAddBlockAction(state.action);
+}
+
+export function selectPasteBlockAction(
+  state: DocumentStoreState
+): DocumentStorePasteBlockAction | null {
+  return asPasteBlockAction(state.action);
 }
 
 export function selectResizeColumnAction(
@@ -598,6 +631,7 @@ export function selectActiveBlockId(state: DocumentStoreState): string | null {
     case "resize-column":
       return action.blockId;
     case "add-block":
+    case "paste-block":
       return null;
   }
 }
@@ -961,6 +995,110 @@ export function DocumentStoresProvider({
     syncDocumentTextPresetToMatch,
     syncProjectTextPresetToMatch,
   ]);
+
+  useEffect(() => {
+    if (!renderedDocument) {
+      return;
+    }
+
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+      if (target.isContentEditable) {
+        return true;
+      }
+      const tag = target.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.metaKey && !e.ctrlKey) {
+        return;
+      }
+      if (isEditableTarget(e.target)) {
+        return;
+      }
+
+      const key = e.key;
+      if (key === "c" || key === "C") {
+        const action = documentStore.getState().action;
+        const focusId =
+          action?.type === "edit-block" || action?.type === "focus-block"
+            ? action.blockId
+            : null;
+        if (!focusId) {
+          return;
+        }
+        const subtree = collectSubtreeBlocksInDocumentOrder(
+          renderedDocument,
+          focusId
+        );
+        if (!subtree?.length) {
+          return;
+        }
+        e.preventDefault();
+        void navigator.clipboard
+          .writeText(serializeCopyPasteClipboard(subtree))
+          .catch(() => {});
+        return;
+      }
+
+      if (key === "v" || key === "V") {
+        e.preventDefault();
+        void (async () => {
+          let text: string;
+          try {
+            text = await navigator.clipboard.readText();
+          } catch {
+            return;
+          }
+          const remapped = parseCopyPasteClipboardPayload(text);
+          if (!remapped?.length) {
+            return;
+          }
+
+          const action = documentStore.getState().action;
+          const focusId =
+            action?.type === "edit-block" || action?.type === "focus-block"
+              ? action.blockId
+              : null;
+
+          if (focusId) {
+            updateBlocks((current) => {
+              const doc = documentBlocksSnapshotToDocument(current);
+              const next = insertSubtreeBelowInDocument(doc, focusId, remapped);
+              if (!next) {
+                return current;
+              }
+              return {
+                ...current,
+                blocks: next.blocks,
+                layout: next.layout as DocumentBlocksSnapshot["layout"],
+              };
+            });
+            if (remapped[0]!.type === "text") {
+              documentStore.getState().setAction({
+                type: "edit-block",
+                blockId: remapped[0]!.id,
+              });
+            } else {
+              documentStore.getState().setAction(null);
+            }
+          } else {
+            documentStore.getState().setAction({
+              type: "paste-block",
+              current: null,
+              targetBlock: null,
+            });
+          }
+        })();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [renderedDocument, documentStore, updateBlocks]);
 
   const isLoading =
     blocksQuery.status === "pending" || stylesQuery.status === "pending";

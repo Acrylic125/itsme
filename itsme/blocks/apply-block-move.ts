@@ -42,9 +42,13 @@ export type MoveBlockUpdate = z.infer<typeof MoveBlockUpdateSchema>;
 
 const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
 
-function createClientIdForDuplicate(kind: string): string {
+export function newClientBlockId(kind: string): string {
   const token = nanoid(12);
   return `${CLIENT_ID_PREFIX}${kind}-${token}`;
+}
+
+function createClientIdForDuplicate(kind: string): string {
+  return newClientBlockId(kind);
 }
 
 type ParentRef =
@@ -179,6 +183,30 @@ function getChildBlockIds(block: Document["blocks"][number]): string[] {
     case "text":
       return [];
   }
+}
+
+/** DFS order: root first, then descendants (same walk as duplicate). */
+export function collectSubtreeBlocksInDocumentOrder(
+  doc: Document,
+  rootBlockId: string
+): Document["blocks"][number][] | null {
+  const blockById = new Map(doc.blocks.map((block) => [block.id, block]));
+  if (!blockById.get(rootBlockId)) {
+    return null;
+  }
+  const ordered: Document["blocks"][number][] = [];
+  const visit = (id: string) => {
+    const block = blockById.get(id);
+    if (!block) {
+      return;
+    }
+    ordered.push(block);
+    for (const childId of getChildBlockIds(block)) {
+      visit(childId);
+    }
+  };
+  visit(rootBlockId);
+  return ordered;
 }
 
 function isDescendantOf(
@@ -468,12 +496,20 @@ function clampInsertIndex(index: number, length: number): number {
   return Math.max(0, Math.min(index, length));
 }
 
-/** Inserts a new block row and splices its id into the destination container (no move/remove). */
-export function applyInsertNewBlockAtDestination(
+/**
+ * Inserts `subtreeBlocks` (root first, then descendants; none may exist in
+ * `doc.blocks` yet) and splices the root id into the destination container.
+ */
+export function applyInsertSubtreeAtDestination(
   doc: Document,
-  newBlock: Document["blocks"][number],
+  subtreeBlocks: Document["blocks"][number][],
   destination: MoveBlockUpdate["destination"]
-): Document {
+): Document | null {
+  if (subtreeBlocks.length === 0) {
+    return null;
+  }
+  const newRoot = subtreeBlocks[0];
+
   const next: Document = {
     ...doc,
     layout: [...doc.layout],
@@ -493,7 +529,9 @@ export function applyInsertNewBlockAtDestination(
     }),
   };
 
-  next.blocks.push(newBlock);
+  for (const b of subtreeBlocks) {
+    next.blocks.push(b);
+  }
 
   const maxIndexForInsert = (() => {
     switch (destination.container) {
@@ -527,38 +565,48 @@ export function applyInsertNewBlockAtDestination(
 
   switch (destination.container) {
     case "document":
-      next.layout.splice(idx, 0, newBlock.id);
+      next.layout.splice(idx, 0, newRoot.id);
       break;
     case "section": {
       const parent = next.blocks.find(
         (b) => b.id === destination.parentBlockId && b.type === "section"
       );
-      if (!parent || parent.type !== "section") return doc;
-      parent.blocks.splice(idx, 0, newBlock.id);
+      if (!parent || parent.type !== "section") return null;
+      parent.blocks.splice(idx, 0, newRoot.id);
       break;
     }
     case "list": {
       const parent = next.blocks.find(
         (b) => b.id === destination.parentBlockId && b.type === "list"
       );
-      if (!parent || parent.type !== "list") return doc;
-      parent.blocks.splice(idx, 0, newBlock.id);
+      if (!parent || parent.type !== "list") return null;
+      parent.blocks.splice(idx, 0, newRoot.id);
       break;
     }
     case "columns": {
       const parent = next.blocks.find(
         (b) => b.id === destination.parentBlockId && b.type === "columns"
       );
-      if (!parent || parent.type !== "columns") return doc;
+      if (!parent || parent.type !== "columns") return null;
       parent.blocks.splice(idx, 0, {
-        blockId: newBlock.id,
+        blockId: newRoot.id,
         span: destination.span,
       });
       break;
     }
   }
 
-  return next;
+  return pruneStaleLayoutReferences(next);
+}
+
+/** Inserts a new block row and splices its id into the destination container (no move/remove). */
+export function applyInsertNewBlockAtDestination(
+  doc: Document,
+  newBlock: Document["blocks"][number],
+  destination: MoveBlockUpdate["destination"]
+): Document {
+  const result = applyInsertSubtreeAtDestination(doc, [newBlock], destination);
+  return result ?? doc;
 }
 
 /**
@@ -784,4 +832,62 @@ export function duplicateBlockBelowInDocument(
     document: pruneStaleLayoutReferences(next),
     newRootId,
   };
+}
+
+/** Inserts `subtreeBlocks` (root first) immediately after `afterBlockId` in its parent container. */
+export function insertSubtreeBelowInDocument(
+  doc: Document,
+  afterBlockId: string,
+  subtreeBlocks: Document["blocks"][number][]
+): Document | null {
+  if (subtreeBlocks.length === 0) {
+    return null;
+  }
+  const parentRef = findParentRef(doc, afterBlockId);
+  if (!parentRef) {
+    return null;
+  }
+
+  let destination: MoveBlockUpdate["destination"];
+  switch (parentRef.container) {
+    case "document":
+      destination = {
+        container: "document",
+        index: parentRef.index + 1,
+      };
+      break;
+    case "section":
+      destination = {
+        container: "section",
+        parentBlockId: parentRef.parentBlockId,
+        index: parentRef.index + 1,
+      };
+      break;
+    case "list":
+      destination = {
+        container: "list",
+        parentBlockId: parentRef.parentBlockId,
+        index: parentRef.index + 1,
+      };
+      break;
+    case "columns":
+      destination = {
+        container: "columns",
+        parentBlockId: parentRef.parentBlockId,
+        index: parentRef.index + 1,
+        span: parentRef.span,
+      };
+      break;
+  }
+
+  return applyInsertSubtreeAtDestination(doc, subtreeBlocks, destination);
+}
+
+/** Inserts `newBlock` (not yet in `doc.blocks`) immediately after `afterBlockId` in its parent container. */
+export function insertBlockBelowInDocument(
+  doc: Document,
+  afterBlockId: string,
+  newBlock: Document["blocks"][number]
+): Document | null {
+  return insertSubtreeBelowInDocument(doc, afterBlockId, [newBlock]);
 }

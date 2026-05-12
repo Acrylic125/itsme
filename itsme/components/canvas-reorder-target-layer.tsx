@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Group, Rect, Text } from "react-konva";
 import {
   applyBlockMove,
-  applyInsertNewBlockAtDestination,
+  applyInsertSubtreeAtDestination,
   isMoveIntoOwnSubtree,
   isNestedInsideBlock,
   pruneStaleLayoutReferences,
@@ -14,13 +14,16 @@ import type { Block } from "@/blocks/blocks";
 import {
   asAddBlockAction,
   asMoveBlockAction,
+  asPasteBlockAction,
   documentBlocksSnapshotToDocument,
   selectAddBlockAction,
   selectMoveBlockAction,
+  selectPasteBlockAction,
   type DocumentBlocksSnapshot,
   type DocumentStoreMoveBlockAction,
   useDocument,
 } from "@/blocks/document-context";
+import { parseCopyPasteClipboardPayload } from "@/blocks/copy-paste-clipboard";
 import type {
   BlockTree,
   BlockTreeReorderBoundingBox,
@@ -476,31 +479,18 @@ export type AddBlockPlacementResult = {
   insertedBlockId: string;
 };
 
-/** Places a new text/list block using the same drop targets as block reorder (merge excluded). */
-export function buildNextDocumentForAddBlockPlacement(args: {
+/** Places an existing subtree (root first, then descendants) using the same drop targets as add-block (merge excluded). */
+export function buildNextDocumentForBlockPlacement(args: {
   snapshot: DocumentBlocksSnapshot;
   blockTree: BlockTree;
-  blockType: "text" | "list";
+  newSubtreeBlocks: Block[];
   targetBox: BlockTreeReorderBoundingBox;
 }): AddBlockPlacementResult | null {
-  const { snapshot, blockTree, blockType, targetBox } = args;
-  const newId = createClientId({ kind: blockType });
-  const newBlock: Block =
-    blockType === "text"
-      ? {
-          id: newId,
-          type: "text",
-          text: "",
-          align: "left",
-          style: "default",
-        }
-      : {
-          id: newId,
-          type: "list",
-          blocks: [],
-          bullet: { type: "normal", value: "-" },
-        };
-
+  const { snapshot, blockTree, newSubtreeBlocks, targetBox } = args;
+  if (newSubtreeBlocks.length === 0) {
+    return null;
+  }
+  const newRoot = newSubtreeBlocks[0]!;
   const document = documentBlocksSnapshotToDocument(snapshot);
 
   // Inner: append the new block to a list's children.
@@ -517,11 +507,14 @@ export function buildNextDocumentForAddBlockPlacement(args: {
       parentBlockId: targetBlock.id,
       index: targetBlock.blocks.length,
     };
-    const phase1 = applyInsertNewBlockAtDestination(
+    const phase1 = applyInsertSubtreeAtDestination(
       document,
-      newBlock,
+      newSubtreeBlocks,
       destination
     );
+    if (!phase1) {
+      return null;
+    }
     const phase1Snapshot: DocumentBlocksSnapshot = {
       ...snapshot,
       blocks: phase1.blocks,
@@ -529,7 +522,7 @@ export function buildNextDocumentForAddBlockPlacement(args: {
     };
     return {
       snapshot: finalizeSnapshotAfterReorder(phase1Snapshot),
-      insertedBlockId: newId,
+      insertedBlockId: newRoot.id,
     };
   }
 
@@ -569,11 +562,14 @@ export function buildNextDocumentForAddBlockPlacement(args: {
         };
         break;
     }
-    const phase1 = applyInsertNewBlockAtDestination(
+    const phase1 = applyInsertSubtreeAtDestination(
       document,
-      newBlock,
+      newSubtreeBlocks,
       destination
     );
+    if (!phase1) {
+      return null;
+    }
     const phase1Snapshot: DocumentBlocksSnapshot = {
       ...snapshot,
       blocks: phase1.blocks,
@@ -581,7 +577,7 @@ export function buildNextDocumentForAddBlockPlacement(args: {
     };
     return {
       snapshot: finalizeSnapshotAfterReorder(phase1Snapshot),
-      insertedBlockId: newId,
+      insertedBlockId: newRoot.id,
     };
   }
 
@@ -607,11 +603,14 @@ export function buildNextDocumentForAddBlockPlacement(args: {
       index: targetParent.index + (targetBox.type === "right" ? 1 : 0),
       span: newSpan,
     };
-    const phase1 = applyInsertNewBlockAtDestination(
+    const phase1 = applyInsertSubtreeAtDestination(
       document,
-      newBlock,
+      newSubtreeBlocks,
       destination
     );
+    if (!phase1) {
+      return null;
+    }
     const phase1Snapshot: DocumentBlocksSnapshot = {
       ...snapshot,
       blocks: phase1.blocks,
@@ -619,12 +618,14 @@ export function buildNextDocumentForAddBlockPlacement(args: {
     };
     return {
       snapshot: finalizeSnapshotAfterReorder(phase1Snapshot),
-      insertedBlockId: newId,
+      insertedBlockId: newRoot.id,
     };
   }
 
   const next = cloneSnapshot(snapshot);
-  next.blocks.push(newBlock);
+  for (const b of newSubtreeBlocks) {
+    next.blocks.push(b);
+  }
 
   const targetParentMutable = findParentRefFromBlockTree(
     blockTree,
@@ -643,12 +644,12 @@ export function buildNextDocumentForAddBlockPlacement(args: {
   const orderedChildren =
     targetBox.type === "left"
       ? [
-          { blockId: newBlock.id, span: movingSpan },
+          { blockId: newRoot.id, span: movingSpan },
           { blockId: targetBox.blockId, span: targetSpan },
         ]
       : [
           { blockId: targetBox.blockId, span: targetSpan },
-          { blockId: newBlock.id, span: movingSpan },
+          { blockId: newRoot.id, span: movingSpan },
         ];
 
   const newColumnsBlock: Extract<Block, { type: "columns" }> = {
@@ -687,8 +688,38 @@ export function buildNextDocumentForAddBlockPlacement(args: {
 
   return {
     snapshot: finalizeSnapshotAfterReorder(next),
-    insertedBlockId: newId,
+    insertedBlockId: newRoot.id,
   };
+}
+
+/** Places a new text/list block using the same drop targets as block reorder (merge excluded). */
+export function buildNextDocumentForAddBlockPlacement(args: {
+  snapshot: DocumentBlocksSnapshot;
+  blockTree: BlockTree;
+  blockType: "text" | "list";
+  targetBox: BlockTreeReorderBoundingBox;
+}): AddBlockPlacementResult | null {
+  const { blockType, ...rest } = args;
+  const newId = createClientId({ kind: blockType });
+  const newBlock: Block =
+    blockType === "text"
+      ? {
+          id: newId,
+          type: "text",
+          text: "",
+          align: "left",
+          style: "default",
+        }
+      : {
+          id: newId,
+          type: "list",
+          blocks: [],
+          bullet: { type: "normal", value: "-" },
+        };
+  return buildNextDocumentForBlockPlacement({
+    ...rest,
+    newSubtreeBlocks: [newBlock],
+  });
 }
 
 /**
@@ -915,32 +946,69 @@ export function AddBlockPlacementLayer({
 }) {
   const { documentStore, updateBlocks, blockTree, document } = useDocument();
   const addAction = useStore(documentStore, selectAddBlockAction);
+  const pasteAction = useStore(documentStore, selectPasteBlockAction);
+  const placementAction = addAction ?? pasteAction;
   const setAction = useStore(documentStore, (s) => s.setAction);
 
-  const pointer = addAction?.current?.position ?? null;
-  const blockLabel = addAction?.blockType === "list" ? "List" : "Text";
+  const pointer = placementAction?.current?.position ?? null;
+  const blockLabel = pasteAction
+    ? "Paste"
+    : addAction?.blockType === "list"
+      ? "List"
+      : "Text";
   /** Dev Strict Mode may invoke state updaters twice; cache one placement result per commit. */
   const placementSnapshotCacheRef = useRef<DocumentBlocksSnapshot | null>(null);
 
-  const syncAddTarget = useCallback(
+  const syncPlacementTarget = useCallback(
     (target: BlockTreeReorderBoundingBox | null) => {
       setAction((c) => {
-        const a = asAddBlockAction(c);
-        if (!a) return c;
-        if (a.targetBlock === target) return c;
-        return { ...a, targetBlock: target };
+        const add = asAddBlockAction(c);
+        if (add) {
+          if (add.targetBlock === target) return c;
+          return { ...add, targetBlock: target };
+        }
+        const paste = asPasteBlockAction(c);
+        if (paste) {
+          if (paste.targetBlock === target) return c;
+          return { ...paste, targetBlock: target };
+        }
+        return c;
       });
     },
     [setAction]
   );
 
-  const commitPlacement = useCallback(() => {
-    const add = asAddBlockAction(documentStore.getState().action);
-    if (!document || !add?.targetBlock) {
+  const commitPlacement = useCallback(async () => {
+    const raw = documentStore.getState().action;
+    const add = asAddBlockAction(raw);
+    const paste = asPasteBlockAction(raw);
+    if (!document) {
       return;
     }
-    const targetBox = add.targetBlock;
-    const blockType = add.blockType;
+
+    let targetBox: BlockTreeReorderBoundingBox | null = null;
+    let blockType: "text" | "list" | null = null;
+    let newSubtreeForPaste: Block[] | null = null;
+
+    if (add?.targetBlock) {
+      targetBox = add.targetBlock;
+      blockType = add.blockType;
+    } else if (paste?.targetBlock) {
+      targetBox = paste.targetBlock;
+      let text: string;
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {
+        return;
+      }
+      newSubtreeForPaste = parseCopyPasteClipboardPayload(text);
+      if (!newSubtreeForPaste?.length) {
+        return;
+      }
+    } else {
+      return;
+    }
+
     let insertedBlockId: string | null = null;
     placementSnapshotCacheRef.current = null;
     updateBlocks((current) => {
@@ -948,12 +1016,19 @@ export function AddBlockPlacementLayer({
       if (cached) {
         return cached;
       }
-      const placed = buildNextDocumentForAddBlockPlacement({
-        snapshot: current,
-        blockTree,
-        blockType,
-        targetBox,
-      });
+      const placed = blockType
+        ? buildNextDocumentForAddBlockPlacement({
+            snapshot: current,
+            blockTree,
+            blockType,
+            targetBox: targetBox!,
+          })
+        : buildNextDocumentForBlockPlacement({
+            snapshot: current,
+            blockTree,
+            newSubtreeBlocks: newSubtreeForPaste!,
+            targetBox: targetBox!,
+          });
       if (!placed) {
         return current;
       }
@@ -962,7 +1037,10 @@ export function AddBlockPlacementLayer({
       return placed.snapshot;
     });
     setAction(null);
-    if (blockType === "text" && insertedBlockId) {
+    const shouldOpenTextEdit =
+      insertedBlockId != null &&
+      (blockType === "text" || newSubtreeForPaste?.[0]?.type === "text");
+    if (shouldOpenTextEdit && insertedBlockId != null) {
       documentStore.getState().setAction({
         type: "edit-block",
         blockId: insertedBlockId,
@@ -970,7 +1048,7 @@ export function AddBlockPlacementLayer({
     }
   }, [blockTree, document, documentStore, setAction, updateBlocks]);
 
-  if (!addAction) {
+  if (!placementAction) {
     return null;
   }
 
@@ -978,7 +1056,7 @@ export function AddBlockPlacementLayer({
     <>
       <CanvasReorderTargetLayer
         pointerCanvasPos={pointer}
-        onActiveTargetChange={syncAddTarget}
+        onActiveTargetChange={syncPlacementTarget}
       />
       {pointer && (
         <Group x={pointer.x + 14} y={pointer.y + 14} listening={false}>
@@ -1014,26 +1092,43 @@ export function AddBlockPlacementLayer({
           const p = stage?.getPointerPosition();
           if (!p) return;
           setAction((c) => {
-            const a = asAddBlockAction(c);
-            if (!a) return c;
-            return {
-              ...a,
-              current: {
-                position: { x: p.x / scale, y: p.y / scale },
-              },
-            };
+            const add = asAddBlockAction(c);
+            if (add) {
+              return {
+                ...add,
+                current: {
+                  position: { x: p.x / scale, y: p.y / scale },
+                },
+              };
+            }
+            const paste = asPasteBlockAction(c);
+            if (paste) {
+              return {
+                ...paste,
+                current: {
+                  position: { x: p.x / scale, y: p.y / scale },
+                },
+              };
+            }
+            return c;
           });
         }}
         onMouseLeave={() => {
           setAction((c) => {
-            const a = asAddBlockAction(c);
-            if (!a) return c;
-            return { ...a, current: null, targetBlock: null };
+            const add = asAddBlockAction(c);
+            if (add) {
+              return { ...add, current: null, targetBlock: null };
+            }
+            const paste = asPasteBlockAction(c);
+            if (paste) {
+              return { ...paste, current: null, targetBlock: null };
+            }
+            return c;
           });
         }}
         onClick={(e) => {
           e.cancelBubble = true;
-          commitPlacement();
+          void commitPlacement();
         }}
       />
     </>

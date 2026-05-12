@@ -5,7 +5,7 @@ import { Layer, Rect, Group, Stage } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { getPageLayoutMetrics } from "@/blocks/renderer";
-import { asAddBlockAction, useDocument } from "@/blocks/document-context";
+import { asAddBlockAction, asPasteBlockAction, useDocument } from "@/blocks/document-context";
 import { useStore } from "zustand/react";
 import { cn } from "@/lib/utils";
 import {
@@ -28,9 +28,10 @@ export function PageCanvas() {
 
   const { blocks, dpi, document, documentStore } = useDocument();
   const [canvasPointerInside, setCanvasPointerInside] = useState(false);
-  const isAddPlacementMode = useStore(
+  const isAddOrPastePlacementMode = useStore(
     documentStore,
-    (s) => asAddBlockAction(s.action) != null
+    (s) =>
+      asAddBlockAction(s.action) != null || asPasteBlockAction(s.action) != null
   );
 
   const toggleAddBlockMode = useCallback(
@@ -115,7 +116,7 @@ export function PageCanvas() {
       <div
         className={cn(
           "w-full max-w-7xl overflow-x-hidden h-fit absolute mt-10",
-          isAddPlacementMode && canvasPointerInside && "cursor-crosshair"
+          isAddOrPastePlacementMode && canvasPointerInside && "cursor-crosshair"
         )}
         ref={containerRef}
         onMouseEnter={() => setCanvasPointerInside(true)}
