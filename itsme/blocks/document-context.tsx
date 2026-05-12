@@ -1058,40 +1058,11 @@ export function DocumentStoresProvider({
             return;
           }
 
-          const action = documentStore.getState().action;
-          const focusId =
-            action?.type === "edit-block" || action?.type === "focus-block"
-              ? action.blockId
-              : null;
-
-          if (focusId) {
-            updateBlocks((current) => {
-              const doc = documentBlocksSnapshotToDocument(current);
-              const next = insertSubtreeBelowInDocument(doc, focusId, remapped);
-              if (!next) {
-                return current;
-              }
-              return {
-                ...current,
-                blocks: next.blocks,
-                layout: next.layout as DocumentBlocksSnapshot["layout"],
-              };
-            });
-            if (remapped[0]!.type === "text") {
-              documentStore.getState().setAction({
-                type: "edit-block",
-                blockId: remapped[0]!.id,
-              });
-            } else {
-              documentStore.getState().setAction(null);
-            }
-          } else {
-            documentStore.getState().setAction({
-              type: "paste-block",
-              current: null,
-              targetBlock: null,
-            });
-          }
+          documentStore.getState().setAction({
+            type: "paste-block",
+            current: null,
+            targetBlock: null,
+          });
         })();
       }
     };
