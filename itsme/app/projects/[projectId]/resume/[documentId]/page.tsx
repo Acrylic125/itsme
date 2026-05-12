@@ -37,9 +37,9 @@ import { Loader2 } from "lucide-react";
 export default async function ProjectResumePage({
   params,
 }: {
-  params: Promise<{ documentId: string }>;
+  params: Promise<{ projectId: string; documentId: string }>;
 }) {
-  const { documentId } = await params;
+  const { projectId, documentId } = await params;
 
   return (
     <Suspense
@@ -49,7 +49,11 @@ export default async function ProjectResumePage({
         </div>
       }
     >
-      <DocumentStoresProvider documentId={documentId} dpi={300}>
+      <DocumentStoresProvider
+        documentId={documentId}
+        projectId={projectId}
+        dpi={300}
+      >
         <PageCanvas />
       </DocumentStoresProvider>
     </Suspense>

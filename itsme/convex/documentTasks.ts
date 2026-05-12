@@ -1,13 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 
 import { Block, DEFAULT_STYLE_SHEET, StyleSheetSchema } from "../blocks/blocks";
 import { TextStyleSheetSchema } from "../blocks/text/schema";
 import { pdfToBlocks } from "../lib/pdf-to-blocks/server";
 import { CreateProjectFromPdfInputSchema } from "@/lib/pdf-to-blocks/schema";
 import type { z } from "zod";
-import type { Doc } from "./_generated/dataModel";
 
 const textStyle = v.union(
   v.literal("default"),
@@ -42,6 +42,10 @@ export const blockDataValidator = v.union(
     text: v.string(),
     align: textAlign,
     style: textStyle,
+    fontSize: v.optional(v.float64()),
+    fontWeight: v.optional(
+      v.union(v.literal("normal"), v.literal("bold"))
+    ),
     ref: v.optional(v.id("blocks")),
   }),
   v.object({
@@ -77,6 +81,10 @@ const blockDataWithClientIdsValidator = v.union(
     text: v.string(),
     align: textAlign,
     style: textStyle,
+    fontSize: v.optional(v.float64()),
+    fontWeight: v.optional(
+      v.union(v.literal("normal"), v.literal("bold"))
+    ),
     ref: v.optional(blockIdLike),
   }),
   v.object({
@@ -135,12 +143,15 @@ function remapBlockDataClientIds(args: {
   };
 
   if (args.data.type === "text") {
+    const d = args.data;
     return {
       type: "text",
-      text: args.data.text,
-      align: args.data.align,
-      style: args.data.style,
-      ref: remap(args.data.ref),
+      text: d.text,
+      align: d.align,
+      style: d.style,
+      ref: remap(d.ref),
+      ...(d.fontSize !== undefined ? { fontSize: d.fontSize } : {}),
+      ...(d.fontWeight !== undefined ? { fontWeight: d.fontWeight } : {}),
     };
   }
   if (args.data.type === "section") {
@@ -291,6 +302,8 @@ export function convexBlockToClientBlock(row: Doc<"blocks">): Block {
       align: d.align,
       style: d.style,
       ref: d.ref ?? undefined,
+      ...(d.fontSize !== undefined ? { fontSize: d.fontSize } : {}),
+      ...(d.fontWeight !== undefined ? { fontWeight: d.fontWeight } : {}),
     };
   }
 
@@ -610,6 +623,12 @@ export const duplicateDocument = mutation({
             text: b.data.text,
             align: b.data.align,
             style: b.data.style,
+            ...(b.data.fontSize !== undefined
+              ? { fontSize: b.data.fontSize }
+              : {}),
+            ...(b.data.fontWeight !== undefined
+              ? { fontWeight: b.data.fontWeight }
+              : {}),
           };
         }
         if (b.data.type === "section") {
@@ -949,6 +968,143 @@ export const updateDocumentBlocks = mutation({
   },
 });
 
+type TextStylePreset = "default" | "h1" | "h2" | "h3";
+
+/**
+ * After a document text preset is updated from the toolbar “sync” actions,
+ * strip per-block fontSize/fontWeight so blocks inherit the new sheet values.
+ */
+async function clearTextBlockTypographyOverridesForDocumentAndStyle(
+  ctx: MutationCtx,
+  documentId: Id<"documents">,
+  style: TextStylePreset
+): Promise<number> {
+  let cleared = 0;
+  const rows = await ctx.db
+    .query("blocks")
+    .withIndex("by_documentId", (q) => q.eq("documentId", documentId))
+    .collect();
+  for (const row of rows) {
+    const d = row.data;
+    if (d.type !== "text" || d.style !== style) continue;
+    if (d.fontSize === undefined && d.fontWeight === undefined) continue;
+    await ctx.db.patch(row._id, {
+      data: {
+        type: "text",
+        text: d.text,
+        align: d.align,
+        style: d.style,
+        ...(d.ref !== undefined ? { ref: d.ref } : {}),
+      },
+    });
+    cleared += 1;
+  }
+  return cleared;
+}
+
+const textStylePatchValidator = v.object({
+  style: textStyle,
+  fontSize: v.optional(v.float64()),
+  fontWeight: v.optional(v.union(v.literal("normal"), v.literal("bold"))),
+});
+
+export const updateDocumentTextStyles = mutation({
+  args: {
+    documentId: v.id("documents"),
+    patches: v.array(textStylePatchValidator),
+  },
+  handler: async (ctx, args) => {
+    await requireIdentity(ctx);
+
+    if (args.patches.length === 0) {
+      return { updated: 0, blocksTypographyCleared: 0 };
+    }
+
+    const doc = await ctx.db.get(args.documentId);
+    if (!doc) {
+      throw new Error("Document not found.");
+    }
+
+    let updated = 0;
+    let blocksTypographyCleared = 0;
+    for (const p of args.patches) {
+      if (p.fontSize === undefined && p.fontWeight === undefined) {
+        continue;
+      }
+      const row = await ctx.db
+        .query("documentTextStyles")
+        .withIndex("by_documentId_style", (q) =>
+          q.eq("documentId", args.documentId).eq("style", p.style)
+        )
+        .first();
+      if (!row) {
+        throw new Error(`Missing documentTextStyles row for style '${p.style}'.`);
+      }
+      const patch: { fontSize?: number; fontWeight?: "normal" | "bold" } = {};
+      if (p.fontSize !== undefined) patch.fontSize = p.fontSize;
+      if (p.fontWeight !== undefined) patch.fontWeight = p.fontWeight;
+      if (Object.keys(patch).length > 0) {
+        await ctx.db.patch(row._id, patch);
+        updated += 1;
+        blocksTypographyCleared +=
+          await clearTextBlockTypographyOverridesForDocumentAndStyle(
+            ctx,
+            args.documentId,
+            p.style
+          );
+      }
+    }
+
+    return { updated, blocksTypographyCleared };
+  },
+});
+
+export const syncProjectTextStylePresetAllDocuments = mutation({
+  args: {
+    projectId: v.id("projects"),
+    style: textStyle,
+    fontSize: v.float64(),
+    fontWeight: v.union(v.literal("normal"), v.literal("bold")),
+  },
+  handler: async (ctx, args) => {
+    await requireIdentity(ctx);
+
+    const documents = await ctx.db
+      .query("documents")
+      .withIndex("by_projectId", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    let rowsUpdated = 0;
+    let blocksTypographyCleared = 0;
+    for (const doc of documents) {
+      const row = await ctx.db
+        .query("documentTextStyles")
+        .withIndex("by_documentId_style", (q) =>
+          q.eq("documentId", doc._id).eq("style", args.style)
+        )
+        .first();
+      if (!row) continue;
+      await ctx.db.patch(row._id, {
+        fontSize: args.fontSize,
+        fontWeight: args.fontWeight,
+      });
+      rowsUpdated += 1;
+      blocksTypographyCleared +=
+        await clearTextBlockTypographyOverridesForDocumentAndStyle(
+          ctx,
+          doc._id,
+          args.style
+        );
+    }
+
+    return {
+      documentCount: documents.length,
+      rowsUpdated,
+      blocksTypographyCleared,
+    };
+  },
+});
+
 export const createProjectFromPdf = mutation({
   args: {
     input: v.any(),
@@ -1026,12 +1182,18 @@ export const createProjectFromPdf = mutation({
             align: "left" | "center" | "right";
             style: "default" | "h1" | "h2" | "h3";
             ref?: string;
+            fontSize?: number;
+            fontWeight?: "normal" | "bold";
           };
           return {
             type: "text" as const,
             text: tb.text,
             align: tb.align,
             style: tb.style,
+            ...(tb.fontSize !== undefined ? { fontSize: tb.fontSize } : {}),
+            ...(tb.fontWeight !== undefined
+              ? { fontWeight: tb.fontWeight }
+              : {}),
           };
         }
         if (b.type === "section") {
@@ -1085,6 +1247,8 @@ export const createProjectFromPdf = mutation({
           align: "left" | "center" | "right";
           style: "default" | "h1" | "h2" | "h3";
           ref?: string;
+          fontSize?: number;
+          fontWeight?: "normal" | "bold";
         };
         await ctx.db.patch(newId, {
           data: {
@@ -1093,6 +1257,10 @@ export const createProjectFromPdf = mutation({
             align: tb.align,
             style: tb.style,
             ref: tb.ref ? newIdByImportedId.get(tb.ref) : undefined,
+            ...(tb.fontSize !== undefined ? { fontSize: tb.fontSize } : {}),
+            ...(tb.fontWeight !== undefined
+              ? { fontWeight: tb.fontWeight }
+              : {}),
           },
         });
         continue;

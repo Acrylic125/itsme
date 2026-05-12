@@ -26,10 +26,32 @@ import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
 import { useQueryWithStatus } from "@/components/convex-hooks";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { DEFAULT_STYLE_SHEET, PAGE_SIZE } from "./blocks";
+import { DEFAULT_STYLE_SHEET, PAGE_SIZE, StyleSheetSchema } from "./blocks";
 import { Loader2 } from "lucide-react";
 
 export type DocumentId = string;
+
+type StyleSheet = z.infer<typeof StyleSheetSchema>;
+export type DocumentTextPresetKey = keyof StyleSheet["text"];
+
+function applyTextStylePatchListToStyleSheet(
+  styleSheet: StyleSheet,
+  patches: Array<{
+    style: DocumentTextPresetKey;
+    fontSize?: number;
+    fontWeight?: "normal" | "bold";
+  }>
+): StyleSheet {
+  const text = { ...styleSheet.text };
+  for (const p of patches) {
+    text[p.style] = {
+      ...text[p.style],
+      ...(p.fontSize !== undefined ? { fontSize: p.fontSize } : {}),
+      ...(p.fontWeight !== undefined ? { fontWeight: p.fontWeight } : {}),
+    };
+  }
+  return { ...styleSheet, text };
+}
 
 export type Document = z.infer<typeof DocumentSchema>;
 
@@ -250,6 +272,8 @@ type ConvexBlockRowData =
       text: string;
       align: "left" | "center" | "right";
       style: "default" | "h1" | "h2" | "h3";
+      fontSize?: number;
+      fontWeight?: "normal" | "bold";
       ref?: string;
     }
   | {
@@ -280,6 +304,10 @@ function clientBlockToConvexData(block: Block): ConvexBlockRowData {
         text: block.text,
         align: block.align,
         style: block.style,
+        ...(block.fontSize !== undefined ? { fontSize: block.fontSize } : {}),
+        ...(block.fontWeight !== undefined
+          ? { fontWeight: block.fontWeight }
+          : {}),
         ref: block.ref ? block.ref : undefined,
       };
     case "section":
@@ -579,10 +607,24 @@ type DocumentContextValue = {
   blockTree: BlockTree;
   documentStore: DocumentStore;
   document: z.infer<typeof DocumentSchema> | null;
+  /** Convex project id when the provider was given one; otherwise null. */
+  projectId: Id<"projects"> | null;
   /** Apply a pure transform to the current blocks snapshot; changes debounce then sync to Convex. */
   updateBlocks: (
     transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot
   ) => void;
+  /** Writes toolbar font size/weight onto this document's shared text preset (explicit action). */
+  syncDocumentTextPresetToMatch: (args: {
+    style: DocumentTextPresetKey;
+    fontSize: number;
+    fontWeight: "normal" | "bold";
+  }) => Promise<void>;
+  /** Same for every document in the project; no-op when `projectId` is null. */
+  syncProjectTextPresetToMatch: (args: {
+    style: DocumentTextPresetKey;
+    fontSize: number;
+    fontWeight: "normal" | "bold";
+  }) => Promise<void>;
   dpi: number;
 };
 
@@ -590,16 +632,23 @@ const DocumentContext = createContext<DocumentContextValue | null>(null);
 
 export function DocumentStoresProvider({
   documentId,
+  projectId: projectIdProp,
   children,
   dpi,
 }: {
   documentId: string;
+  /** When set, enables “sync all documents in project” text-style actions. */
+  projectId?: string | null;
   children: ReactNode;
   dpi: number;
 }) {
   const [documentStore] = useState(() => createDocumentStore());
 
   const convexDocumentId = documentId as Id<"documents">;
+  const convexProjectId =
+    projectIdProp != null && projectIdProp !== ""
+      ? (projectIdProp as Id<"projects">)
+      : null;
 
   const blocksQuery = useQueryWithStatus(
     api.documentTasks.getDocumentBlocks,
@@ -613,6 +662,14 @@ export function DocumentStoresProvider({
 
   const updateDocumentBlocksMutation = useMutation(
     api.documentTasks.updateDocumentBlocks
+  );
+
+  const updateDocumentTextStylesMutation = useMutation(
+    api.documentTasks.updateDocumentTextStyles
+  );
+
+  const syncProjectTextStylePresetAllDocumentsMutation = useMutation(
+    api.documentTasks.syncProjectTextStylePresetAllDocuments
   );
 
   const [modifiedBlocks, setModifiedBlocks] =
@@ -744,6 +801,68 @@ export function DocumentStoresProvider({
     }, 1000);
   }, [commitModifiedBlocks]);
 
+  const syncDocumentTextPresetToMatch = useCallback(
+    async (args: {
+      style: DocumentTextPresetKey;
+      fontSize: number;
+      fontWeight: "normal" | "bold";
+    }) => {
+      const run = updateDocumentTextStylesMutation.withOptimisticUpdate(
+        (localStore, mutationArgs) => {
+          const current = localStore.getQuery(
+            api.documentTasks.getDocumentStyles,
+            {
+              documentId: mutationArgs.documentId,
+            }
+          );
+          if (current === undefined) return;
+          localStore.setQuery(
+            api.documentTasks.getDocumentStyles,
+            { documentId: mutationArgs.documentId },
+            {
+              ...current,
+              styleSheet: applyTextStylePatchListToStyleSheet(
+                current.styleSheet,
+                mutationArgs.patches
+              ),
+            }
+          );
+        }
+      );
+
+      await run({
+        documentId: convexDocumentId,
+        patches: [
+          {
+            style: args.style,
+            fontSize: args.fontSize,
+            fontWeight: args.fontWeight,
+          },
+        ],
+      });
+    },
+    [convexDocumentId, updateDocumentTextStylesMutation]
+  );
+
+  const syncProjectTextPresetToMatch = useCallback(
+    async (args: {
+      style: DocumentTextPresetKey;
+      fontSize: number;
+      fontWeight: "normal" | "bold";
+    }) => {
+      if (!convexProjectId) {
+        return;
+      }
+      await syncProjectTextStylePresetAllDocumentsMutation({
+        projectId: convexProjectId,
+        style: args.style,
+        fontSize: args.fontSize,
+        fontWeight: args.fontWeight,
+      });
+    },
+    [convexProjectId, syncProjectTextStylePresetAllDocumentsMutation]
+  );
+
   const updateBlocks = useCallback(
     (
       transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot
@@ -826,10 +945,22 @@ export function DocumentStoresProvider({
       blockTree: rendered.blockTree,
       documentStore,
       document: renderedDocument,
+      projectId: convexProjectId,
       updateBlocks,
+      syncDocumentTextPresetToMatch,
+      syncProjectTextPresetToMatch,
       dpi,
     };
-  }, [rendered, dpi, renderedDocument, documentStore, updateBlocks]);
+  }, [
+    rendered,
+    dpi,
+    renderedDocument,
+    documentStore,
+    convexProjectId,
+    updateBlocks,
+    syncDocumentTextPresetToMatch,
+    syncProjectTextPresetToMatch,
+  ]);
 
   const isLoading =
     blocksQuery.status === "pending" || stylesQuery.status === "pending";

@@ -47,6 +47,8 @@ export default defineSchema({
         text: v.string(),
         align: textAlign,
         style: textStyle,
+        fontSize: v.optional(v.float64()),
+        fontWeight: v.optional(fontWeight),
         ref: v.optional(v.id("blocks")),
       }),
       v.object({

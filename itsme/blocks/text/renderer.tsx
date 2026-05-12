@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Text } from "react-konva";
 import { prepare, layout } from "@chenglou/pretext";
 import type { ColumnsResizeContext } from "../renderer-types";
+import { DEFAULT_STYLE_SHEET } from "../blocks";
 import {
   BlockRenderer,
   getEdgeReorderBoundingBoxes,
@@ -38,6 +39,7 @@ import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
 import { useDebouncedCallback } from "use-debounce";
 import { caretOffsetFromLocalPoint } from "./caret-from-pointer";
+import { EditTextToolbar, clampTextEditFontSizePt } from "./edit-text-toolbar";
 
 /** Shown only when `block.text` is empty; not persisted and not used as edit initial value. */
 const EMPTY_TEXT_DISPLAY = "Click to set text";
@@ -70,23 +72,50 @@ function textareaRowsFromPretext(args: {
 
 export function EditTextModal({
   block,
+  onClose,
   initialCaretOffset,
-  textStyle,
-  fontSizePx,
   layoutWidthPx,
   /** Konva cumulative scale (e.g. `Layer` fit-to-container); DOM CSS px must match this for parity with canvas text. */
   canvasDisplayScale = 1,
 }: {
   block: z.infer<typeof TextBlockSchema>;
+  onClose: () => void;
   initialCaretOffset: number;
-  textStyle: z.infer<typeof TextStyleSchema>;
-  fontSizePx: number;
   layoutWidthPx: number;
   canvasDisplayScale?: number;
 }) {
-  const { updateBlocks } = useDocument();
+  const {
+    updateBlocks,
+    document,
+    dpi,
+    syncDocumentTextPresetToMatch,
+    syncProjectTextPresetToMatch,
+    projectId,
+  } = useDocument();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState(block.text);
+
+  const textSheet = document?.styleSheet.text ?? DEFAULT_STYLE_SHEET.text;
+
+  const [blockStyle, setBlockStyle] = useState(() => block.style);
+  const [fontSizePt, setFontSizePt] = useState(
+    () => block.fontSize ?? textSheet[block.style].fontSize
+  );
+  const [fontWeightUi, setFontWeightUi] = useState<"normal" | "bold">(
+    () => block.fontWeight ?? textSheet[block.style].fontWeight
+  );
+  const [alignUi, setAlignUi] = useState(() => block.align);
+
+  const localResolvedStyle = useMemo(() => {
+    const sheet = textSheet[blockStyle];
+    return {
+      ...sheet,
+      fontSize: fontSizePt,
+      fontWeight: fontWeightUi,
+    };
+  }, [textSheet, blockStyle, fontSizePt, fontWeightUi]);
+
+  const fontSizePx = useMemo(() => (fontSizePt * dpi) / 72, [dpi, fontSizePt]);
 
   useLayoutEffect(() => {
     const ta = textareaRef.current;
@@ -99,30 +128,96 @@ export function EditTextModal({
 
   const debouncedSave = useDebouncedCallback(
     (nextText: string) => {
-      updateBlocks((current) => {
-        const nextBlocks = current.blocks.map((b) => {
-          if (b.id !== block.id) return b;
-          if (b.type !== "text") return b;
-          return {
-            ...b,
-            text: nextText,
-            align: block.align,
-            style: block.style,
-          };
-        });
-        return { ...current, blocks: nextBlocks };
-      });
+      updateBlocks((current) => ({
+        ...current,
+        blocks: current.blocks.map((b) => {
+          if (b.id !== block.id || b.type !== "text") return b;
+          return { ...b, text: nextText };
+        }),
+      }));
     },
     500,
     { maxWait: 1500 }
   );
 
+  const debouncedPersistBlockFormatting = useDebouncedCallback(
+    (args: {
+      style: z.infer<typeof TextBlockSchema>["style"];
+      align: z.infer<typeof TextBlockSchema>["align"];
+      fontSizePt: number;
+      fontWeight: "normal" | "bold";
+      sheetFontSize: number;
+      sheetFontWeight: "normal" | "bold";
+    }) => {
+      updateBlocks((current) => ({
+        ...current,
+        blocks: current.blocks.map((b) => {
+          if (b.id !== block.id || b.type !== "text") return b;
+          const next: z.infer<typeof TextBlockSchema> = {
+            ...b,
+            style: args.style,
+            align: args.align,
+          };
+          if (args.fontSizePt !== args.sheetFontSize) {
+            next.fontSize = args.fontSizePt;
+          } else {
+            delete next.fontSize;
+          }
+          if (args.fontWeight !== args.sheetFontWeight) {
+            next.fontWeight = args.fontWeight;
+          } else {
+            delete next.fontWeight;
+          }
+          return next;
+        }),
+      }));
+    },
+    500,
+    { maxWait: 1500 }
+  );
+
+  const persistBlockFormatting = useCallback(
+    (args: {
+      fontSizePt: number;
+      fontWeight: "normal" | "bold";
+      align: z.infer<typeof TextBlockSchema>["align"];
+    }) => {
+      const ts = document?.styleSheet.text ?? DEFAULT_STYLE_SHEET.text;
+      const sh = ts[blockStyle];
+      debouncedPersistBlockFormatting({
+        style: blockStyle,
+        fontSizePt: args.fontSizePt,
+        fontWeight: args.fontWeight,
+        align: args.align,
+        sheetFontSize: sh.fontSize,
+        sheetFontWeight: sh.fontWeight,
+      });
+    },
+    [blockStyle, debouncedPersistBlockFormatting, document?.styleSheet.text]
+  );
+
+  const handleSyncDocumentPresetToMatch = useCallback(async () => {
+    await syncDocumentTextPresetToMatch({
+      style: blockStyle,
+      fontSize: clampTextEditFontSizePt(fontSizePt),
+      fontWeight: fontWeightUi,
+    });
+  }, [blockStyle, fontSizePt, fontWeightUi, syncDocumentTextPresetToMatch]);
+
+  const handleSyncAllDocumentsPresetToMatch = useCallback(async () => {
+    await syncProjectTextPresetToMatch({
+      style: blockStyle,
+      fontSize: clampTextEditFontSizePt(fontSizePt),
+      fontWeight: fontWeightUi,
+    });
+  }, [blockStyle, fontSizePt, fontWeightUi, syncProjectTextPresetToMatch]);
+
   useEffect(() => {
     return () => {
-      // Ensure latest edits are persisted when closing/unmounting.
       debouncedSave.flush();
+      debouncedPersistBlockFormatting.flush();
     };
-  }, [debouncedSave]);
+  }, [debouncedPersistBlockFormatting, debouncedSave]);
 
   const handleChange = useCallback(
     (nextText: string) => {
@@ -137,40 +232,65 @@ export function EditTextModal({
       textareaRowsFromPretext({
         text,
         layoutWidthPx,
-        textStyle,
+        textStyle: localResolvedStyle,
         fontSizePx,
         canvasDisplayScale,
       }),
-    [canvasDisplayScale, fontSizePx, layoutWidthPx, text, textStyle]
+    [canvasDisplayScale, fontSizePx, layoutWidthPx, text, localResolvedStyle]
   );
 
+  const handleToolbarClose = useCallback(() => {
+    debouncedSave.flush();
+    debouncedPersistBlockFormatting.flush();
+    onClose();
+  }, [debouncedPersistBlockFormatting, debouncedSave, onClose]);
+
   return (
-    <div className="flex flex-col gap-2 border border-primary ring-8 ring-primary/15 bg-white rounded-xl shadow-2xs">
+    <div className="relative border border-primary ring-8 ring-primary/15 bg-white rounded-xl shadow-2xs">
+      <EditTextToolbar
+        onClose={handleToolbarClose}
+        blockStyle={blockStyle}
+        onTextStylePresetSelect={(style) => {
+          setBlockStyle(style);
+          const ts = document?.styleSheet.text ?? DEFAULT_STYLE_SHEET.text;
+          const sh = ts[style];
+          setFontSizePt(sh.fontSize);
+          setFontWeightUi(sh.fontWeight);
+          debouncedPersistBlockFormatting({
+            style,
+            align: alignUi,
+            fontSizePt: sh.fontSize,
+            fontWeight: sh.fontWeight,
+            sheetFontSize: sh.fontSize,
+            sheetFontWeight: sh.fontWeight,
+          });
+        }}
+        fontSizePt={fontSizePt}
+        onFontSizePtChange={setFontSizePt}
+        fontWeightUi={fontWeightUi}
+        onFontWeightUiChange={setFontWeightUi}
+        align={alignUi}
+        onAlignChange={setAlignUi}
+        persistBlockFormatting={persistBlockFormatting}
+        onSyncDocumentPresetToMatch={handleSyncDocumentPresetToMatch}
+        onSyncAllDocumentsPresetToMatch={handleSyncAllDocumentsPresetToMatch}
+        canSyncAllDocuments={projectId != null}
+      />
       <textarea
         ref={textareaRef}
         className="w-full bg-transparent rounded-xl p-2 outline-none text-black"
         style={{
-          fontFamily: textStyle.fontFamily,
+          fontFamily: localResolvedStyle.fontFamily,
           fontSize: `${fontSizePx * canvasDisplayScale}px`,
-          fontWeight: textStyle.fontWeight,
-          lineHeight: textStyle.lineHeight,
-          textAlign: block.align,
+          fontWeight: localResolvedStyle.fontWeight,
+          lineHeight: localResolvedStyle.lineHeight,
+          textAlign: alignUi,
         }}
         placeholder="Type your text here..."
         value={text}
         onChange={(e) => handleChange(e.target.value)}
         rows={rows}
       />
-      {/* <div className="flex gap-2">
-        <Button
-          className="w-fit"
-          type="button"
-          variant="outline"
-          onClick={closePopup}
-        >
-          Cancel
-        </Button>
-      </div> */}
     </div>
   );
 }
@@ -408,9 +528,8 @@ function TextBlockComponent({
           >
             <EditTextModal
               block={block}
+              onClose={closeTextEditor}
               initialCaretOffset={initialCaretOffset}
-              textStyle={style}
-              fontSizePx={fontSizePx}
               layoutWidthPx={dimensions.width}
               canvasDisplayScale={canvasDisplayScale}
             />
@@ -437,7 +556,12 @@ function TextBlockComponent({
 export const TextBlockRenderer: BlockRenderer<"text"> = {
   type: "text",
   render: (block, relativeTo, ctx) => {
-    const style = ctx.styleSheet.text[block.style];
+    const sheetStyle = ctx.styleSheet.text[block.style];
+    const style = {
+      ...sheetStyle,
+      ...(block.fontSize != null ? { fontSize: block.fontSize } : {}),
+      ...(block.fontWeight != null ? { fontWeight: block.fontWeight } : {}),
+    };
     // Text styles are authored in points; renderer layout works in canvas pixels.
     const fontSizePx = (style.fontSize * ctx.dpi) / 72;
     const layoutSourceText =

@@ -25,6 +25,9 @@ export const TextBlockSchema = z.object({
     z.literal("h2"),
     z.literal("h3"),
   ]),
+  /** Points; overrides `documentTextStyles` for this block when set. */
+  fontSize: z.number().min(1).max(96).optional(),
+  fontWeight: z.enum(["normal", "bold"]).optional(),
   ref: z.string().optional(),
 });
 
@@ -40,4 +43,6 @@ export const TextBlockUpdateSchema = z.object({
     z.literal("h2"),
     z.literal("h3"),
   ]),
+  fontSize: z.number().min(1).max(96).optional(),
+  fontWeight: z.enum(["normal", "bold"]).optional(),
 });
