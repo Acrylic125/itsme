@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useDebouncedCallback } from "use-debounce";
 import { TextBlockSchema } from "./schema";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -58,7 +60,7 @@ type EditTextToolbarProps = {
   /** Preset (Body / H1–H3): updates the block only. */
   onTextStylePresetSelect: (style: TextStyleKey) => void;
   fontSizePt: number;
-  onFontSizePtChange: (pt: number) => void;
+  onFontSizePtCommit: (pt: number) => void;
   fontWeightUi: "normal" | "bold";
   onFontWeightUiChange: (w: "normal" | "bold") => void;
   align: TextAlign;
@@ -76,7 +78,7 @@ export function EditTextToolbar({
   blockStyle,
   onTextStylePresetSelect,
   fontSizePt,
-  onFontSizePtChange,
+  onFontSizePtCommit,
   fontWeightUi,
   onFontWeightUiChange,
   align,
@@ -88,6 +90,7 @@ export function EditTextToolbar({
 }: EditTextToolbarProps) {
   const styleLabel =
     TEXT_STYLE_OPTIONS.find((o) => o.value === blockStyle)?.label ?? "Body";
+  const [fontSizeDraft, setFontSizeDraft] = useState(() => String(fontSizePt));
 
   const pushFormatting = (overrides?: Partial<BlockFormattingPersistArgs>) => {
     persistBlockFormatting({
@@ -100,6 +103,34 @@ export function EditTextToolbar({
 
   const alignLabel =
     ALIGN_OPTIONS.find((o) => o.value === align)?.label ?? "Align";
+
+  const parseValidFontSizeDraft = (draft: string) => {
+    const trimmed = draft.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 96) {
+      return null;
+    }
+
+    return parsed;
+  };
+
+  const commitValidFontSizeDebounced = useDebouncedCallback(
+    (nextFontSizePt: number) => {
+      onFontSizePtCommit(nextFontSizePt);
+      pushFormatting({ fontSizePt: nextFontSizePt });
+    },
+    300
+  );
+
+  useEffect(() => {
+    return () => {
+      commitValidFontSizeDebounced.cancel();
+    };
+  }, [commitValidFontSizeDebounced]);
 
   return (
     <div
@@ -163,25 +194,20 @@ export function EditTextToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
         <Input
-          type="number"
-          min={1}
-          max={96}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           aria-label="Font size in points"
-          // className="h-7 w-14 shrink-0 rounded-md border border-input bg-background px-1.5 text-center text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-          value={fontSizePt}
+          className="h-7"
+          value={fontSizeDraft}
           onChange={(e) => {
-            const raw = e.target.value;
-            const parsed = parseInt(raw, 10);
-            const next = clampTextEditFontSizePt(
-              raw === "" ? 1 : Number.isNaN(parsed) ? 1 : parsed
-            );
-            onFontSizePtChange(next);
-            pushFormatting({ fontSizePt: next });
-          }}
-          onBlur={() => {
-            const next = clampTextEditFontSizePt(fontSizePt);
-            if (next !== fontSizePt) onFontSizePtChange(next);
-            pushFormatting({ fontSizePt: next });
+            const nextDraft = e.target.value;
+            setFontSizeDraft(nextDraft);
+            const parsed = parseValidFontSizeDraft(nextDraft);
+            if (parsed == null) {
+              return;
+            }
+            commitValidFontSizeDebounced(parsed);
           }}
         />
         <Button

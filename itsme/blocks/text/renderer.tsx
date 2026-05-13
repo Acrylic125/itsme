@@ -72,50 +72,28 @@ function textareaRowsFromPretext(args: {
 
 export function EditTextModal({
   block,
-  onClose,
   initialCaretOffset,
   layoutWidthPx,
+  localResolvedStyle,
+  alignUi,
   /** Konva cumulative scale (e.g. `Layer` fit-to-container); DOM CSS px must match this for parity with canvas text. */
   canvasDisplayScale = 1,
 }: {
   block: z.infer<typeof TextBlockSchema>;
-  onClose: () => void;
   initialCaretOffset: number;
   layoutWidthPx: number;
+  localResolvedStyle: z.infer<typeof TextStyleSchema>;
+  alignUi: z.infer<typeof TextBlockSchema>["align"];
   canvasDisplayScale?: number;
 }) {
-  const {
-    updateBlocks,
-    document,
-    dpi,
-    syncDocumentTextPresetToMatch,
-    syncProjectTextPresetToMatch,
-    projectId,
-  } = useDocument();
+  const { updateBlocks, dpi } = useDocument();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState(block.text);
 
-  const textSheet = document?.styleSheet.text ?? DEFAULT_STYLE_SHEET.text;
-
-  const [blockStyle, setBlockStyle] = useState(() => block.style);
-  const [fontSizePt, setFontSizePt] = useState(
-    () => block.fontSize ?? textSheet[block.style].fontSize
+  const fontSizePx = useMemo(
+    () => (localResolvedStyle.fontSize * dpi) / 72,
+    [dpi, localResolvedStyle.fontSize]
   );
-  const [fontWeightUi, setFontWeightUi] = useState<"normal" | "bold">(
-    () => block.fontWeight ?? textSheet[block.style].fontWeight
-  );
-  const [alignUi, setAlignUi] = useState(() => block.align);
-
-  const localResolvedStyle = useMemo(() => {
-    const sheet = textSheet[blockStyle];
-    return {
-      ...sheet,
-      fontSize: fontSizePt,
-      fontWeight: fontWeightUi,
-    };
-  }, [textSheet, blockStyle, fontSizePt, fontWeightUi]);
-
-  const fontSizePx = useMemo(() => (fontSizePt * dpi) / 72, [dpi, fontSizePt]);
 
   useLayoutEffect(() => {
     const ta = textareaRef.current;
@@ -163,133 +141,11 @@ export function EditTextModal({
     { maxWait: 1500 }
   );
 
-  const debouncedPersistBlockFormatting = useDebouncedCallback(
-    (args: {
-      style: z.infer<typeof TextBlockSchema>["style"];
-      align: z.infer<typeof TextBlockSchema>["align"];
-      fontSizePt: number;
-      fontWeight: "normal" | "bold";
-      sheetFontSize: number;
-      sheetFontWeight: "normal" | "bold";
-    }) => {
-      let prevFields: {
-        style: z.infer<typeof TextBlockSchema>["style"];
-        align: z.infer<typeof TextBlockSchema>["align"];
-        fontSize: number | undefined;
-        fontWeight: "normal" | "bold" | undefined;
-      } | null = null;
-
-      updateBlocks(
-        (current) => {
-          const b = current.blocks.find(
-            (x) => x.id === block.id && x.type === "text"
-          );
-          if (!b || b.type !== "text") return current;
-          prevFields = {
-            style: b.style,
-            align: b.align,
-            fontSize: b.fontSize,
-            fontWeight: b.fontWeight,
-          };
-          return {
-            ...current,
-            blocks: current.blocks.map((b) => {
-              if (b.id !== block.id || b.type !== "text") return b;
-              const next: z.infer<typeof TextBlockSchema> = {
-                ...b,
-                style: args.style,
-                align: args.align,
-              };
-              if (args.fontSizePt !== args.sheetFontSize) {
-                next.fontSize = args.fontSizePt;
-              } else {
-                delete next.fontSize;
-              }
-              if (args.fontWeight !== args.sheetFontWeight) {
-                next.fontWeight = args.fontWeight;
-              } else {
-                delete next.fontWeight;
-              }
-              return next;
-            }),
-          };
-        },
-        {
-          down: () => {
-            if (!prevFields) return;
-            const pf = prevFields;
-            updateBlocks((current) => ({
-              ...current,
-              blocks: current.blocks.map((b) => {
-                if (b.id !== block.id || b.type !== "text") return b;
-                const next: z.infer<typeof TextBlockSchema> = {
-                  ...b,
-                  style: pf.style,
-                  align: pf.align,
-                };
-                if (pf.fontSize !== undefined) {
-                  next.fontSize = pf.fontSize;
-                } else {
-                  delete next.fontSize;
-                }
-                if (pf.fontWeight !== undefined) {
-                  next.fontWeight = pf.fontWeight;
-                } else {
-                  delete next.fontWeight;
-                }
-                return next;
-              }),
-            }));
-          },
-        }
-      );
-    },
-    500,
-    { maxWait: 1500 }
-  );
-
-  const persistBlockFormatting = useCallback(
-    (args: {
-      fontSizePt: number;
-      fontWeight: "normal" | "bold";
-      align: z.infer<typeof TextBlockSchema>["align"];
-    }) => {
-      const ts = document?.styleSheet.text ?? DEFAULT_STYLE_SHEET.text;
-      const sh = ts[blockStyle];
-      debouncedPersistBlockFormatting({
-        style: blockStyle,
-        fontSizePt: args.fontSizePt,
-        fontWeight: args.fontWeight,
-        align: args.align,
-        sheetFontSize: sh.fontSize,
-        sheetFontWeight: sh.fontWeight,
-      });
-    },
-    [blockStyle, debouncedPersistBlockFormatting, document?.styleSheet.text]
-  );
-
-  const handleSyncDocumentPresetToMatch = useCallback(async () => {
-    await syncDocumentTextPresetToMatch({
-      style: blockStyle,
-      fontSize: clampTextEditFontSizePt(fontSizePt),
-      fontWeight: fontWeightUi,
-    });
-  }, [blockStyle, fontSizePt, fontWeightUi, syncDocumentTextPresetToMatch]);
-
-  const handleSyncAllDocumentsPresetToMatch = useCallback(async () => {
-    await syncProjectTextPresetToMatch({
-      style: blockStyle,
-      fontSize: clampTextEditFontSizePt(fontSizePt),
-      fontWeight: fontWeightUi,
-    });
-  }, [blockStyle, fontSizePt, fontWeightUi, syncProjectTextPresetToMatch]);
-
   useEffect(() => {
     return () => {
       debouncedSave.flush();
-      debouncedPersistBlockFormatting.flush();
     };
-  }, [debouncedPersistBlockFormatting, debouncedSave]);
+  }, [debouncedSave]);
 
   const handleChange = useCallback(
     (nextText: string) => {
@@ -311,43 +167,8 @@ export function EditTextModal({
     [canvasDisplayScale, fontSizePx, layoutWidthPx, text, localResolvedStyle]
   );
 
-  const handleToolbarClose = useCallback(() => {
-    debouncedSave.flush();
-    debouncedPersistBlockFormatting.flush();
-    onClose();
-  }, [debouncedPersistBlockFormatting, debouncedSave, onClose]);
-
   return (
     <div className="relative border border-primary ring-8 ring-primary/15 bg-white rounded-xl shadow-2xs">
-      <EditTextToolbar
-        onClose={handleToolbarClose}
-        blockStyle={blockStyle}
-        onTextStylePresetSelect={(style) => {
-          setBlockStyle(style);
-          const ts = document?.styleSheet.text ?? DEFAULT_STYLE_SHEET.text;
-          const sh = ts[style];
-          setFontSizePt(sh.fontSize);
-          setFontWeightUi(sh.fontWeight);
-          debouncedPersistBlockFormatting({
-            style,
-            align: alignUi,
-            fontSizePt: sh.fontSize,
-            fontWeight: sh.fontWeight,
-            sheetFontSize: sh.fontSize,
-            sheetFontWeight: sh.fontWeight,
-          });
-        }}
-        fontSizePt={fontSizePt}
-        onFontSizePtChange={setFontSizePt}
-        fontWeightUi={fontWeightUi}
-        onFontWeightUiChange={setFontWeightUi}
-        align={alignUi}
-        onAlignChange={setAlignUi}
-        persistBlockFormatting={persistBlockFormatting}
-        onSyncDocumentPresetToMatch={handleSyncDocumentPresetToMatch}
-        onSyncAllDocumentsPresetToMatch={handleSyncAllDocumentsPresetToMatch}
-        canSyncAllDocuments={projectId != null}
-      />
       <textarea
         ref={textareaRef}
         className="w-full bg-transparent rounded-xl p-2 outline-none text-black"
@@ -392,7 +213,15 @@ function TextBlockComponent({
   columnsResizeContext?: ColumnsResizeContext;
 }) {
   // const popupKey = useId();
-  const { documentStore, blockTree } = useDocument();
+  const {
+    documentStore,
+    blockTree,
+    updateBlocks,
+    document,
+    syncDocumentTextPresetToMatch,
+    syncProjectTextPresetToMatch,
+    projectId,
+  } = useDocument();
   const { setAction, editAction, focusAction, activeBlockId } = useStore(
     documentStore,
     useShallow((s) => ({
@@ -410,9 +239,193 @@ function TextBlockComponent({
   const inFocus = isEditingThisBlock || focusAction?.blockId === block.id;
   const canvasGroupRef = useRef<Konva.Group | null>(null);
   const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
+  const textSheet = document?.styleSheet.text ?? DEFAULT_STYLE_SHEET.text;
+  const resolvedFontSizePt = clampTextEditFontSizePt(
+    block.fontSize ?? textSheet[block.style].fontSize
+  );
+  const resolvedFontWeightUi =
+    block.fontWeight ?? textSheet[block.style].fontWeight;
+  const [formattingDraft, setFormattingDraft] = useState<{
+    blockStyle: z.infer<typeof TextBlockSchema>["style"];
+    fontSizePt: number;
+    fontWeightUi: "normal" | "bold";
+    alignUi: z.infer<typeof TextBlockSchema>["align"];
+  } | null>(null);
+
+  const blockStyle = formattingDraft?.blockStyle ?? block.style;
+  const fontSizePt = formattingDraft?.fontSizePt ?? resolvedFontSizePt;
+  const fontWeightUi = formattingDraft?.fontWeightUi ?? resolvedFontWeightUi;
+  const alignUi = formattingDraft?.alignUi ?? block.align;
+
+  const updateFormattingDraft = useCallback(
+    (
+      patch: Partial<{
+        blockStyle: z.infer<typeof TextBlockSchema>["style"];
+        fontSizePt: number;
+        fontWeightUi: "normal" | "bold";
+        alignUi: z.infer<typeof TextBlockSchema>["align"];
+      }>
+    ) => {
+      setFormattingDraft((current) => ({
+        blockStyle: current?.blockStyle ?? block.style,
+        fontSizePt: current?.fontSizePt ?? resolvedFontSizePt,
+        fontWeightUi: current?.fontWeightUi ?? resolvedFontWeightUi,
+        alignUi: current?.alignUi ?? block.align,
+        ...patch,
+      }));
+    },
+    [block.align, block.style, resolvedFontSizePt, resolvedFontWeightUi]
+  );
+
+  const localResolvedStyle = useMemo(() => {
+    const sheet = textSheet[blockStyle];
+    return {
+      ...sheet,
+      fontSize: clampTextEditFontSizePt(fontSizePt),
+      fontWeight: fontWeightUi,
+    };
+  }, [textSheet, blockStyle, fontSizePt, fontWeightUi]);
+
+  const debouncedPersistBlockFormatting = useDebouncedCallback(
+    (args: {
+      style: z.infer<typeof TextBlockSchema>["style"];
+      align: z.infer<typeof TextBlockSchema>["align"];
+      fontSizePt: number;
+      fontWeight: "normal" | "bold";
+      sheetFontSize: number;
+      sheetFontWeight: "normal" | "bold";
+    }) => {
+      const fontSizePtSafe = clampTextEditFontSizePt(args.fontSizePt);
+      const argsSafe = { ...args, fontSizePt: fontSizePtSafe };
+      let prevFields: {
+        style: z.infer<typeof TextBlockSchema>["style"];
+        align: z.infer<typeof TextBlockSchema>["align"];
+        fontSize: number | undefined;
+        fontWeight: "normal" | "bold" | undefined;
+      } | null = null;
+
+      updateBlocks(
+        (current) => {
+          const currentBlock = current.blocks.find(
+            (x) => x.id === block.id && x.type === "text"
+          );
+          if (!currentBlock || currentBlock.type !== "text") return current;
+          prevFields = {
+            style: currentBlock.style,
+            align: currentBlock.align,
+            fontSize: currentBlock.fontSize,
+            fontWeight: currentBlock.fontWeight,
+          };
+          return {
+            ...current,
+            blocks: current.blocks.map((existingBlock) => {
+              if (
+                existingBlock.id !== block.id ||
+                existingBlock.type !== "text"
+              ) {
+                return existingBlock;
+              }
+              const next: z.infer<typeof TextBlockSchema> = {
+                ...existingBlock,
+                style: argsSafe.style,
+                align: argsSafe.align,
+              };
+              if (argsSafe.fontSizePt !== argsSafe.sheetFontSize) {
+                next.fontSize = argsSafe.fontSizePt;
+              } else {
+                delete next.fontSize;
+              }
+              if (argsSafe.fontWeight !== argsSafe.sheetFontWeight) {
+                next.fontWeight = argsSafe.fontWeight;
+              } else {
+                delete next.fontWeight;
+              }
+              return next;
+            }),
+          };
+        },
+        {
+          down: () => {
+            if (!prevFields) return;
+            const previousFields = prevFields;
+            updateBlocks((current) => ({
+              ...current,
+              blocks: current.blocks.map((existingBlock) => {
+                if (
+                  existingBlock.id !== block.id ||
+                  existingBlock.type !== "text"
+                ) {
+                  return existingBlock;
+                }
+                const next: z.infer<typeof TextBlockSchema> = {
+                  ...existingBlock,
+                  style: previousFields.style,
+                  align: previousFields.align,
+                };
+                if (previousFields.fontSize !== undefined) {
+                  next.fontSize = previousFields.fontSize;
+                } else {
+                  delete next.fontSize;
+                }
+                if (previousFields.fontWeight !== undefined) {
+                  next.fontWeight = previousFields.fontWeight;
+                } else {
+                  delete next.fontWeight;
+                }
+                return next;
+              }),
+            }));
+          },
+        }
+      );
+    },
+    500,
+    { maxWait: 1500 }
+  );
+
+  useEffect(() => {
+    return () => {
+      debouncedPersistBlockFormatting.flush();
+    };
+  }, [debouncedPersistBlockFormatting]);
+
+  const persistBlockFormatting = useCallback(
+    (args: {
+      fontSizePt: number;
+      fontWeight: "normal" | "bold";
+      align: z.infer<typeof TextBlockSchema>["align"];
+    }) => {
+      const sh = textSheet[blockStyle];
+      debouncedPersistBlockFormatting({
+        style: blockStyle,
+        fontSizePt: args.fontSizePt,
+        fontWeight: args.fontWeight,
+        align: args.align,
+        sheetFontSize: sh.fontSize,
+        sheetFontWeight: sh.fontWeight,
+      });
+    },
+    [blockStyle, debouncedPersistBlockFormatting, textSheet]
+  );
+
+  const handleSyncDocumentPresetToMatch = useCallback(async () => {
+    await syncDocumentTextPresetToMatch({
+      style: blockStyle,
+      fontSize: clampTextEditFontSizePt(fontSizePt),
+      fontWeight: fontWeightUi,
+    });
+  }, [blockStyle, fontSizePt, fontWeightUi, syncDocumentTextPresetToMatch]);
+
+  const handleSyncAllDocumentsPresetToMatch = useCallback(async () => {
+    await syncProjectTextPresetToMatch({
+      style: blockStyle,
+      fontSize: clampTextEditFontSizePt(fontSizePt),
+      fontWeight: fontWeightUi,
+    });
+  }, [blockStyle, fontSizePt, fontWeightUi, syncProjectTextPresetToMatch]);
 
   useLayoutEffect(() => {
-    if (!isEditingThisBlock || anchor) return;
+    if (!inFocus || anchor) return;
     const syncAnchor = () => {
       const node = canvasGroupRef.current;
       if (!node) return;
@@ -422,11 +435,11 @@ function TextBlockComponent({
     syncAnchor();
     const frame = requestAnimationFrame(syncAnchor);
     return () => cancelAnimationFrame(frame);
-  }, [anchor, block.id, isEditingThisBlock]);
+  }, [anchor, block.id, inFocus]);
 
   /** Canvas text uses layout px × Konva absolute scale; DOM textarea fontSize must match (see `PageCanvas` layer scale). */
   useLayoutEffect(() => {
-    if (!anchor || !isEditingThisBlock) return;
+    if (!anchor || !inFocus) return;
 
     const updateScale = () => {
       const node = canvasGroupRef.current;
@@ -450,7 +463,7 @@ function TextBlockComponent({
       ro?.disconnect();
       window.removeEventListener("resize", updateScale);
     };
-  }, [anchor, isEditingThisBlock]);
+  }, [anchor, inFocus]);
 
   const closeTextEditor = useCallback(() => {
     setAnchor(null);
@@ -461,6 +474,21 @@ function TextBlockComponent({
       return { type: "focus-block", blockId: block.id };
     });
   }, [block.id, setAction]);
+
+  const closeTextFocus = useCallback(() => {
+    debouncedPersistBlockFormatting.flush();
+    setFormattingDraft(null);
+    setAnchor(null);
+    setInitialCaretOffset(0);
+    setAction((current) => {
+      const edit = asEditBlockAction(current);
+      if (edit?.blockId === block.id) {
+        return null;
+      }
+      const focus = asFocusBlockAction(current);
+      return focus?.blockId === block.id ? null : current;
+    });
+  }, [block.id, debouncedPersistBlockFormatting, setAction]);
 
   const handleClick = useCallback(
     (args: {
@@ -499,6 +527,7 @@ function TextBlockComponent({
         return;
       }
 
+      setAnchor(args.anchor);
       setAction({ type: "focus-block", blockId: block.id });
     },
     [
@@ -577,6 +606,55 @@ function TextBlockComponent({
           fill={block.text === "" ? "#9a9a9a" : "#000000"}
           perfectDrawEnabled={false}
         />
+        {anchor && inFocus && (
+          <Html
+            transform={false}
+            divProps={{
+              style: {
+                position: "absolute",
+                top: anchor.top * 100 + "%",
+                left: anchor.left * 100 + "%",
+                width: anchor.width * 100 + "%",
+              },
+            }}
+          >
+            <div className="relative h-0 w-full">
+              <EditTextToolbar
+                onClose={closeTextFocus}
+                blockStyle={blockStyle}
+                onTextStylePresetSelect={(nextStyle) => {
+                  const sh = textSheet[nextStyle];
+                  updateFormattingDraft({
+                    blockStyle: nextStyle,
+                    fontSizePt: sh.fontSize,
+                    fontWeightUi: sh.fontWeight,
+                  });
+                  persistBlockFormatting({
+                    align: alignUi,
+                    fontSizePt: sh.fontSize,
+                    fontWeight: sh.fontWeight,
+                  });
+                }}
+                fontSizePt={fontSizePt}
+                onFontSizePtCommit={(nextFontSizePt) => {
+                  updateFormattingDraft({ fontSizePt: nextFontSizePt });
+                }}
+                fontWeightUi={fontWeightUi}
+                onFontWeightUiChange={(nextWeight) =>
+                  updateFormattingDraft({ fontWeightUi: nextWeight })
+                }
+                align={alignUi}
+                onAlignChange={(nextAlign) =>
+                  updateFormattingDraft({ alignUi: nextAlign })
+                }
+                persistBlockFormatting={persistBlockFormatting}
+                onSyncDocumentPresetToMatch={handleSyncDocumentPresetToMatch}
+                onSyncAllDocumentsPresetToMatch={handleSyncAllDocumentsPresetToMatch}
+                canSyncAllDocuments={projectId != null}
+              />
+            </div>
+          </Html>
+        )}
         {anchor && isEditingThisBlock && (
           <Html
             transform={false}
@@ -600,9 +678,10 @@ function TextBlockComponent({
           >
             <EditTextModal
               block={block}
-              onClose={closeTextEditor}
               initialCaretOffset={initialCaretOffset}
               layoutWidthPx={dimensions.width}
+              localResolvedStyle={localResolvedStyle}
+              alignUi={alignUi}
               canvasDisplayScale={canvasDisplayScale}
             />
             {/* <div className="h-1 w-full bg-amber-300" /> */}
@@ -631,7 +710,9 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     const sheetStyle = ctx.styleSheet.text[block.style];
     const style = {
       ...sheetStyle,
-      ...(block.fontSize != null ? { fontSize: block.fontSize } : {}),
+      ...(block.fontSize != null
+        ? { fontSize: clampTextEditFontSizePt(block.fontSize) }
+        : {}),
       ...(block.fontWeight != null ? { fontWeight: block.fontWeight } : {}),
     };
     // Text styles are authored in points; renderer layout works in canvas pixels.
