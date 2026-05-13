@@ -1011,31 +1011,44 @@ export function AddBlockPlacementLayer({
 
     let insertedBlockId: string | null = null;
     placementSnapshotCacheRef.current = null;
-    updateBlocks((current) => {
-      const cached = placementSnapshotCacheRef.current;
-      if (cached) {
-        return cached;
+    let beforePlacement: DocumentBlocksSnapshot | null = null;
+    updateBlocks(
+      (current) => {
+        const cached = placementSnapshotCacheRef.current;
+        if (cached) {
+          return cached;
+        }
+        const placed = blockType
+          ? buildNextDocumentForAddBlockPlacement({
+              snapshot: current,
+              blockTree,
+              blockType,
+              targetBox: targetBox!,
+            })
+          : buildNextDocumentForBlockPlacement({
+              snapshot: current,
+              blockTree,
+              newSubtreeBlocks: newSubtreeForPaste!,
+              targetBox: targetBox!,
+            });
+        if (!placed) {
+          return current;
+        }
+        if (!beforePlacement) {
+          beforePlacement = structuredClone(current);
+        }
+        insertedBlockId = placed.insertedBlockId;
+        placementSnapshotCacheRef.current = placed.snapshot;
+        return placed.snapshot;
+      },
+      {
+        down: () => {
+          if (beforePlacement) {
+            updateBlocks(() => structuredClone(beforePlacement!));
+          }
+        },
       }
-      const placed = blockType
-        ? buildNextDocumentForAddBlockPlacement({
-            snapshot: current,
-            blockTree,
-            blockType,
-            targetBox: targetBox!,
-          })
-        : buildNextDocumentForBlockPlacement({
-            snapshot: current,
-            blockTree,
-            newSubtreeBlocks: newSubtreeForPaste!,
-            targetBox: targetBox!,
-          });
-      if (!placed) {
-        return current;
-      }
-      insertedBlockId = placed.insertedBlockId;
-      placementSnapshotCacheRef.current = placed.snapshot;
-      return placed.snapshot;
-    });
+    );
     setAction(null);
     const shouldOpenTextEdit =
       insertedBlockId != null &&

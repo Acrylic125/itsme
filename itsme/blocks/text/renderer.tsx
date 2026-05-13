@@ -128,13 +128,36 @@ export function EditTextModal({
 
   const debouncedSave = useDebouncedCallback(
     (nextText: string) => {
-      updateBlocks((current) => ({
-        ...current,
-        blocks: current.blocks.map((b) => {
-          if (b.id !== block.id || b.type !== "text") return b;
-          return { ...b, text: nextText };
-        }),
-      }));
+      let previousText: string | undefined;
+      updateBlocks(
+        (current) => {
+          const existing = current.blocks.find(
+            (b) => b.id === block.id && b.type === "text"
+          );
+          if (existing?.type === "text") {
+            previousText = existing.text;
+          }
+          return {
+            ...current,
+            blocks: current.blocks.map((b) => {
+              if (b.id !== block.id || b.type !== "text") return b;
+              return { ...b, text: nextText };
+            }),
+          };
+        },
+        {
+          down: () => {
+            if (previousText === undefined) return;
+            updateBlocks((current) => ({
+              ...current,
+              blocks: current.blocks.map((b) => {
+                if (b.id !== block.id || b.type !== "text") return b;
+                return { ...b, text: previousText! };
+              }),
+            }));
+          },
+        }
+      );
     },
     500,
     { maxWait: 1500 }
@@ -149,28 +172,77 @@ export function EditTextModal({
       sheetFontSize: number;
       sheetFontWeight: "normal" | "bold";
     }) => {
-      updateBlocks((current) => ({
-        ...current,
-        blocks: current.blocks.map((b) => {
-          if (b.id !== block.id || b.type !== "text") return b;
-          const next: z.infer<typeof TextBlockSchema> = {
-            ...b,
-            style: args.style,
-            align: args.align,
+      let prevFields: {
+        style: z.infer<typeof TextBlockSchema>["style"];
+        align: z.infer<typeof TextBlockSchema>["align"];
+        fontSize: number | undefined;
+        fontWeight: "normal" | "bold" | undefined;
+      } | null = null;
+
+      updateBlocks(
+        (current) => {
+          const b = current.blocks.find(
+            (x) => x.id === block.id && x.type === "text"
+          );
+          if (!b || b.type !== "text") return current;
+          prevFields = {
+            style: b.style,
+            align: b.align,
+            fontSize: b.fontSize,
+            fontWeight: b.fontWeight,
           };
-          if (args.fontSizePt !== args.sheetFontSize) {
-            next.fontSize = args.fontSizePt;
-          } else {
-            delete next.fontSize;
-          }
-          if (args.fontWeight !== args.sheetFontWeight) {
-            next.fontWeight = args.fontWeight;
-          } else {
-            delete next.fontWeight;
-          }
-          return next;
-        }),
-      }));
+          return {
+            ...current,
+            blocks: current.blocks.map((b) => {
+              if (b.id !== block.id || b.type !== "text") return b;
+              const next: z.infer<typeof TextBlockSchema> = {
+                ...b,
+                style: args.style,
+                align: args.align,
+              };
+              if (args.fontSizePt !== args.sheetFontSize) {
+                next.fontSize = args.fontSizePt;
+              } else {
+                delete next.fontSize;
+              }
+              if (args.fontWeight !== args.sheetFontWeight) {
+                next.fontWeight = args.fontWeight;
+              } else {
+                delete next.fontWeight;
+              }
+              return next;
+            }),
+          };
+        },
+        {
+          down: () => {
+            if (!prevFields) return;
+            const pf = prevFields;
+            updateBlocks((current) => ({
+              ...current,
+              blocks: current.blocks.map((b) => {
+                if (b.id !== block.id || b.type !== "text") return b;
+                const next: z.infer<typeof TextBlockSchema> = {
+                  ...b,
+                  style: pf.style,
+                  align: pf.align,
+                };
+                if (pf.fontSize !== undefined) {
+                  next.fontSize = pf.fontSize;
+                } else {
+                  delete next.fontSize;
+                }
+                if (pf.fontWeight !== undefined) {
+                  next.fontWeight = pf.fontWeight;
+                } else {
+                  delete next.fontWeight;
+                }
+                return next;
+              }),
+            }));
+          },
+        }
+      );
     },
     500,
     { maxWait: 1500 }

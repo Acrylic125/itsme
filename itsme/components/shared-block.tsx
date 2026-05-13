@@ -214,22 +214,43 @@ function patchColumnSpansAfterResizeDrag(args: {
     nextSpans.every((s, idx) => s === spans[idx]);
   if (unchanged) return;
 
-  args.updateBlocks((current) => {
-    return {
-      ...current,
-      blocks: current.blocks.map((b) => {
-        if (b.type !== "columns" || b.id !== resizeCtx.columnsBlockId) return b;
-        if (b.blocks.length !== resizeCtx.siblingCount) return b;
-        return {
-          ...b,
-          blocks: b.blocks.map((child, iChild) => ({
-            ...child,
-            span: nextSpans[iChild] ?? child.span,
-          })),
-        };
-      }),
-    };
-  });
+  args.updateBlocks(
+    (current) => {
+      return {
+        ...current,
+        blocks: current.blocks.map((b) => {
+          if (b.type !== "columns" || b.id !== resizeCtx.columnsBlockId) return b;
+          if (b.blocks.length !== resizeCtx.siblingCount) return b;
+          return {
+            ...b,
+            blocks: b.blocks.map((child, iChild) => ({
+              ...child,
+              span: nextSpans[iChild] ?? child.span,
+            })),
+          };
+        }),
+      };
+    },
+    {
+      down: () => {
+        args.updateBlocks((current) => ({
+          ...current,
+          blocks: current.blocks.map((b) => {
+            if (b.type !== "columns" || b.id !== resizeCtx.columnsBlockId)
+              return b;
+            if (b.blocks.length !== resizeCtx.siblingCount) return b;
+            return {
+              ...b,
+              blocks: b.blocks.map((child, iChild) => ({
+                ...child,
+                span: spans[iChild] ?? child.span,
+              })),
+            };
+          }),
+        }));
+      },
+    }
+  );
 }
 
 function DraggingFillPreview({
@@ -681,17 +702,30 @@ function useInteractableBlockController(args: {
       if (event.key === "Backspace") {
         event.preventDefault();
         let didDelete = false;
-        updateBlocks((current) => {
-          const doc = documentBlocksSnapshotToDocument(current);
-          const nextDoc = deleteBlockFromDocument(doc, blockId);
-          if (!nextDoc) return current;
-          didDelete = true;
-          return {
-            ...current,
-            blocks: nextDoc.blocks,
-            layout: nextDoc.layout as DocumentBlocksSnapshot["layout"],
-          };
-        });
+        let beforeSnapshot: DocumentBlocksSnapshot | null = null;
+        updateBlocks(
+          (current) => {
+            const doc = documentBlocksSnapshotToDocument(current);
+            const nextDoc = deleteBlockFromDocument(doc, blockId);
+            if (!nextDoc) return current;
+            if (!beforeSnapshot) {
+              beforeSnapshot = structuredClone(current);
+            }
+            didDelete = true;
+            return {
+              ...current,
+              blocks: nextDoc.blocks,
+              layout: nextDoc.layout as DocumentBlocksSnapshot["layout"],
+            };
+          },
+          {
+            down: () => {
+              if (beforeSnapshot) {
+                updateBlocks(() => structuredClone(beforeSnapshot!));
+              }
+            },
+          }
+        );
         if (didDelete) {
           setAction((current) => {
             const edit = asEditBlockAction(current);
@@ -711,16 +745,29 @@ function useInteractableBlockController(args: {
         event.code === "KeyD";
       if (duplicateChord) {
         event.preventDefault();
-        updateBlocks((current) => {
-          const doc = documentBlocksSnapshotToDocument(current);
-          const dup = duplicateBlockBelowInDocument(doc, blockId);
-          if (!dup) return current;
-          return {
-            ...current,
-            blocks: dup.document.blocks,
-            layout: dup.document.layout as DocumentBlocksSnapshot["layout"],
-          };
-        });
+        let beforeSnapshot: DocumentBlocksSnapshot | null = null;
+        updateBlocks(
+          (current) => {
+            const doc = documentBlocksSnapshotToDocument(current);
+            const dup = duplicateBlockBelowInDocument(doc, blockId);
+            if (!dup) return current;
+            if (!beforeSnapshot) {
+              beforeSnapshot = structuredClone(current);
+            }
+            return {
+              ...current,
+              blocks: dup.document.blocks,
+              layout: dup.document.layout as DocumentBlocksSnapshot["layout"],
+            };
+          },
+          {
+            down: () => {
+              if (beforeSnapshot) {
+                updateBlocks(() => structuredClone(beforeSnapshot!));
+              }
+            },
+          }
+        );
       }
     };
 
@@ -816,15 +863,28 @@ export function InteractableBlock({
       return;
     }
 
-    updateBlocks((current) => {
-      const next = buildMoveUpdatesForReorder({
-        snapshot: current,
-        move: moveAction,
-        blockTree,
-      });
-      if (!next) return current;
-      return next;
-    });
+    let beforeSnapshot: DocumentBlocksSnapshot | null = null;
+    updateBlocks(
+      (current) => {
+        const next = buildMoveUpdatesForReorder({
+          snapshot: current,
+          move: moveAction,
+          blockTree,
+        });
+        if (!next) return current;
+        if (!beforeSnapshot) {
+          beforeSnapshot = structuredClone(current);
+        }
+        return next;
+      },
+      {
+        down: () => {
+          if (beforeSnapshot) {
+            updateBlocks(() => structuredClone(beforeSnapshot!));
+          }
+        },
+      }
+    );
 
     state.setAction((current) => (asMoveBlockAction(current) ? null : current));
   }, [document, documentStore, updateBlocks, blockTree]);

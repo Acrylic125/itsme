@@ -21,7 +21,6 @@ import {
 } from "./renderer";
 import {
   collectSubtreeBlocksInDocumentOrder,
-  insertSubtreeBelowInDocument,
   sanitizeRootLayout,
 } from "./apply-block-move";
 import type { Block } from "./blocks";
@@ -30,6 +29,12 @@ import {
   serializeCopyPasteClipboard,
 } from "./copy-paste-clipboard";
 import { BlockUpdateSchema } from "./updater";
+import {
+  makeProjDocId,
+  pushHistoryOp,
+  redoHistory,
+  undoHistory,
+} from "./session-store";
 import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
 import { useQueryWithStatus } from "@/components/convex-hooks";
 import { api } from "@/convex/_generated/api";
@@ -645,7 +650,8 @@ type DocumentContextValue = {
   projectId: Id<"projects"> | null;
   /** Apply a pure transform to the current blocks snapshot; changes debounce then sync to Convex. */
   updateBlocks: (
-    transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot
+    transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot,
+    options?: { down?: () => void }
   ) => void;
   /** Writes toolbar font size/weight onto this document's shared text preset (explicit action). */
   syncDocumentTextPresetToMatch: (args: {
@@ -718,12 +724,22 @@ export function DocumentStoresProvider({
   > | null>(null);
   const inFlightCommitRef = useRef<Promise<unknown> | null>(null);
   const pendingCommitRef = useRef(false);
+  /** When true, `updateBlocks` applies transforms without recording session undo history. */
+  const suppressHistoryForBlocksTransformRef = useRef(false);
 
   const clientIdMappings = useStore(documentStore, (s) => s.clientIdMappings);
 
   useEffect(() => {
     modifiedBlocksRef.current = modifiedBlocks;
   }, [modifiedBlocks]);
+
+  const setModifiedBlocksState = useCallback(
+    (next: DocumentBlocksSnapshot | null) => {
+      modifiedBlocksRef.current = next;
+      setModifiedBlocks(next);
+    },
+    []
+  );
 
   useEffect(() => {
     if (blocksQuery.status === "success" && blocksQuery.data) {
@@ -768,7 +784,7 @@ export function DocumentStoresProvider({
         : undefined;
 
     if (mutationActions.length === 0 && layoutForMutation === undefined) {
-      setModifiedBlocks(null);
+      setModifiedBlocksState(null);
       return;
     }
 
@@ -818,8 +834,13 @@ export function DocumentStoresProvider({
       });
     inFlightCommitRef.current = promise;
 
-    setModifiedBlocks(null);
-  }, [convexDocumentId, documentStore, updateDocumentBlocksMutation]);
+    setModifiedBlocksState(null);
+  }, [
+    convexDocumentId,
+    documentStore,
+    setModifiedBlocksState,
+    updateDocumentBlocksMutation,
+  ]);
 
   useEffect(() => {
     commitModifiedBlocksRef.current = commitModifiedBlocks;
@@ -834,6 +855,38 @@ export function DocumentStoresProvider({
       commitModifiedBlocks();
     }, 1000);
   }, [commitModifiedBlocks]);
+
+  const projDocId = useMemo(
+    () =>
+      makeProjDocId(
+        convexProjectId ? String(convexProjectId) : null,
+        documentId
+      ),
+    [convexProjectId, documentId]
+  );
+
+  const applyBlocksTransform = useCallback(
+    (
+      transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot
+    ) => {
+      const raw = blocksQueryRawRef.current;
+      if (!raw) {
+        return;
+      }
+
+      const { convexToClient } = documentStore.getState().clientIdMappings;
+      const normalized = snapshotConvexToClient(raw, convexToClient);
+      const base = modifiedBlocksRef.current
+        ? structuredClone(modifiedBlocksRef.current)
+        : structuredClone(normalized);
+      const next = transform(base);
+
+      setModifiedBlocksState(next);
+
+      scheduleCommit();
+    },
+    [documentStore, scheduleCommit, setModifiedBlocksState]
+  );
 
   const syncDocumentTextPresetToMatch = useCallback(
     async (args: {
@@ -864,6 +917,10 @@ export function DocumentStoresProvider({
         }
       );
 
+      const sheet = stylesQuery.data?.styleSheet;
+      const prev =
+        sheet?.text[args.style] ?? DEFAULT_STYLE_SHEET.text[args.style];
+
       await run({
         documentId: convexDocumentId,
         patches: [
@@ -874,8 +931,42 @@ export function DocumentStoresProvider({
           },
         ],
       });
+
+      if (sheet) {
+        pushHistoryOp(projDocId, {
+          down: () => {
+            void run({
+              documentId: convexDocumentId,
+              patches: [
+                {
+                  style: args.style,
+                  fontSize: prev.fontSize,
+                  fontWeight: prev.fontWeight,
+                },
+              ],
+            });
+          },
+          up: () => {
+            void run({
+              documentId: convexDocumentId,
+              patches: [
+                {
+                  style: args.style,
+                  fontSize: args.fontSize,
+                  fontWeight: args.fontWeight,
+                },
+              ],
+            });
+          },
+        });
+      }
     },
-    [convexDocumentId, updateDocumentTextStylesMutation]
+    [
+      convexDocumentId,
+      projDocId,
+      stylesQuery.data?.styleSheet,
+      updateDocumentTextStylesMutation,
+    ]
   );
 
   const syncProjectTextPresetToMatch = useCallback(
@@ -887,37 +978,98 @@ export function DocumentStoresProvider({
       if (!convexProjectId) {
         return;
       }
+
+      const sheet = stylesQuery.data?.styleSheet;
+      const prev =
+        sheet?.text[args.style] ?? DEFAULT_STYLE_SHEET.text[args.style];
+
       await syncProjectTextStylePresetAllDocumentsMutation({
         projectId: convexProjectId,
         style: args.style,
         fontSize: args.fontSize,
         fontWeight: args.fontWeight,
       });
+
+      if (sheet) {
+        pushHistoryOp(projDocId, {
+          down: () => {
+            void syncProjectTextStylePresetAllDocumentsMutation({
+              projectId: convexProjectId,
+              style: args.style,
+              fontSize: prev.fontSize,
+              fontWeight: prev.fontWeight,
+            });
+          },
+          up: () => {
+            void syncProjectTextStylePresetAllDocumentsMutation({
+              projectId: convexProjectId,
+              style: args.style,
+              fontSize: args.fontSize,
+              fontWeight: args.fontWeight,
+            });
+          },
+        });
+      }
     },
-    [convexProjectId, syncProjectTextStylePresetAllDocumentsMutation]
+    [
+      convexProjectId,
+      projDocId,
+      stylesQuery.data?.styleSheet,
+      syncProjectTextStylePresetAllDocumentsMutation,
+    ]
   );
 
   const updateBlocks = useCallback(
     (
-      transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot
+      transform: (current: DocumentBlocksSnapshot) => DocumentBlocksSnapshot,
+      options?: { down?: () => void }
     ) => {
-      setModifiedBlocks((prev) => {
-        const raw = blocksQueryRawRef.current;
-        if (!raw) {
-          return prev;
-        }
+      const historyDown = options?.down;
+      const skipHistory = suppressHistoryForBlocksTransformRef.current;
+      const raw = blocksQueryRawRef.current;
+      if (!raw) {
+        return;
+      }
 
-        const { convexToClient } = documentStore.getState().clientIdMappings;
-        const normalized = snapshotConvexToClient(raw, convexToClient);
-        const base: DocumentBlocksSnapshot = prev
-          ? prev
-          : structuredClone(normalized);
-        return transform(base);
-      });
+      const { convexToClient } = documentStore.getState().clientIdMappings;
+      const normalized = snapshotConvexToClient(raw, convexToClient);
+      const base = modifiedBlocksRef.current
+        ? structuredClone(modifiedBlocksRef.current)
+        : structuredClone(normalized);
+      const next = transform(base);
+
+      setModifiedBlocksState(next);
 
       scheduleCommit();
+
+      if (historyDown && !skipHistory && next !== base) {
+        pushHistoryOp(projDocId, {
+          up: () => {
+            suppressHistoryForBlocksTransformRef.current = true;
+            try {
+              applyBlocksTransform(transform);
+            } finally {
+              suppressHistoryForBlocksTransformRef.current = false;
+            }
+          },
+          down: () => {
+            suppressHistoryForBlocksTransformRef.current = true;
+            try {
+              historyDown();
+            } finally {
+              suppressHistoryForBlocksTransformRef.current = false;
+            }
+          },
+        });
+      }
     },
-    [documentStore, scheduleCommit]
+    [
+      applyBlocksTransform,
+      documentStore,
+      projDocId,
+      scheduleCommit,
+      setModifiedBlocksState,
+    ]
   );
 
   useEffect(() => {
@@ -1064,12 +1216,28 @@ export function DocumentStoresProvider({
             targetBlock: null,
           });
         })();
+        return;
+      }
+
+      if (key === "z" || key === "Z") {
+        if (e.shiftKey) {
+          return;
+        }
+        e.preventDefault();
+        undoHistory(projDocId);
+        return;
+      }
+
+      if (key === "y" || key === "Y") {
+        e.preventDefault();
+        redoHistory(projDocId);
+        return;
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [renderedDocument, documentStore, updateBlocks]);
+  }, [renderedDocument, documentStore, updateBlocks, projDocId]);
 
   const isLoading =
     blocksQuery.status === "pending" || stylesQuery.status === "pending";
