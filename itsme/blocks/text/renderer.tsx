@@ -47,6 +47,9 @@ const EMPTY_TEXT_DISPLAY = "Click to set text";
 /** Tailwind `p-2`: horizontal padding (left + right) in CSS px, converted to layout px via `canvasDisplayScale`. */
 const TEXTAREA_PADDING_X_CSS_PX = 16;
 
+/** Konva `Text` and `<textarea>` break on `\n`; pretext defaults collapse newlines (`white-space: normal`). */
+const PRETEXT_PREPARE_OPTIONS = { whiteSpace: "pre-wrap" as const };
+
 function textareaRowsFromPretext(args: {
   text: string;
   /** Same units as Konva / block layout (`relativeTo.width`). */
@@ -64,7 +67,8 @@ function textareaRowsFromPretext(args: {
   );
   const prepared = prepare(
     text,
-    `${textStyle.fontWeight} ${fontSizePx}px ${textStyle.fontFamily}`
+    `${textStyle.fontWeight} ${fontSizePx}px ${textStyle.fontFamily}`,
+    PRETEXT_PREPARE_OPTIONS
   );
   const { lineCount } = layout(prepared, wrapWidthPx, textStyle.lineHeight);
   return Math.max(1, lineCount);
@@ -649,7 +653,9 @@ function TextBlockComponent({
                 }
                 persistBlockFormatting={persistBlockFormatting}
                 onSyncDocumentPresetToMatch={handleSyncDocumentPresetToMatch}
-                onSyncAllDocumentsPresetToMatch={handleSyncAllDocumentsPresetToMatch}
+                onSyncAllDocumentsPresetToMatch={
+                  handleSyncAllDocumentsPresetToMatch
+                }
                 canSyncAllDocuments={projectId != null}
               />
             </div>
@@ -721,7 +727,8 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
       block.text === "" ? EMPTY_TEXT_DISPLAY : block.text;
     const prepared = prepare(
       layoutSourceText,
-      `${style.fontWeight} ${fontSizePx}px ${style.fontFamily}`
+      `${style.fontWeight} ${fontSizePx}px ${style.fontFamily}`,
+      PRETEXT_PREPARE_OPTIONS
     );
     const { lineCount } = layout(prepared, relativeTo.width, style.lineHeight);
 

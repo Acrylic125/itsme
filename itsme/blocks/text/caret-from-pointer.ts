@@ -76,7 +76,9 @@ export function caretOffsetFromLocalPoint(args: {
   localY: number;
 }): number {
   const font = `${args.fontWeight} ${args.fontSizePx}px ${args.fontFamily}`;
-  const prepared = prepareWithSegments(args.text, font);
+  const prepared = prepareWithSegments(args.text, font, {
+    whiteSpace: "pre-wrap",
+  });
   const { lines } = layoutWithLines(prepared, args.widthPx, args.lineHeight);
   if (lines.length === 0) return 0;
 

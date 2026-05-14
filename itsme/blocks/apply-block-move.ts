@@ -123,6 +123,13 @@ function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
   return null;
 }
 
+/** Container block id for a nested block, or `null` if it lives at document root (or is missing). */
+export function getParentBlockId(doc: Document, blockId: string): string | null {
+  const ref = findParentRef(doc, blockId);
+  if (!ref || ref.container === "document") return null;
+  return ref.parentBlockId;
+}
+
 /**
  * Drops layout entries for ids that already appear as children of
  * section/list/columns. That inconsistent state can happen after races or older

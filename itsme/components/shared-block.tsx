@@ -8,6 +8,7 @@ import { buildMoveUpdatesForReorder } from "@/components/canvas-reorder-target-l
 import {
   deleteBlockFromDocument,
   duplicateBlockBelowInDocument,
+  getParentBlockId,
 } from "@/blocks/apply-block-move";
 import {
   useDocument,
@@ -702,12 +703,14 @@ function useInteractableBlockController(args: {
       if (event.key === "Backspace") {
         event.preventDefault();
         let didDelete = false;
+        let parentIdAfterDelete: string | null = null;
         let beforeSnapshot: DocumentBlocksSnapshot | null = null;
         updateBlocks(
           (current) => {
             const doc = documentBlocksSnapshotToDocument(current);
             const nextDoc = deleteBlockFromDocument(doc, blockId);
             if (!nextDoc) return current;
+            parentIdAfterDelete = getParentBlockId(doc, blockId);
             if (!beforeSnapshot) {
               beforeSnapshot = structuredClone(current);
             }
@@ -729,9 +732,17 @@ function useInteractableBlockController(args: {
         if (didDelete) {
           setAction((current) => {
             const edit = asEditBlockAction(current);
-            if (edit?.blockId === blockId) return null;
+            if (edit?.blockId === blockId) {
+              return parentIdAfterDelete != null
+                ? { type: "focus-block", blockId: parentIdAfterDelete }
+                : null;
+            }
             const focus = asFocusBlockAction(current);
-            if (focus?.blockId === blockId) return null;
+            if (focus?.blockId === blockId) {
+              return parentIdAfterDelete != null
+                ? { type: "focus-block", blockId: parentIdAfterDelete }
+                : null;
+            }
             return current;
           });
         }

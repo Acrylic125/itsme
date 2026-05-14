@@ -272,9 +272,11 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       const rowStartPosition = ctx.getNextPosition();
       const bulletLabel = getBulletLabel(block.bullet, index);
       const bulletFontSizePx = (defaultTextStyle.fontSize * ctx.dpi) / 72;
+      const PRETEXT_PREPARE_OPTIONS = { whiteSpace: "pre-wrap" as const };
       const bulletPrepared = prepare(
         bulletLabel,
-        `${defaultTextStyle.fontWeight} ${bulletFontSizePx}px ${defaultTextStyle.fontFamily}`
+        `${defaultTextStyle.fontWeight} ${bulletFontSizePx}px ${defaultTextStyle.fontFamily}`,
+        PRETEXT_PREPARE_OPTIONS
       );
       const { lineCount: bulletLineCount } = layout(
         bulletPrepared,
