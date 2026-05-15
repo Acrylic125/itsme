@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
 import { useDebouncedCallback } from "use-debounce";
 import { TextBlockSchema } from "./schema";
 import { z } from "zod";
@@ -22,6 +23,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export const TEXT_STYLE_OPTIONS = [
   { value: "default" as const, label: "Body" },
@@ -59,9 +62,9 @@ type EditTextToolbarProps = {
   blockStyle: TextStyleKey;
   /** Preset (Body / H1–H3): updates the block only. */
   onTextStylePresetSelect: (style: TextStyleKey) => void;
-  /** Distinct text bodies from linked text blocks (same ref group); empty hides the control. */
-  contentPresetVariants: string[];
-  contentPresetVariantsLoading?: boolean;
+  /** When both are set, loads linked text preset variants from Convex. */
+  convexDocumentId: Id<"documents"> | null;
+  convexBlockId: Id<"blocks"> | null;
   onContentPresetSelect: (text: string) => void;
   fontSizePt: number;
   onFontSizePtCommit: (pt: number) => void;
@@ -81,8 +84,8 @@ export function EditTextToolbar({
   onClose,
   blockStyle,
   onTextStylePresetSelect,
-  contentPresetVariants,
-  contentPresetVariantsLoading,
+  convexDocumentId,
+  convexBlockId,
   onContentPresetSelect,
   fontSizePt,
   onFontSizePtCommit,
@@ -95,6 +98,18 @@ export function EditTextToolbar({
   onSyncAllDocumentsPresetToMatch,
   canSyncAllDocuments,
 }: EditTextToolbarProps) {
+  const canFetchTextContentPresets =
+    convexDocumentId != null && convexBlockId != null;
+  const textContentPresetsQuery = useQuery(
+    api.documentTasks.getTextBlockContentVariants,
+    canFetchTextContentPresets
+      ? { documentId: convexDocumentId, blockId: convexBlockId }
+      : "skip"
+  );
+  const contentPresetVariants = textContentPresetsQuery?.variants ?? [];
+  const contentPresetVariantsLoading =
+    canFetchTextContentPresets && textContentPresetsQuery === undefined;
+
   const styleLabel =
     TEXT_STYLE_OPTIONS.find((o) => o.value === blockStyle)?.label ?? "Body";
   const [fontSizeDraft, setFontSizeDraft] = useState(() => String(fontSizePt));

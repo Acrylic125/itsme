@@ -70,7 +70,9 @@ export const CopyPasteClipboardSchema = z
     }
   });
 
-export type CopyPasteClipboardPayload = z.infer<typeof CopyPasteClipboardSchema>;
+export type CopyPasteClipboardPayload = z.infer<
+  typeof CopyPasteClipboardSchema
+>;
 
 /** Drop `text.ref` when it does not point at another row in the same clipboard. */
 export function stripDanglingTextRefsInSubtree(blocks: Block[]): Block[] {
@@ -88,6 +90,10 @@ export function stripDanglingTextRefsInSubtree(blocks: Block[]): Block[] {
   });
 }
 
+/**
+ * Assign fresh client ids for a paste; **does not** carry over `ref` fields so
+ * pasted blocks do not stay linked to anchors outside the new subtree.
+ */
 export function remapCopyPasteBlocksToClientIds(blocks: Block[]): Block[] {
   const oldToNew = new Map<string, string>();
   for (const b of blocks) {
@@ -106,18 +112,12 @@ export function remapCopyPasteBlocksToClientIds(blocks: Block[]): Block[] {
           style: b.style,
           ...(b.fontSize !== undefined ? { fontSize: b.fontSize } : {}),
           ...(b.fontWeight !== undefined ? { fontWeight: b.fontWeight } : {}),
-          ...(b.ref !== undefined && oldToNew.has(b.ref)
-            ? { ref: r(b.ref) }
-            : {}),
         } as Block;
       case "section":
         return {
           type: "section",
           id: r(b.id),
           blocks: b.blocks.map(r),
-          ...(b.ref !== undefined && oldToNew.has(b.ref)
-            ? { ref: r(b.ref) }
-            : {}),
         } as Block;
       case "list":
         return {
@@ -127,18 +127,12 @@ export function remapCopyPasteBlocksToClientIds(blocks: Block[]): Block[] {
           bullet: b.bullet,
           ...(b.leftSpace !== undefined ? { leftSpace: b.leftSpace } : {}),
           ...(b.rightSpace !== undefined ? { rightSpace: b.rightSpace } : {}),
-          ...(b.ref !== undefined && oldToNew.has(b.ref)
-            ? { ref: r(b.ref) }
-            : {}),
         } as Block;
       case "columns":
         return {
           type: "columns",
           id: r(b.id),
           blocks: b.blocks.map((c) => ({ ...c, blockId: r(c.blockId) })),
-          ...(b.ref !== undefined && oldToNew.has(b.ref)
-            ? { ref: r(b.ref) }
-            : {}),
         } as Block;
     }
   });

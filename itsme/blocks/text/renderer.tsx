@@ -34,8 +34,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
@@ -229,17 +227,22 @@ function TextBlockComponent({
     syncProjectTextPresetToMatch,
     projectId,
   } = useDocument();
-  const { setAction, editAction, focusAction, activeBlockId, clientIdMappings } =
-    useStore(
-      documentStore,
-      useShallow((s) => ({
-        setAction: s.setAction,
-        editAction: selectEditBlockAction(s),
-        focusAction: asFocusBlockAction(s.action),
-        activeBlockId: selectActiveBlockId(s),
-        clientIdMappings: s.clientIdMappings,
-      }))
-    );
+  const {
+    setAction,
+    editAction,
+    focusAction,
+    activeBlockId,
+    clientIdMappings,
+  } = useStore(
+    documentStore,
+    useShallow((s) => ({
+      setAction: s.setAction,
+      editAction: selectEditBlockAction(s),
+      focusAction: asFocusBlockAction(s.action),
+      activeBlockId: selectActiveBlockId(s),
+      clientIdMappings: s.clientIdMappings,
+    }))
+  );
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const [initialCaretOffset, setInitialCaretOffset] = useState(0);
   /** Bumps when toolbar content preset is applied so the edit modal remounts with fresh `block.text`. */
@@ -446,19 +449,6 @@ function TextBlockComponent({
     }
     return block.id as Id<"blocks">;
   }, [block.id, clientIdMappings]);
-
-  const canFetchTextContentPresets =
-    convexDocumentId != null && convexBlockIdForContentPresets != null;
-
-  const textContentPresetsQuery = useQuery(
-    api.documentTasks.getTextBlockContentVariants,
-    canFetchTextContentPresets
-      ? {
-          documentId: convexDocumentId,
-          blockId: convexBlockIdForContentPresets,
-        }
-      : "skip"
-  );
 
   const handleContentPresetSelect = useCallback(
     (nextText: string) => {
@@ -684,11 +674,8 @@ function TextBlockComponent({
                     fontWeight: sh.fontWeight,
                   });
                 }}
-                contentPresetVariants={textContentPresetsQuery?.variants ?? []}
-                contentPresetVariantsLoading={
-                  canFetchTextContentPresets &&
-                  textContentPresetsQuery === undefined
-                }
+                convexDocumentId={convexDocumentId}
+                convexBlockId={convexBlockIdForContentPresets}
                 onContentPresetSelect={handleContentPresetSelect}
                 fontSizePt={fontSizePt}
                 onFontSizePtCommit={(nextFontSizePt) => {

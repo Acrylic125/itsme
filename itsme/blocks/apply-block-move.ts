@@ -124,7 +124,10 @@ function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
 }
 
 /** Container block id for a nested block, or `null` if it lives at document root (or is missing). */
-export function getParentBlockId(doc: Document, blockId: string): string | null {
+export function getParentBlockId(
+  doc: Document,
+  blockId: string
+): string | null {
   const ref = findParentRef(doc, blockId);
   if (!ref || ref.container === "document") return null;
   return ref.parentBlockId;
@@ -700,7 +703,7 @@ export function deleteBlockFromDocument(
   return pruneStaleLayoutReferences(next);
 }
 
-/** Deep-copies the subtree at `blockId` with fresh ids and inserts it below that block. */
+/** Deep-copies the subtree at `blockId` with fresh ids and inserts it below that block. Omits `ref` on duplicated rows (same as paste). */
 export function duplicateBlockBelowInDocument(
   doc: Document,
   blockId: string
@@ -738,30 +741,36 @@ export function duplicateBlockBelowInDocument(
   const newBlocks: Document["blocks"] = orderedIds.map((id) => {
     const b = blockById.get(id)!;
     switch (b.type) {
-      case "text":
+      case "text": {
+        const { ref: _omitRef, ...rest } = b;
+        void _omitRef;
         return {
-          ...b,
+          ...rest,
           id: remapId(b.id),
-          ...(b.ref ? { ref: remapId(b.ref) } : {}),
         };
+      }
       case "section":
-      case "list":
+      case "list": {
+        const { ref: _omitRef, ...rest } = b;
+        void _omitRef;
         return {
-          ...b,
+          ...rest,
           id: remapId(b.id),
           blocks: b.blocks.map((cid) => remapId(cid)),
-          ...(b.ref ? { ref: remapId(b.ref) } : {}),
         };
-      case "columns":
+      }
+      case "columns": {
+        const { ref: _omitRef, ...rest } = b;
+        void _omitRef;
         return {
-          ...b,
+          ...rest,
           id: remapId(b.id),
           blocks: b.blocks.map((c) => ({
             ...c,
             blockId: remapId(c.blockId),
           })),
-          ...(b.ref ? { ref: remapId(b.ref) } : {}),
         };
+      }
     }
   });
 
