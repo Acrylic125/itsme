@@ -34,6 +34,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useShallow } from "zustand/react/shallow";
 import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
@@ -226,17 +229,21 @@ function TextBlockComponent({
     syncProjectTextPresetToMatch,
     projectId,
   } = useDocument();
-  const { setAction, editAction, focusAction, activeBlockId } = useStore(
-    documentStore,
-    useShallow((s) => ({
-      setAction: s.setAction,
-      editAction: selectEditBlockAction(s),
-      focusAction: asFocusBlockAction(s.action),
-      activeBlockId: selectActiveBlockId(s),
-    }))
-  );
+  const { setAction, editAction, focusAction, activeBlockId, clientIdMappings } =
+    useStore(
+      documentStore,
+      useShallow((s) => ({
+        setAction: s.setAction,
+        editAction: selectEditBlockAction(s),
+        focusAction: asFocusBlockAction(s.action),
+        activeBlockId: selectActiveBlockId(s),
+        clientIdMappings: s.clientIdMappings,
+      }))
+    );
   const [anchor, setAnchor] = useState<AnchorRect | null>(null);
   const [initialCaretOffset, setInitialCaretOffset] = useState(0);
+  /** Bumps when toolbar content preset is applied so the edit modal remounts with fresh `block.text`. */
+  const [editTextModalNonce, setEditTextModalNonce] = useState(0);
   const isEditingThisBlock = editAction?.blockId === block.id;
   const isFocusOnlyThisBlock =
     focusAction?.blockId === block.id && !isEditingThisBlock;
@@ -427,6 +434,44 @@ function TextBlockComponent({
       fontWeight: fontWeightUi,
     });
   }, [blockStyle, fontSizePt, fontWeightUi, syncProjectTextPresetToMatch]);
+
+  const convexDocumentId = document
+    ? (document as unknown as { id: Id<"documents"> }).id
+    : null;
+
+  const convexBlockIdForContentPresets = useMemo(() => {
+    if (block.id.startsWith("CLIENT_ID:")) {
+      const resolved = clientIdMappings.clientToConvex.get(block.id);
+      return resolved ? (resolved as Id<"blocks">) : null;
+    }
+    return block.id as Id<"blocks">;
+  }, [block.id, clientIdMappings]);
+
+  const canFetchTextContentPresets =
+    convexDocumentId != null && convexBlockIdForContentPresets != null;
+
+  const textContentPresetsQuery = useQuery(
+    api.documentTasks.getTextBlockContentVariants,
+    canFetchTextContentPresets
+      ? {
+          documentId: convexDocumentId,
+          blockId: convexBlockIdForContentPresets,
+        }
+      : "skip"
+  );
+
+  const handleContentPresetSelect = useCallback(
+    (nextText: string) => {
+      updateBlocks((current) => ({
+        ...current,
+        blocks: current.blocks.map((b) =>
+          b.id === block.id && b.type === "text" ? { ...b, text: nextText } : b
+        ),
+      }));
+      setEditTextModalNonce((n) => n + 1);
+    },
+    [block.id, updateBlocks]
+  );
 
   useLayoutEffect(() => {
     if (!inFocus || anchor) return;
@@ -639,6 +684,12 @@ function TextBlockComponent({
                     fontWeight: sh.fontWeight,
                   });
                 }}
+                contentPresetVariants={textContentPresetsQuery?.variants ?? []}
+                contentPresetVariantsLoading={
+                  canFetchTextContentPresets &&
+                  textContentPresetsQuery === undefined
+                }
+                onContentPresetSelect={handleContentPresetSelect}
                 fontSizePt={fontSizePt}
                 onFontSizePtCommit={(nextFontSizePt) => {
                   updateFormattingDraft({ fontSizePt: nextFontSizePt });
@@ -683,6 +734,7 @@ function TextBlockComponent({
             }}
           >
             <EditTextModal
+              key={`${block.id}-${editTextModalNonce}`}
               block={block}
               initialCaretOffset={initialCaretOffset}
               layoutWidthPx={dimensions.width}

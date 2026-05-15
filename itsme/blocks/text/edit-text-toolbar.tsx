@@ -59,6 +59,10 @@ type EditTextToolbarProps = {
   blockStyle: TextStyleKey;
   /** Preset (Body / H1–H3): updates the block only. */
   onTextStylePresetSelect: (style: TextStyleKey) => void;
+  /** Distinct text bodies from linked text blocks (same ref group); empty hides the control. */
+  contentPresetVariants: string[];
+  contentPresetVariantsLoading?: boolean;
+  onContentPresetSelect: (text: string) => void;
   fontSizePt: number;
   onFontSizePtCommit: (pt: number) => void;
   fontWeightUi: "normal" | "bold";
@@ -77,6 +81,9 @@ export function EditTextToolbar({
   onClose,
   blockStyle,
   onTextStylePresetSelect,
+  contentPresetVariants,
+  contentPresetVariantsLoading,
+  onContentPresetSelect,
   fontSizePt,
   onFontSizePtCommit,
   fontWeightUi,
@@ -103,6 +110,8 @@ export function EditTextToolbar({
 
   const alignLabel =
     ALIGN_OPTIONS.find((o) => o.value === align)?.label ?? "Align";
+  const AlignTriggerIcon =
+    ALIGN_OPTIONS.find((o) => o.value === align)?.Icon ?? AlignLeft;
 
   const parseValidFontSizeDraft = (draft: string) => {
     const trimmed = draft.trim();
@@ -135,103 +144,108 @@ export function EditTextToolbar({
   return (
     <div
       className={cn(
-        "pointer-events-auto absolute bottom-full left-0 z-10 mb-2 flex w-fit max-w-[min(100vw-1rem,36rem)] flex-wrap items-center gap-4 rounded-lg border border-border bg-background px-1.5 py-1 shadow-md",
+        // Temporarily removed: max-w-[min(100vw-1rem,36rem)]
+        "pointer-events-auto absolute bottom-full left-0 z-10 mb-2 flex flex-row w-fit gap-2",
         className
       )}
     >
-      <div className="flex flex-row items-center gap-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0"
-          aria-label="Close text editor"
-          onClick={onClose}
-        >
-          <X className="size-4" />
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-w-28 shrink-0 justify-between gap-1 font-normal"
-              aria-label="Text style"
-            >
-              <span className="truncate">{styleLabel}</span>
-              <ChevronDown className="size-3.5 opacity-60" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-72">
-            {TEXT_STYLE_OPTIONS.map((opt) => (
+      <div className="flex flex-row flex-wrap items-center gap-4 rounded-lg border border-border bg-background px-1.5 py-1 shadow-md">
+        <div className="flex flex-row items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0"
+            aria-label="Close text editor"
+            onClick={onClose}
+          >
+            <X className="size-4" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-28 shrink-0 justify-between gap-1 font-normal"
+                aria-label="Text style"
+              >
+                <span className="truncate">{styleLabel}</span>
+                <ChevronDown className="size-3.5 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-72">
+              {TEXT_STYLE_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onSelect={() => {
+                    onTextStylePresetSelect(opt.value);
+                  }}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
-                key={opt.value}
                 onSelect={() => {
-                  onTextStylePresetSelect(opt.value);
+                  void onSyncDocumentPresetToMatch();
                 }}
               >
-                {opt.label}
+                Update document {styleLabel} to match
               </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => {
-                void onSyncDocumentPresetToMatch();
-              }}
-            >
-              Update document {styleLabel} to match
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!canSyncAllDocuments}
-              onSelect={() => {
-                if (!canSyncAllDocuments) return;
-                void onSyncAllDocumentsPresetToMatch();
-              }}
-            >
-              Update ALL documents {styleLabel} to match
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          aria-label="Font size in points"
-          className="h-7"
-          value={fontSizeDraft}
-          onChange={(e) => {
-            const nextDraft = e.target.value;
-            setFontSizeDraft(nextDraft);
-            const parsed = parseValidFontSizeDraft(nextDraft);
-            if (parsed == null) {
-              return;
-            }
-            commitValidFontSizeDebounced(parsed);
-          }}
-        />
-        <Button
-          type="button"
-          variant={fontWeightUi === "bold" ? "secondary" : "outline"}
-          size="icon-sm"
-          className="shrink-0"
-          aria-label="Bold"
-          aria-pressed={fontWeightUi === "bold"}
-          onClick={() => {
-            const next: "normal" | "bold" =
-              fontWeightUi === "bold" ? "normal" : "bold";
-            onFontWeightUiChange(next);
-            pushFormatting({
-              fontWeight: next,
-              fontSizePt: clampTextEditFontSizePt(fontSizePt),
-            });
-          }}
-        >
-          <Bold className="size-4" />
-        </Button>
+              <DropdownMenuItem
+                disabled={!canSyncAllDocuments}
+                onSelect={() => {
+                  if (!canSyncAllDocuments) return;
+                  void onSyncAllDocumentsPresetToMatch();
+                }}
+              >
+                Update ALL documents {styleLabel} to match
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            aria-label="Font size in points"
+            className="h-7 w-12"
+            value={fontSizeDraft}
+            onChange={(e) => {
+              const nextDraft = e.target.value;
+              setFontSizeDraft(nextDraft);
+              const parsed = parseValidFontSizeDraft(nextDraft);
+              if (parsed == null) {
+                return;
+              }
+              commitValidFontSizeDebounced(parsed);
+            }}
+          />
+          <Button
+            type="button"
+            variant={fontWeightUi === "bold" ? "secondary" : "outline"}
+            size="icon-sm"
+            className="shrink-0"
+            aria-label="Bold"
+            aria-pressed={fontWeightUi === "bold"}
+            onClick={() => {
+              const next: "normal" | "bold" =
+                fontWeightUi === "bold" ? "normal" : "bold";
+              onFontWeightUiChange(next);
+              pushFormatting({
+                fontWeight: next,
+                fontSizePt: clampTextEditFontSizePt(fontSizePt),
+              });
+            }}
+          >
+            <Bold className="size-4" />
+          </Button>
+        </div>
+        {/* <div className="w-px h-6 shrink-0 self-center border-l border-border" /> */}
+
+        {/* <div className="flex flex-row items-center gap-1"></div> */}
       </div>
-      <div className="w-px h-6 border-l border-border" />
-      <div className="flex flex-row items-center gap-1">
+      <div className="flex flex-row items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-1 shadow-md">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -241,8 +255,9 @@ export function EditTextToolbar({
               className="min-w-28 shrink-0 justify-between gap-1 font-normal"
               aria-label="Text alignment"
             >
+              <AlignTriggerIcon className="size-4 shrink-0 opacity-70" />
               <span className="truncate">{alignLabel}</span>
-              <ChevronDown className="size-3.5 opacity-60" />
+              <ChevronDown className="size-3.5 shrink-0 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-40">
@@ -260,6 +275,47 @@ export function EditTextToolbar({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        {contentPresetVariants.length > 0 || contentPresetVariantsLoading ? (
+          <div className="min-w-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={contentPresetVariantsLoading}
+                  className="h-7 w-full justify-between gap-2 py-1.5 font-normal"
+                  aria-label="Text content presets"
+                >
+                  <span className="min-w-0 whitespace-normal text-left">
+                    {contentPresetVariantsLoading ? "Preset…" : "Preset"}
+                  </span>
+                  <ChevronDown className="size-3.5 shrink-0 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-md overflow-x-visible! overflow-y-auto"
+              >
+                {contentPresetVariantsLoading &&
+                contentPresetVariants.length === 0 ? (
+                  <DropdownMenuItem disabled>Loading…</DropdownMenuItem>
+                ) : null}
+                {contentPresetVariants.map((variant) => (
+                  <DropdownMenuItem
+                    key={variant}
+                    className="h-auto min-h-8 max-w-none items-start whitespace-pre-wrap wrap-break-word py-2"
+                    onSelect={() => {
+                      onContentPresetSelect(variant);
+                    }}
+                  >
+                    {variant}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : null}
       </div>
     </div>
   );

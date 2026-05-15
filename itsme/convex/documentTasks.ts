@@ -43,9 +43,7 @@ export const blockDataValidator = v.union(
     align: textAlign,
     style: textStyle,
     fontSize: v.optional(v.float64()),
-    fontWeight: v.optional(
-      v.union(v.literal("normal"), v.literal("bold"))
-    ),
+    fontWeight: v.optional(v.union(v.literal("normal"), v.literal("bold"))),
     ref: v.optional(v.id("blocks")),
   }),
   v.object({
@@ -82,9 +80,7 @@ const blockDataWithClientIdsValidator = v.union(
     align: textAlign,
     style: textStyle,
     fontSize: v.optional(v.float64()),
-    fontWeight: v.optional(
-      v.union(v.literal("normal"), v.literal("bold"))
-    ),
+    fontWeight: v.optional(v.union(v.literal("normal"), v.literal("bold"))),
     ref: v.optional(blockIdLike),
   }),
   v.object({
@@ -287,6 +283,23 @@ function mapBlockDataIds(args: {
   };
 }
 
+/**
+ * Like `mapBlockDataIds`, but for document duplication: when the source **text**
+ * block had no `ref`, the copy sets `ref` to the **source** block's id (`oldBlockId`)
+ * so variants stay tied to the original row across documents.
+ */
+function mapBlockDataForDuplicate(args: {
+  oldBlockId: Id<"blocks">;
+  data: (typeof blockDataValidator)["type"];
+  idMap: Map<Id<"blocks">, Id<"blocks">>;
+}): (typeof blockDataValidator)["type"] {
+  const mapped = mapBlockDataIds({ data: args.data, idMap: args.idMap });
+  // if (mapped.type !== "text") return mapped;
+  // const orig = args.data;
+  // if (orig.type !== "text" || orig.ref !== undefined) return mapped;
+  return { ...mapped, ref: args.data.ref ?? args.oldBlockId };
+}
+
 type StyleSheet = z.infer<typeof StyleSheetSchema>;
 
 /** Maps a Convex block row to the client `Block` union (same shape as `mapBlocks` in `blocks/retriever.ts`). */
@@ -428,6 +441,81 @@ export const getDocumentBlocks = query({
       layout: [...document.layout],
       blocks,
     };
+  },
+});
+
+/**
+ * Text blocks whose `ref` points at the same anchor (`_id`) share a content-variant group.
+ * Loads all blocks in the document's project, then returns distinct `text` values for that group.
+ */
+export const getTextBlockContentVariants = query({
+  args: {
+    documentId: v.id("documents"),
+    blockId: v.id("blocks"),
+  },
+  handler: async (ctx, args) => {
+    await requireIdentity(ctx);
+
+    const row = await ctx.db.get(args.blockId);
+    if (!row || row.documentId !== args.documentId) {
+      return { variants: [] as string[] };
+    }
+
+    const d = row.data;
+    if (d.type !== "text") {
+      return { variants: [] as string[] };
+    }
+
+    const documentRecord = await ctx.db.get(args.documentId);
+    if (!documentRecord) {
+      return { variants: [] as string[] };
+    }
+
+    const projectDocuments = await ctx.db
+      .query("documents")
+      .withIndex("by_projectId", (q) =>
+        q.eq("projectId", documentRecord.projectId)
+      )
+      .collect();
+
+    const blockRows = (
+      await Promise.all(
+        projectDocuments.map((doc) =>
+          ctx.db
+            .query("blocks")
+            .withIndex("by_documentId", (q) => q.eq("documentId", doc._id))
+            .collect()
+        )
+      )
+    ).flat();
+
+    const currentBlock = blockRows.find((b) => b._id === args.blockId);
+    if (!currentBlock || currentBlock.data.type !== "text") {
+      return { variants: [] as string[] };
+    }
+
+    const texts: string[] = [];
+    for (const b of blockRows) {
+      const data = b.data;
+      if (data.type !== "text") continue;
+      if (
+        !(
+          currentBlock.data.ref === b._id ||
+          (b.data.ref !== undefined && b.data.ref === currentBlock.data.ref) ||
+          currentBlock._id === b.data.ref
+        )
+      )
+        continue;
+      texts.push(data.text);
+    }
+
+    const variants = new Set<string>();
+    for (const t of texts) {
+      variants.add(t);
+    }
+    variants.delete(currentBlock.data.text);
+
+    return { variants: Array.from(variants) };
   },
 });
 
@@ -665,7 +753,8 @@ export const duplicateDocument = mutation({
       const originalData = originalDataByOldId.get(oldId);
       if (!originalData) continue;
       await ctx.db.patch(newId, {
-        data: mapBlockDataIds({
+        data: mapBlockDataForDuplicate({
+          oldBlockId: oldId,
           data: originalData,
           idMap: newIdByOldId,
         }),
@@ -1038,7 +1127,9 @@ export const updateDocumentTextStyles = mutation({
         )
         .first();
       if (!row) {
-        throw new Error(`Missing documentTextStyles row for style '${p.style}'.`);
+        throw new Error(
+          `Missing documentTextStyles row for style '${p.style}'.`
+        );
       }
       const patch: { fontSize?: number; fontWeight?: "normal" | "bold" } = {};
       if (p.fontSize !== undefined) patch.fontSize = p.fontSize;
