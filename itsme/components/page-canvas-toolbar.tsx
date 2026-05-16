@@ -1,4 +1,8 @@
+"use client";
+
+import { useDocument } from "@/blocks/document-context";
 import { ListBulletIcon, TextIcon } from "@radix-ui/react-icons";
+import { Loader2 } from "lucide-react";
 import { FavIcon } from "./icon/favicon";
 import { Button } from "./ui/button";
 
@@ -9,6 +13,8 @@ export function PageCanvasToolbar(props: {
   isDownloading?: boolean;
 }) {
   const { onToggleAddText, onToggleAddList, onDownload, isDownloading } = props;
+  const { isSaving } = useDocument();
+
   return (
     <div className="w-full flex flex-row justify-between items-center sticky top-0 z-10 bg-background border-b p-2">
       <div className="flex-1 flex flex-row gap-1.5 items-center px-2">
@@ -16,6 +22,12 @@ export function PageCanvasToolbar(props: {
           <FavIcon />
         </div>
         <p className="font-extrabold">ITSME</p>
+        {isSaving ? (
+          <div className="flex flex-row items-center gap-1.5 text-muted-foreground text-sm ml-1">
+            <Loader2 className="size-3.5 animate-spin" />
+            <span>Saving…</span>
+          </div>
+        ) : null}
       </div>
       <div className="flex-1 flex flex-row gap-2 items-center justify-center">
         <Button variant="outline" type="button" onClick={onToggleAddText}>
@@ -33,11 +45,7 @@ export function PageCanvasToolbar(props: {
       </div>
       <div className="flex-1 flex flex-row gap-1 justify-end">
         <Button variant="outline">Refine</Button>
-        <Button
-          type="button"
-          onClick={onDownload}
-          disabled={isDownloading}
-        >
+        <Button type="button" onClick={onDownload} disabled={isDownloading}>
           {isDownloading ? "Exporting…" : "Download"}
         </Button>
       </div>

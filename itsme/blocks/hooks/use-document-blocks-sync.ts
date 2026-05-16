@@ -39,6 +39,7 @@ export function useDocumentBlocksSync(args: {
 
   const [modifiedBlocks, setModifiedBlocks] =
     useState<DocumentBlocksSnapshot | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const modifiedBlocksRef = useRef<DocumentBlocksSnapshot | null>(null);
   const blocksQueryRawRef = useRef<BlocksQueryData | null>(null);
   const commitTimerRef = useRef<ReturnType<
@@ -58,12 +59,22 @@ export function useDocumentBlocksSync(args: {
     }
   }, [blocksQueryData]);
 
+  const refreshIsSaving = useCallback(() => {
+    setIsSaving(
+      modifiedBlocksRef.current !== null ||
+        commitTimerRef.current !== null ||
+        inFlightCommitRef.current !== null ||
+        pendingCommitRef.current
+    );
+  }, []);
+
   const setModifiedBlocksState = useCallback(
     (next: DocumentBlocksSnapshot | null) => {
       modifiedBlocksRef.current = next;
       setModifiedBlocks(next);
+      refreshIsSaving();
     },
-    []
+    [refreshIsSaving]
   );
 
   const commitModifiedBlocksRef = useRef<(() => void) | null>(null);
@@ -77,6 +88,7 @@ export function useDocumentBlocksSync(args: {
 
     if (inFlightCommitRef.current) {
       pendingCommitRef.current = true;
+      refreshIsSaving();
       return;
     }
 
@@ -151,14 +163,18 @@ export function useDocumentBlocksSync(args: {
         if (pendingCommitRef.current) {
           pendingCommitRef.current = false;
           commitModifiedBlocksRef.current?.();
+        } else {
+          refreshIsSaving();
         }
       });
     inFlightCommitRef.current = promise;
+    refreshIsSaving();
 
     setModifiedBlocksState(null);
   }, [
     convexDocumentId,
     documentStore,
+    refreshIsSaving,
     setModifiedBlocksState,
     updateDocumentBlocksMutation,
   ]);
@@ -173,9 +189,11 @@ export function useDocumentBlocksSync(args: {
     }
     commitTimerRef.current = globalThis.setTimeout(() => {
       commitTimerRef.current = null;
+      refreshIsSaving();
       commitModifiedBlocks();
     }, 1000);
-  }, [commitModifiedBlocks]);
+    refreshIsSaving();
+  }, [commitModifiedBlocks, refreshIsSaving]);
 
   const applyBlocksTransform = useCallback(
     (
@@ -259,5 +277,5 @@ export function useDocumentBlocksSync(args: {
     };
   }, []);
 
-  return { modifiedBlocks, updateBlocks };
+  return { modifiedBlocks, updateBlocks, isSaving };
 }

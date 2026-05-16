@@ -35,6 +35,7 @@ import {
 import { documentBlocksSnapshotToDocument } from "./core/persistence/snapshot";
 import type { DocumentBlocksSnapshot } from "./core/persistence/snapshot";
 import { useDocumentBlocksSync } from "./hooks/use-document-blocks-sync";
+import { useDocumentSaveGuard } from "./hooks/use-document-save-guard";
 import { useDocumentKeyboardShortcuts } from "./hooks/use-document-keyboard-shortcuts";
 import { useDocumentRenderModel } from "./hooks/use-document-render-model";
 import { useDocumentTextPresets } from "./hooks/use-document-text-presets";
@@ -83,6 +84,7 @@ type DocumentContextValue = {
   syncProjectTextPresetToMatch: ReturnType<
     typeof useDocumentTextPresets
   >["syncProjectTextPresetToMatch"];
+  isSaving: boolean;
   dpi: number;
 };
 
@@ -151,7 +153,7 @@ export function DocumentStoresProvider({
     [convexProjectId, documentId]
   );
 
-  const { modifiedBlocks, updateBlocks } = useDocumentBlocksSync({
+  const { modifiedBlocks, updateBlocks, isSaving } = useDocumentBlocksSync({
     documentStore,
     convexDocumentId,
     projDocId,
@@ -204,6 +206,8 @@ export function DocumentStoresProvider({
     projDocId,
   });
 
+  useDocumentSaveGuard(isSaving);
+
   const value = useMemo<DocumentContextValue>(
     () => ({
       blocks: rendered.rendered,
@@ -216,6 +220,7 @@ export function DocumentStoresProvider({
       updateBlocks,
       syncDocumentTextPresetToMatch,
       syncProjectTextPresetToMatch,
+      isSaving,
       dpi,
     }),
     [
@@ -229,6 +234,7 @@ export function DocumentStoresProvider({
       updateBlocks,
       syncDocumentTextPresetToMatch,
       syncProjectTextPresetToMatch,
+      isSaving,
     ]
   );
 
