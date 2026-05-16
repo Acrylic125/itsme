@@ -1,0 +1,3941 @@
+{
+  "type": "marked",
+  "pages": [
+    {
+      "view": [0, 0, 612, 792],
+      "textItems": [
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H1"
+        },
+        {
+          "str": "BENEDICT TAN",
+          "dir": "ltr",
+          "width": 114.67767353108363,
+          "height": 16.0000005,
+          "transform": [
+            16.0000005, 0, 0, 16.0000005, 248.662577, 744.6624984325
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 93.4074485, 728.172267985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "benedictjyss69@gmail.com | 9139 2600 | LinkedIn benedict-tan-265403215 | Github Acrylic125",
+          "dir": "ltr",
+          "width": 425.18899439999956,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 93.4074485, 728.172267985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H1"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [12, 0, 0, 12, 32.400002, 712.692413],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Education",
+          "dir": "ltr",
+          "width": 52.68164051999999,
+          "height": 12,
+          "transform": [12, 0, 0, 12, 32.400002, 712.692413],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 699.827178985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Nanyang Technological University | Bachelor’s of Computing | cGPA 4.53 | Nanyang Scholar",
+          "dir": "ltr",
+          "width": 412.16525404325176,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 699.827178985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 41.04935794233082,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 444.5652560432519, 699.827178985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Aug 2024 - Dec 2027",
+          "dir": "ltr",
+          "width": 95.25161887499961,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 475.3522745, 699.827178985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H1"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [12, 0, 0, 12, 32.400002, 674.3473205],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Work Experiences",
+          "dir": "ltr",
+          "width": 94.32421932000001,
+          "height": 12,
+          "transform": [12, 0, 0, 12, 32.400002, 674.3473205],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H2"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 661.4820709850001
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Software Engineer Contractor | LimboLabs (Stealth Startup)",
+          "dir": "ltr",
+          "width": 286.7815624932519,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 661.4820709850001
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 210.66077334233083,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 319.1815644932519, 661.4820709850001
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Mar 2025 - Sep 2025",
+          "dir": "ltr",
+          "width": 93.42674887499976,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 477.17714450000005,
+            661.4820709850001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 648.7848051075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 648.7848051075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 648.7848051075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Designed webhook based data ingestion pipeline for token events, using Golang as the ingestion service, storing in",
+          "dir": "ltr",
+          "width": 504.9252929249998,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 648.7848051075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "SQL database, handling 20,000 swap events / day.",
+          "dir": "ltr",
+          "width": 220.91865761250006,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 634.2312904575
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 619.6366881075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 619.6366881075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 619.6366881075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Reconciled missing token events by developing a data reconciliation algorithm, ensuring data consistency across the",
+          "dir": "ltr",
+          "width": 511.9130409209626,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 619.6366881075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "platform after service interruptions.",
+          "dir": "ltr",
+          "width": 156.2756503875,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 605.0831734575
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 590.4885691075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 590.4885691075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 590.4885691075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Collaborated with design and frontend teams to integrate functionalities with backend APIs, enabling seamless end",
+          "dir": "ltr",
+          "width": 505.8216416249997,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 590.4885691075001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "to end integration of features.",
+          "dir": "ltr",
+          "width": 129.72372086249987,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 575.9350544575001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 561.3404591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 561.3404591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 561.3404591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Conducted tradeoff analysis between managed providers (Alchemy, Codex) and self managed solutions such as",
+          "dir": "ltr",
+          "width": 489.9329996072905,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 561.3404591075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "managing data pipelines with Kafka, resulting in a resilient and cost effective ingestion framework.",
+          "dir": "ltr",
+          "width": 436.6031200874995,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 546.7869617074999
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H2"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 517.6944289850001
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Container Stack (CStack) Internship | GovTech",
+          "dir": "ltr",
+          "width": 222.79402242903805,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 517.6944289850001
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 292.7213334279492,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 255.19402442903808,
+            517.6944289850001
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Apr 2023 - May 2024",
+          "dir": "ltr",
+          "width": 95.86886887500013,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 474.7350245, 517.6944289850001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 504.99715910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 504.99715910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            504.99715910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Streamlined tenant cluster resource management by building a web based platform using ReactJS, HTML, and CSS,",
+          "dir": "ltr",
+          "width": 511.63246241250033,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 504.99715910749995
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "and Go, simplifying cluster management interfacing.",
+          "dir": "ltr",
+          "width": 232.29779028749982,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 490.4436332075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 475.8490291075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 475.8490291075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 475.8490291075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Automated infrastructure provisioning using Python scripts, and GitLab CI/CD pipelines, reducing workflow steps",
+          "dir": "ltr",
+          "width": 504.95666195728995,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 475.8490291075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "from 5 to 3.",
+          "dir": "ltr",
+          "width": 51.903541312500025,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 461.2955032075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 446.7008991075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 446.7008991075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 446.7008991075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Collaborated with internal and external teams to manage orchestration pipelines and deploy the web interface on a",
+          "dir": "ltr",
+          "width": 502.40762687096196,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 446.7008991075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Serverless platform, simplifying deployment.",
+          "dir": "ltr",
+          "width": 199.3534337625,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 432.1474017075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 417.5527991075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 417.5527991075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 417.5527991075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Built proof of concepts (POC) to do system wide testing on isolated tenant clusters, and monitored logs, traces, and",
+          "dir": "ltr",
+          "width": 507.07760662500004,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 417.5527991075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "golden metrics using Prometheus and Grafana, verifying system resilience.",
+          "dir": "ltr",
+          "width": 329.67632418749986,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 402.99927320750004
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 388.4046591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 388.4046591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 388.4046591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Delivered an internship engagement talk to 100+ peers, sharing on personal growth and achievements, translating to",
+          "dir": "ltr",
+          "width": 510.78100792500004,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 388.4046591075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "internship success.",
+          "dir": "ltr",
+          "width": 82.42725738750002,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 373.8511332075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H1"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [12, 0, 0, 12, 32.400002, 348.3712745],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Personal Projects",
+          "dir": "ltr",
+          "width": 89.41406257500002,
+          "height": 12,
+          "transform": [12, 0, 0, 12, 32.400002, 348.3712745],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H2"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 335.50603898500003
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "FStars | Course Planner and Vacant Classroom Finder Web App",
+          "dir": "ltr",
+          "width": 302.594154954038,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 335.50603898500003
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 208.7062867279492,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 334.9941569540381,
+            335.50603898500003
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Jul 2025 - Present",
+          "dir": "ltr",
+          "width": 79.07829102445783,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 491.523872, 335.50603898500003
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 320.9114391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 320.9114391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 320.9114391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Devised genetic algorithm to factor personal constraints, achieving a satisfiable baseline timetable within the first",
+          "dir": "ltr",
+          "width": 499.0732087994585,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 320.9114391075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "showcased result, among trial users.",
+          "dir": "ltr",
+          "width": 158.73923006249998,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 306.3579702075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 291.76336910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 291.76336910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            291.76336910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Engaged users through LinkedIn and Reddit, capturing 1,200+ unique visitors and facilitated the generation of 200+",
+          "dir": "ltr",
+          "width": 510.89423963099125,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 291.76336910749995
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "academic timetables within the first 4 months.",
+          "dir": "ltr",
+          "width": 203.00317998750006,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 277.2098087075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 262.61523910750003
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 262.61523910750003
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            262.61523910750003
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Designed a backend using NextJS, Redis caching, and SQL, reducing shared common database resources (e,g,",
+          "dir": "ltr",
+          "width": 485.65483308750083,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 262.61523910750003
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Courses and Indexes) by 80%, and reducing response time to ~1.5s.",
+          "dir": "ltr",
+          "width": 298.0952725125,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 248.06171320750005
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 233.46709910750005
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 233.46709910750005
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            233.46709910750005
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Automated large-scale data collection and processing of 1,139 courses, 23,067 time slots and 10,030 locations across",
+          "dir": "ltr",
+          "width": 514.7786257322897,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 233.46709910750005
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "10 data sources using Python, enabling timetable generation and planning.",
+          "dir": "ltr",
+          "width": 326.9444104875001,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 218.91357320750004
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 204.3189691075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 204.3189691075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 204.3189691075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Annotated and mapped 9,415 alternative location names to create a unified search index, resolving data",
+          "dir": "ltr",
+          "width": 454.789124495962,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 204.3189691075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "fragmentation across 5 scraped sources, significantly simplifying the campus navigation UX.",
+          "dir": "ltr",
+          "width": 409.05307196249976,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 189.7654432075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 175.17083910749997
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 175.17083910749997
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            175.17083910749997
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Designed vacant classroom finder using a consolidated table, providing a simplified overview of classrooms not in",
+          "dir": "ltr",
+          "width": 504.3026879249999,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 175.17083910749997
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "use for classes, redirecting students away from populated areas.",
+          "dir": "ltr",
+          "width": 279.59425331250014,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 160.61737020749996
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 146.0227691075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 146.0227691075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 146.0227691075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Prototyped wireframes using Figma for a high level overview of user flow, enabling rapid design iteration.",
+          "dir": "ltr",
+          "width": 468.4736773124997,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 146.0227691075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H2"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 116.92296892499999
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "FNTU | CLI Scraper and API Provider for NTU data",
+          "dir": "ltr",
+          "width": 249.8398775250002,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 116.92296892499999
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 279.0453233,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 282.239879525, 116.92296892499999
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Jul 2025 - Present",
+          "dir": "ltr",
+          "width": 79.07829102445783,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 491.523872, 116.92296892499999
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 102.32836910750004
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 102.32836910750004
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            102.32836910750004
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Automated large-scale data collection and processing of 1,139 courses, 23,067 time slots and 10,030 locations across",
+          "dir": "ltr",
+          "width": 514.7786257322897,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 102.32836910750004
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "10 data sources, enabling timetable generation and planning.",
+          "dir": "ltr",
+          "width": 266.4766204875002,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 87.77484320750003
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 73.1802391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 73.1802391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 73.1802391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Annotated 9,415 alternative names for locations on campus to link similarly named places across 5 location scraped",
+          "dir": "ltr",
+          "width": 509.46603757499986,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 73.1802391075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "sources, simplifying location search for users.",
+          "dir": "ltr",
+          "width": 201.77944256249998,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 58.626713207499996
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        }
+      ]
+    },
+    {
+      "view": [0, 0, 612, 792],
+      "textItems": [
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 749.2821661075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 749.2821661075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Architected playground API using serverless Cloudflare Workers, and caching using Workers KV, handling 1,000+",
+          "dir": "ltr",
+          "width": 506.09363025599185,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 749.2821661075001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "requests in a day.",
+          "dir": "ltr",
+          "width": 75.59957478750002,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 734.728576985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H2"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 710.18231225
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Weyes | Bus Number Magnifier Mobile App",
+          "dir": "ltr",
+          "width": 205.7746409790381,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 710.18231225
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 332.10964202794923,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 238.17464297903805, 710.18231225
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Apr 2024 - Present",
+          "dir": "ltr",
+          "width": 83.34528852445793,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 487.2568745, 710.18231225
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 697.4851081075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 697.4851081075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 697.4851081075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Designed accessibility-first UI, factoring in phone movements and hand placements for magnification controls,",
+          "dir": "ltr",
+          "width": 489.01476761250007,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 697.4851081075001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "enabling ease of use for the visually impaired.",
+          "dir": "ltr",
+          "width": 202.68114678750015,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 682.9316409850001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 668.3370361075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 668.3370361075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 668.3370361075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Wrote a Medium blog about the design considerations I took in, achieving 50 reads.",
+          "dir": "ltr",
+          "width": 368.6263615124998,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 668.3370361075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 653.7351081075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 653.7351081075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 653.7351081075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Orchestrated data collection efforts with peers to collect 100+ images across Singapore, creating different",
+          "dir": "ltr",
+          "width": 464.24471884945814,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 653.7351081075001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "environment, enabling AI model training,",
+          "dir": "ltr",
+          "width": 183.1603476374999,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 639.181579985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 624.5869751075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 624.5869751075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 624.5869751075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Augmented 100+ original images, generated and labelled 1,300+ images, creating variability in environment, to",
+          "dir": "ltr",
+          "width": 491.94723292500015,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 624.5869751075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "reduce risk of model overfitting.",
+          "dir": "ltr",
+          "width": 142.5515177625,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 610.033448985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 595.4388391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 595.4388391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 595.4388391075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Deployed trained computer vision model on mobile devices using CoreML, factoring in model size, achieving 10",
+          "dir": "ltr",
+          "width": 498.50066887499986,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 595.4388391075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "inference / second, allowing for live detection.",
+          "dir": "ltr",
+          "width": 204.50064011250007,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 580.885378985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 566.2907691075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 566.2907691075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 566.2907691075001
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Trained and tuned hyperparameters for computer vision model (YOLOv11) , achieving precision of 80%, and recall",
+          "dir": "ltr",
+          "width": 509.2544239994577,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 566.2907691075001
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "of 72%.",
+          "dir": "ltr",
+          "width": 34.803390637499966,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 551.737308985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H2"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 527.1910392499999
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "SMEX | Marketplace to Facilitate Materials Exchange Web App",
+          "dir": "ltr",
+          "width": 301.61280245403805,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 527.1910392499999
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 205.54203672794938,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 334.012804454038, 527.1910392499999
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Aug 2023- Present",
+          "dir": "ltr",
+          "width": 82.43283102445824,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 488.16933200000005,
+            527.1910392499999
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 514.4936491075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 514.4936491075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 514.4936491075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Led the technical development in a team of 25, providing guidance on technical development, improving individual",
+          "dir": "ltr",
+          "width": 508.85242062445815,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 514.4936491075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "competency and improving cross functional team workflows.",
+          "dir": "ltr",
+          "width": 269.54670461249975,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 499.940188985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 485.3455791075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 485.3455791075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 485.3455791075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Delivered product demo, showcasing use cases, securing interest from 50 industry members and successfully",
+          "dir": "ltr",
+          "width": 479.5649117999995,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 485.3455791075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "onboarded the first 20 companies to the platform.",
+          "dir": "ltr",
+          "width": 217.3445494125002,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 470.791988985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 456.1973891075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 456.1973891075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 456.1973891075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Designed table based UI, catering to SIWMA members, who mostly had past experiences with Excel, receiving",
+          "dir": "ltr",
+          "width": 490.8415970250007,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 456.1973891075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "feedback on the ease of use.",
+          "dir": "ltr",
+          "width": 123.29908758750013,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 441.643918985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 427.04931910749997
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 427.04931910749997
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            427.04931910749997
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Architected infrastructure by evaluating usage metrics, moving away from AWS to CloudFlare and external services,",
+          "dir": "ltr",
+          "width": 514.9756477125003,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 427.04931910749997
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "reducing monthly costs from $45 to $5.",
+          "dir": "ltr",
+          "width": 173.71931006250003,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 412.495848985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 397.90124910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 397.90124910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            397.90124910749995
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Implemented invite, authentication, and image upload flows using SQL, AWS SES/Resend, S3/R2 Storage,",
+          "dir": "ltr",
+          "width": 472.63854783750025,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 397.90124910749995
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "successfully onboarding 50 users.",
+          "dir": "ltr",
+          "width": 148.36964831249998,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 383.347658985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H2"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 358.80150925
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Reshito | Telling Stories using Receipts Mobile App",
+          "dir": "ltr",
+          "width": 239.282282454038,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 358.80150925
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 286.63127672794917,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 271.68228445403804, 358.80150925
+          ],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Dec 2025 - Present",
+          "dir": "ltr",
+          "width": 83.9464210244579,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 486.6557419999999, 358.80150925
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 346.1041291075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 346.1041291075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 346.1041291075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Implemented cross-platform mobile app using React Native and TypeScript, enabling high code reuse between IOS",
+          "dir": "ltr",
+          "width": 507.47464197903804,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 346.1041291075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "and Android platforms.",
+          "dir": "ltr",
+          "width": 102.88195811250012,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 331.55065898500004
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 316.9560591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 316.9560591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 316.9560591075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Optimised application by leveraging virtualisation, memoisation, and lazy model loading, maintaining a smooth",
+          "dir": "ltr",
+          "width": 492.4141977750001,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 316.9560591075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "60fps and reduced memory usage.",
+          "dir": "ltr",
+          "width": 150.48435573749992,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 302.402588985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 287.8079791075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 287.8079791075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 287.8079791075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Collaborated with peers to collect 200+ receipts, and sourced 500+ from online datasets, enabling model fine tuning,",
+          "dir": "ltr",
+          "width": 513.3231206625011,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 287.8079791075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "and minimising overfitting risks.",
+          "dir": "ltr",
+          "width": 144.11339568750003,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 273.254398985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 258.6599091075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 258.6599091075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098, 258.6599091075
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Automated distillation pipeline for text extraction using Python to do Optical Character Recognition (OCR) and",
+          "dir": "ltr",
+          "width": 492.108229125,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 258.6599091075
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "distilled using Large Language Model (LLM) to annotate 700+ receipts, reducing data processing to 2 hours.",
+          "dir": "ltr",
+          "width": 478.8436285125007,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 244.10619898499996
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 229.51171910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 229.51171910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            229.51171910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Evaluated Receipt Parsing methods, including image segmentation + Named Entity Recognition (NER) to do",
+          "dir": "ltr",
+          "width": 480.6008313750003,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 229.51171910750006
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "item-price groupings, deciding on OCR + small LLM parsing for ~3 second inference.",
+          "dir": "ltr",
+          "width": 380.29511831250056,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 214.958128985
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 200.36352910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 200.36352910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            200.36352910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Optimised LLM by quantizing to 8bit, reducing model inference from ~8 seconds to 3 seconds.",
+          "dir": "ltr",
+          "width": 419.28844001249985,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 200.36352910750006
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 185.76171910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 185.76171910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            185.76171910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Converted fine-tuned LLM Huggingface model to GGUF, allowing for model use on mobile devices.",
+          "dir": "ltr",
+          "width": 445.12050183750046,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 185.76171910750006
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "LI"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 171.15990910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": true,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "●",
+          "dir": "ltr",
+          "width": 6.644043161000978,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 41.400002, 171.15990910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 9.141275785332027,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 48.04404516100098,
+            171.15990910750006
+          ],
+          "fontName": "g_d6_f3",
+          "hasEOL": false,
+          "font": "sans-serif",
+          "type": "text"
+        },
+        {
+          "str": "Tuned inference parameters, increasing model temperature and repeat penalty, reducing risk of model repetition.",
+          "dir": "ltr",
+          "width": 493.9518409875003,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 54.900002, 171.15990910750006
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "H1"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [12, 0, 0, 12, 32.400002, 141.12646500000005],
+          "fontName": "g_d6_f2",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Achievements",
+          "dir": "ltr",
+          "width": 71.3144532,
+          "height": 12,
+          "transform": [12, 0, 0, 12, 32.400002, 141.12646500000005],
+          "fontName": "g_d6_f2",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 128.26122898499997
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Built CareerSphere, achieved 4th out of 118 teams in TechFest",
+          "dir": "ltr",
+          "width": 275.38571322445813,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 128.26122898499997
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 333.1065290340559,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 307.78571522445804,
+            128.26122898499997
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "2026",
+          "dir": "ltr",
+          "width": 21.988281374999875,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 557.6156119999999,
+            128.26122898499997
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 113.71508894749995
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Diploma with Merit and Singapore Computing Society (SCS) 2024 Silver Medalist",
+          "dir": "ltr",
+          "width": 366.3833870744578,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 113.71508894749995
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 211.77629723405576,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 398.7833890744581,
+            113.71508894749995
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "2024",
+          "dir": "ltr",
+          "width": 21.988281374999875,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 557.6156119999999,
+            113.71508894749995
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 99.16869898499998
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Participated in CloudHacks 2024, achieving funniest hack",
+          "dir": "ltr",
+          "width": 255.50785724999992,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 99.16869898499998
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 359.6103369999999,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 287.90785925, 99.16869898499998
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "2024",
+          "dir": "ltr",
+          "width": 21.988281374999875,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 557.6156119999999, 99.16869898499998
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "P"
+        },
+        {
+          "str": "",
+          "dir": "ltr",
+          "width": 0,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 84.62255894750005
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": true,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "Orchestrated a 75+ students react workshop, improving basic web development competency in SP SOC",
+          "dir": "ltr",
+          "width": 456.1756612067479,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 32.400002, 84.62255894750005
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "beginMarkedContentProps",
+          "tag": "SPAN"
+        },
+        {
+          "type": "startMarkedContent"
+        },
+        {
+          "str": " ",
+          "dir": "ltr",
+          "width": 92.05326505766925,
+          "height": 0,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 488.575663206748, 84.62255894750005
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "str": "2022",
+          "dir": "ltr",
+          "width": 21.988281374999875,
+          "height": 11.00000025,
+          "transform": [
+            11.00000025, 0, 0, 11.00000025, 557.6156119999999, 84.62255894750005
+          ],
+          "fontName": "g_d6_f1",
+          "hasEOL": false,
+          "font": "serif",
+          "type": "text"
+        },
+        {
+          "type": "startMarkedContent"
+        }
+      ]
+    }
+  ]
+}

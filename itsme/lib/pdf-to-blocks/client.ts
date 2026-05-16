@@ -48,6 +48,12 @@ export async function ensurePdfWorkerLoaded() {
   workerInitialized = true;
 }
 
+type PdfTextStyles = Record<string, { fontFamily?: string } | undefined>;
+
+function resolveFontName(fontName: string, styles: PdfTextStyles): string {
+  return styles[fontName]?.fontFamily ?? fontName;
+}
+
 function normalizeMarkedTag(rawTag: unknown): MarkedTag {
   let candidate: unknown = rawTag;
   if (
@@ -99,12 +105,11 @@ export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
       pageNumber += 1
     ) {
       const page = await pdfDocument.getPage(pageNumber);
-      await page.getOperatorList();
       const markedContent = await page.getTextContent({
         includeMarkedContent: true,
       });
+      const styles = markedContent.styles as PdfTextStyles;
       const textItems: PdfMarkedItem[] = [];
-      console.log(markedContent.items);
       for (const rawItem of markedContent.items as unknown[]) {
         if (
           typeof rawItem === "object" &&
@@ -113,12 +118,9 @@ export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
           "fontName" in rawItem
         ) {
           const textItem = PDFTextItemSchema.parse(rawItem);
-          const fontObj = page.commonObjs.get(textItem.fontName) as
-            | { name?: string }
-            | undefined;
           textItems.push({
             ...textItem,
-            font: fontObj?.name ?? textItem.fontName,
+            font: resolveFontName(textItem.fontName, styles),
             type: "text",
           });
           continue;
@@ -127,7 +129,8 @@ export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
           typeof rawItem === "object" &&
           rawItem !== null &&
           "type" in rawItem &&
-          rawItem.type === "beginMarkedContentProps"
+          (rawItem.type === "beginMarkedContentProps" ||
+            rawItem.type === "beginMarkedContent")
         ) {
           textItems.push(
             PDFEndMarkedContentSchema.parse({
@@ -169,16 +172,12 @@ export async function parsePdf(file: File): Promise<CreateProjectFromPdfInput> {
   ) {
     const page = await pdfDocument.getPage(pageNumber);
     const textContent = await page.getTextContent();
+    const styles = textContent.styles as PdfTextStyles;
     const items = PDFTextItemSchema.array().parse(textContent.items);
-    const textItems = items.map((item) => {
-      const fontObj = page.commonObjs.get(item.fontName) as
-        | { name?: string }
-        | undefined;
-      return {
-        ...item,
-        font: fontObj?.name ?? item.fontName,
-      };
-    });
+    const textItems = items.map((item) => ({
+      ...item,
+      font: resolveFontName(item.fontName, styles),
+    }));
     pages.push({
       view: PageViewSchema.parse(page.view),
       textItems,

@@ -39,6 +39,12 @@ import { Html } from "react-konva-utils";
 import { useDebouncedCallback } from "use-debounce";
 import { caretOffsetFromLocalPoint } from "./caret-from-pointer";
 import { EditTextToolbar, clampTextEditFontSizePt } from "./edit-text-toolbar";
+import type { PdfDrawSurface } from "../pdf/pdf-draw-context-types";
+import type {
+  BlockRenderLayoutResult,
+  BlockRendererContext,
+} from "../renderer-types";
+import { mapTextStyleToPdfTag } from "../pdf/types";
 
 /** Shown only when `block.text` is empty; not persisted and not used as edit initial value. */
 const EMPTY_TEXT_DISPLAY = "Click to set text";
@@ -750,6 +756,36 @@ function TextBlockComponent({
   );
 }
 
+function renderTextBlockPdf(
+  block: z.infer<typeof TextBlockSchema>,
+  ctx: BlockRendererContext,
+  pdf: PdfDrawSurface,
+  layout: BlockRenderLayoutResult
+) {
+  if (block.text === "") {
+    return;
+  }
+
+  const sheetStyle = ctx.styleSheet.text[block.style];
+  const style = {
+    ...sheetStyle,
+    ...(block.fontSize != null
+      ? { fontSize: clampTextEditFontSizePt(block.fontSize) }
+      : {}),
+    ...(block.fontWeight != null ? { fontWeight: block.fontWeight } : {}),
+  };
+
+  pdf.drawWrappedText({
+    xPx: layout.estimatedDimensions.x,
+    yPx: layout.estimatedDimensions.y,
+    widthPx: layout.estimatedDimensions.width,
+    text: block.text,
+    style,
+    align: block.align,
+    tag: pdf.shouldApplyTextMark() ? mapTextStyleToPdfTag(block.style) : null,
+  });
+}
+
 export const TextBlockRenderer: BlockRenderer<"text"> = {
   type: "text",
   render: (block, relativeTo, ctx) => {
@@ -820,4 +856,5 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
       ),
     };
   },
+  renderPdf: renderTextBlockPdf,
 };

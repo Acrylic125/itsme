@@ -11,9 +11,15 @@ import {
   REORDER_BOUNDING_BOX_VISUAL_SIZE,
 } from "../renderer-types";
 import { BlockSchema, DEFAULT_STYLE_SHEET } from "../blocks";
-import { ListBulletSchema } from "./schema";
+import { ListBlockSchema, ListBulletSchema } from "./schema";
 import { useDocument } from "../document-context";
 import { ContainerBlockFrame } from "../container-block-frame";
+import type {
+  BlockRenderLayoutResult,
+  BlockRendererContext,
+} from "../renderer-types";
+import type { PdfDrawSurface } from "../pdf/pdf-draw-context-types";
+import { drawLayoutTree } from "../pdf/draw-layout-tree";
 
 function EmptyListBlockComponent({
   blockId,
@@ -131,6 +137,25 @@ function getBulletLabel(
     case "numerical":
       return `${index + 1}.`;
   }
+}
+
+/** jsPDF built-in fonts cannot render common Unicode bullet glyphs (e.g. •). */
+function getBulletTextForPdf(
+  bullet: z.infer<typeof ListBulletSchema>,
+  index: number
+): string {
+  const label = getBulletLabel(bullet, index);
+  if (bullet.type !== "normal") {
+    return label;
+  }
+  const normalized = label.replace(
+    /[\u2022\u00b7\u25e6\u25aa\u25cf\u2043]/g,
+    "-"
+  );
+  if (/^[-\s]+$/.test(normalized)) {
+    return "-";
+  }
+  return normalized;
 }
 
 export const ListBlockRenderer: BlockRenderer<"list"> = {
@@ -346,5 +371,61 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
         />
       ),
     };
+  },
+  renderPdf(
+    block: z.infer<typeof ListBlockSchema>,
+    ctx: BlockRendererContext,
+    pdf: PdfDrawSurface,
+    layout: BlockRenderLayoutResult
+  ) {
+    if (block.blocks.length === 0) {
+      return;
+    }
+
+    const listSheet = ctx.styleSheet.list;
+    const leftIn = block.leftSpace ?? listSheet.leftSpace;
+    const rightIn = block.rightSpace ?? listSheet.rightSpace;
+    const bulletWidthPx = leftIn * ctx.dpi;
+    const betweenPx = rightIn * ctx.dpi;
+    const defaultTextStyle = ctx.styleSheet.text.default;
+    const blocksById = new Map(ctx.allBlocks.map((entry) => [entry.id, entry]));
+
+    layout.children.forEach((childLayout, index) => {
+      const itemY = childLayout.estimatedDimensions.y;
+      const itemBottom = itemY + childLayout.estimatedDimensions.height;
+      const endListItem = pdf.beginMarkedGroup("LI", itemY);
+      pdf.drawWrappedText({
+        xPx: layout.estimatedDimensions.x,
+        yPx: itemY,
+        widthPx: bulletWidthPx,
+        text: getBulletTextForPdf(block.bullet, index),
+        style: defaultTextStyle,
+        align: "right",
+        tag: null,
+      });
+
+      const endBulletSpacer = pdf.beginMarkedGroup("SPAN", itemY);
+      pdf.drawWrappedText({
+        xPx: layout.estimatedDimensions.x + bulletWidthPx,
+        yPx: itemY,
+        widthPx: betweenPx,
+        text: " ",
+        style: defaultTextStyle,
+        align: "left",
+        tag: null,
+      });
+      endBulletSpacer();
+
+      pdf.withSuppressedTextMark(() => {
+        drawLayoutTree({
+          layout: childLayout,
+          renderContext: ctx,
+          pdf,
+          blocksById,
+        });
+      });
+      pdf.setPageForY(itemBottom);
+      endListItem();
+    });
   },
 };

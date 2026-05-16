@@ -290,6 +290,11 @@ function buildMarkedTree(items: PdfMarkedItem[]): MarkedGroupNode {
     });
   });
 
+  while (openGroupCount > 0 && stack.length > 1) {
+    stack.pop();
+    openGroupCount -= 1;
+  }
+
   if (openGroupCount !== 0 || stack.length !== 1) {
     throw new Error(
       `Invalid marked content: ${openGroupCount} group(s) were opened but not closed.`

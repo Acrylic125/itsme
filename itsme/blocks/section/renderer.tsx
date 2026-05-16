@@ -109,4 +109,7 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
       ),
     };
   },
+  renderPdf() {
+    // Section is a layout container; children are drawn separately.
+  },
 };

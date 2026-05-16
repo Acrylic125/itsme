@@ -14,6 +14,7 @@ import {
 } from "./canvas-reorder-target-layer";
 import { MasterDiffLayer } from "./master-diff-layer";
 import { PageCanvasToolbar } from "./page-canvas-toolbar";
+import { downloadDocumentPdf } from "../blocks/pdf/export-document";
 
 export function PageCanvas() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -28,6 +29,7 @@ export function PageCanvas() {
   });
 
   const { blocks, dpi, document, documentStore } = useDocument();
+  const [isDownloading, setIsDownloading] = useState(false);
   const [canvasPointerInside, setCanvasPointerInside] = useState(false);
   const isAddOrPastePlacementMode = useStore(
     documentStore,
@@ -35,6 +37,18 @@ export function PageCanvas() {
       documentActionOf(s.action, "add-block") != null ||
       documentActionOf(s.action, "paste-block") != null
   );
+
+  const handleDownload = useCallback(async () => {
+    if (!document || isDownloading) {
+      return;
+    }
+    setIsDownloading(true);
+    try {
+      await downloadDocumentPdf(document, dpi);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [document, dpi, isDownloading]);
 
   const toggleAddBlockMode = useCallback(
     (blockType: "text" | "list") => {
@@ -114,6 +128,8 @@ export function PageCanvas() {
       <PageCanvasToolbar
         onToggleAddText={() => toggleAddBlockMode("text")}
         onToggleAddList={() => toggleAddBlockMode("list")}
+        onDownload={handleDownload}
+        isDownloading={isDownloading}
       />
       <div
         className={cn(

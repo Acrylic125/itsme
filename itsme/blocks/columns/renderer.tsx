@@ -1,5 +1,6 @@
 "use client";
 
+import { z } from "zod";
 import { Fragment } from "react";
 import type { ColumnsResizeContext } from "../renderer-types";
 import {
@@ -9,6 +10,13 @@ import {
   REORDER_BOUNDING_BOX_VISUAL_SIZE,
 } from "../renderer-types";
 import { ContainerBlockFrame } from "../container-block-frame";
+import type {
+  BlockRenderLayoutResult,
+  BlockRendererContext,
+} from "../renderer-types";
+import type { PdfDrawSurface } from "../pdf/pdf-draw-context-types";
+import { mapTextStyleToPdfTag } from "../pdf/types";
+import type { TextBlockSchema } from "../text/schema";
 
 function ColumnsBlockComponent({
   dimensions,
@@ -156,5 +164,103 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
         />
       ),
     };
+  },
+  renderPdf(
+    block,
+    ctx: BlockRendererContext,
+    pdf: PdfDrawSurface,
+    layout: BlockRenderLayoutResult
+  ) {
+    if (layout.children.length < 2) {
+      pdf.withSuppressedTextMark(() => {
+        for (const childLayout of layout.children) {
+          const childBlock = ctx.allBlocks.find(
+            (entry) => entry.id === childLayout.blockId
+          );
+          if (!childBlock) continue;
+          const childRenderer = ctx.renderers[childBlock.type];
+          childRenderer.renderPdf(
+            childBlock as never,
+            ctx,
+            pdf,
+            childLayout as never
+          );
+        }
+      });
+      return;
+    }
+
+    const leftLayout = layout.children[0]!;
+    const rightLayout = layout.children[1]!;
+    const leftBlock = ctx.allBlocks.find(
+      (entry) => entry.id === leftLayout.blockId
+    );
+    const rightBlock = ctx.allBlocks.find(
+      (entry) => entry.id === rightLayout.blockId
+    );
+    const rowTag =
+      leftBlock?.type === "text"
+        ? mapTextStyleToPdfTag(
+            (leftBlock as z.infer<typeof TextBlockSchema>).style
+          )
+        : "P";
+    const spacerStyle =
+      ctx.styleSheet.text[
+        leftBlock?.type === "text"
+          ? (leftBlock as z.infer<typeof TextBlockSchema>).style
+          : "default"
+      ];
+
+    const rowY = leftLayout.estimatedDimensions.y;
+    const rowBottom = Math.max(
+      leftLayout.estimatedDimensions.y + leftLayout.estimatedDimensions.height,
+      rightLayout.estimatedDimensions.y + rightLayout.estimatedDimensions.height
+    );
+    const endRow = pdf.beginMarkedGroup(rowTag, rowY);
+
+    if (leftBlock) {
+      pdf.withSuppressedTextMark(() => {
+        const leftRenderer = ctx.renderers[leftBlock.type];
+        leftRenderer.renderPdf(
+          leftBlock as never,
+          ctx,
+          pdf,
+          leftLayout as never
+        );
+      });
+    }
+
+    const leftRight =
+      leftLayout.estimatedDimensions.x + leftLayout.estimatedDimensions.width;
+    const spacerWidth = Math.max(
+      1,
+      rightLayout.estimatedDimensions.x - leftRight
+    );
+    const endSpan = pdf.beginMarkedGroup("SPAN", rowY);
+    pdf.drawWrappedText({
+      xPx: leftRight,
+      yPx: rowY,
+      widthPx: spacerWidth,
+      text: " ",
+      style: spacerStyle,
+      align: "left",
+      tag: null,
+    });
+    endSpan();
+
+    if (rightBlock) {
+      pdf.withSuppressedTextMark(() => {
+        const rightRenderer = ctx.renderers[rightBlock.type];
+        rightRenderer.renderPdf(
+          rightBlock as never,
+          ctx,
+          pdf,
+          rightLayout as never
+        );
+      });
+    }
+
+    pdf.setPageForY(rowBottom);
+    endRow();
   },
 };

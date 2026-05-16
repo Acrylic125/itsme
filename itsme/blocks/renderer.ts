@@ -6,6 +6,7 @@ import {
   StyleSheetSchema,
 } from "./blocks";
 import {
+  BlockRenderLayoutResult,
   BlockRendererContext,
   BlockTree,
   BlockTreeReorderBoundingBox,
@@ -559,6 +560,7 @@ export function createContext(
 
 export type RenderedLayoutBlock = {
   id: string;
+  layout: BlockRenderLayoutResult;
   estimatedDimensions: EstimatedDimensions;
   y: number;
   /** Vertical extent in document px (same space as `y`); used for pagination / canvas. */
@@ -602,6 +604,7 @@ export function renderDocumentLayout(args: {
     );
     rendered.push({
       id: block.id,
+      layout: result,
       estimatedDimensions: result.estimatedDimensions,
       y: start.y,
       height: result.estimatedDimensions.height,

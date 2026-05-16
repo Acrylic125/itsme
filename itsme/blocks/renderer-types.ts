@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import z from "zod";
 import { BlockSchema, StyleSheetSchema } from "./blocks";
+import type { PdfDrawSurface } from "./pdf/pdf-draw-context-types";
 
 export type Pos = {
   x: number;
@@ -21,10 +23,6 @@ export type ColumnsResizeContext = {
   /** Index of this block among column siblings. */
   childIndex: number;
   siblingCount: number;
-};
-
-type BlockRendererMap = {
-  [T in z.infer<typeof BlockSchema>["type"]]: BlockRenderer<T>;
 };
 
 export type BlockTreeReorderBoundingBox = {
@@ -168,6 +166,14 @@ export type BlockRendererContext = {
   //   renderers: BlockRenderer<z.infer<typeof BlockSchema>["type"]>[];
 };
 
+export type BlockRenderLayoutResult = {
+  blockId: string;
+  boundingBoxes: BlockTreeReorderBoundingBox[];
+  children: BlockRenderLayoutResult[];
+  estimatedDimensions: EstimatedDimensions;
+  component: () => ReactNode;
+};
+
 export type BlockRenderer<T extends z.infer<typeof BlockSchema>["type"]> = {
   type: T;
   // getChildren: (
@@ -181,13 +187,15 @@ export type BlockRenderer<T extends z.infer<typeof BlockSchema>["type"]> = {
       columnsResizeContext?: ColumnsResizeContext;
     },
     ctx: BlockRendererContext
-  ) => {
-    blockId: string;
-    boundingBoxes: BlockTreeReorderBoundingBox[];
-    children: ReturnType<
-      BlockRenderer<z.infer<typeof BlockSchema>["type"]>["render"]
-    >[];
-    estimatedDimensions: EstimatedDimensions;
-    component: () => React.ReactNode;
-  };
+  ) => BlockRenderLayoutResult;
+  renderPdf: (
+    block: Extract<z.infer<typeof BlockSchema>, { type: T }>,
+    ctx: BlockRendererContext,
+    pdf: PdfDrawSurface,
+    layout: BlockRenderLayoutResult
+  ) => void;
+};
+
+type BlockRendererMap = {
+  [T in z.infer<typeof BlockSchema>["type"]]: BlockRenderer<T>;
 };

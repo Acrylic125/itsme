@@ -5,8 +5,10 @@ import { Button } from "./ui/button";
 export function PageCanvasToolbar(props: {
   onToggleAddText: () => void;
   onToggleAddList: () => void;
+  onDownload: () => void;
+  isDownloading?: boolean;
 }) {
-  const { onToggleAddText, onToggleAddList } = props;
+  const { onToggleAddText, onToggleAddList, onDownload, isDownloading } = props;
   return (
     <div className="w-full flex flex-row justify-between items-center sticky top-0 z-10 bg-background border-b p-2">
       <div className="flex-1 flex flex-row gap-1.5 items-center px-2">
@@ -31,7 +33,13 @@ export function PageCanvasToolbar(props: {
       </div>
       <div className="flex-1 flex flex-row gap-1 justify-end">
         <Button variant="outline">Refine</Button>
-        <Button>Download</Button>
+        <Button
+          type="button"
+          onClick={onDownload}
+          disabled={isDownloading}
+        >
+          {isDownloading ? "Exporting…" : "Download"}
+        </Button>
       </div>
     </div>
   );
