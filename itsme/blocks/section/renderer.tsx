@@ -10,17 +10,7 @@ import {
   REORDER_BOUNDING_BOX_VISUAL_SIZE,
 } from "../renderer-types";
 import { BlockSchema } from "../blocks";
-import {
-  InteractableBlock,
-  useInteractableBlock,
-} from "@/components/shared-block";
-import {
-  selectActiveBlockId,
-  selectFocusBlockId,
-  useDocument,
-} from "../document-context";
-import { useShallow } from "zustand/react/shallow";
-import { useStore } from "zustand/react";
+import { ContainerBlockFrame } from "../container-block-frame";
 
 function SectionBlockComponent({
   blockId,
@@ -37,37 +27,17 @@ function SectionBlockComponent({
   nodes: React.ReactNode[];
   columnsResizeContext?: ColumnsResizeContext;
 }) {
-  const { documentStore, blockTree } = useDocument();
-  const { setAction, focusBlockId, activeBlockId } = useStore(
-    documentStore,
-    useShallow((s) => ({
-      setAction: s.setAction,
-      focusBlockId: selectFocusBlockId(s),
-      activeBlockId: selectActiveBlockId(s),
-    }))
-  );
-
-  const isDisabled = useInteractableBlock({
-    activeBlockId,
-    parents,
-    blockId,
-    blockTree,
-  });
-
   return (
-    <InteractableBlock
+    <ContainerBlockFrame
       blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      disabled={isDisabled}
-      inFocus={focusBlockId === blockId}
+      parents={parents}
+      nodes={nodes}
       columnsResizeContext={columnsResizeContext}
-      onClick={() => setAction({ type: "edit-block", blockId })}
-    >
-      {nodes}
-    </InteractableBlock>
+    />
   );
 }
 

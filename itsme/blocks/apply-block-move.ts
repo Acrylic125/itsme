@@ -1,6 +1,23 @@
 import z from "zod";
-import { nanoid } from "nanoid";
 import { DocumentSchema } from "./renderer";
+import { newClientBlockId } from "./core/client-ids";
+import {
+  collectSubtreeIdsInto,
+  findParentRef,
+  getChildBlockIds,
+  isDescendantOf,
+  pruneStaleLayoutReferences,
+  type ParentRef,
+} from "./core/graph";
+
+export { newClientBlockId } from "./core/client-ids";
+export {
+  collectSubtreeBlocksInDocumentOrder,
+  getParentBlockId,
+  isNestedInsideBlock,
+  pruneStaleLayoutReferences,
+  sanitizeRootLayout,
+} from "./core/graph";
 
 /** Discriminant from drag-and-drop; defined here so block logic does not depend on UI modules. */
 export type DropZone =
@@ -40,202 +57,8 @@ export const MoveBlockUpdateSchema = z.object({
 type Document = z.infer<typeof DocumentSchema>;
 export type MoveBlockUpdate = z.infer<typeof MoveBlockUpdateSchema>;
 
-const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
-
-export function newClientBlockId(kind: string): string {
-  const token = nanoid(12);
-  return `${CLIENT_ID_PREFIX}${kind}-${token}`;
-}
-
 function createClientIdForDuplicate(kind: string): string {
   return newClientBlockId(kind);
-}
-
-type ParentRef =
-  | {
-      container: "document";
-      index: number;
-    }
-  | {
-      container: "section" | "list";
-      parentBlockId: string;
-      index: number;
-    }
-  | {
-      container: "columns";
-      parentBlockId: string;
-      index: number;
-      span: number;
-    };
-
-function findParentRef(doc: Document, childBlockId: string): ParentRef | null {
-  // Prefer nested parents over `layout`. If a block is still listed in `layout`
-  // but also sits under a section/list/columns (stale state), removing only
-  // from layout would leave a duplicate reference under the nested parent.
-  for (const block of doc.blocks) {
-    switch (block.type) {
-      case "section": {
-        const index = block.blocks.indexOf(childBlockId);
-        if (index >= 0) {
-          return {
-            container: "section",
-            parentBlockId: block.id,
-            index,
-          };
-        }
-        break;
-      }
-      case "list": {
-        const index = block.blocks.indexOf(childBlockId);
-        if (index >= 0) {
-          return {
-            container: "list",
-            parentBlockId: block.id,
-            index,
-          };
-        }
-        break;
-      }
-      case "columns": {
-        const index = block.blocks.findIndex(
-          (child) => child.blockId === childBlockId
-        );
-        if (index >= 0) {
-          return {
-            container: "columns",
-            parentBlockId: block.id,
-            index,
-            span: block.blocks[index].span,
-          };
-        }
-        break;
-      }
-      case "text":
-        break;
-    }
-  }
-
-  const documentIndex = doc.layout.indexOf(childBlockId);
-  if (documentIndex >= 0) {
-    return { container: "document", index: documentIndex };
-  }
-
-  return null;
-}
-
-/** Container block id for a nested block, or `null` if it lives at document root (or is missing). */
-export function getParentBlockId(
-  doc: Document,
-  blockId: string
-): string | null {
-  const ref = findParentRef(doc, blockId);
-  if (!ref || ref.container === "document") return null;
-  return ref.parentBlockId;
-}
-
-/**
- * Drops layout entries for ids that already appear as children of
- * section/list/columns. That inconsistent state can happen after races or older
- * bugs; it makes moves think the parent is `document` and leave a duplicate
- * reference under a nested parent.
- */
-export function pruneStaleLayoutReferences(doc: Document): Document {
-  const nestedChildIds = new Set<string>();
-  for (const block of doc.blocks) {
-    switch (block.type) {
-      case "section":
-      case "list":
-        for (const id of block.blocks) {
-          nestedChildIds.add(id);
-        }
-        break;
-      case "columns":
-        for (const c of block.blocks) {
-          nestedChildIds.add(c.blockId);
-        }
-        break;
-      case "text":
-        break;
-    }
-  }
-  if (nestedChildIds.size === 0) {
-    return doc;
-  }
-  const nextLayout = doc.layout.filter((id) => !nestedChildIds.has(id));
-  if (nextLayout.length === doc.layout.length) {
-    return doc;
-  }
-  return { ...doc, layout: nextLayout };
-}
-
-/**
- * Root `layout` must only reference top-level blocks that exist in `blocks`.
- * Applies {@link pruneStaleLayoutReferences}, then drops orphan ids (e.g. stale
- * Convex layout rows after deletes, or duplicate root entries left by older bugs).
- */
-export function sanitizeRootLayout(doc: Document): Document {
-  const pruned = pruneStaleLayoutReferences(doc);
-  const blockIds = new Set(pruned.blocks.map((b) => b.id));
-  const nextLayout = pruned.layout.filter((id) => blockIds.has(id));
-  if (nextLayout.length === pruned.layout.length) {
-    return pruned;
-  }
-  return { ...pruned, layout: nextLayout };
-}
-
-function getChildBlockIds(block: Document["blocks"][number]): string[] {
-  switch (block.type) {
-    case "section":
-    case "list":
-      return block.blocks;
-    case "columns":
-      return block.blocks.map((child) => child.blockId);
-    case "text":
-      return [];
-  }
-}
-
-/** DFS order: root first, then descendants (same walk as duplicate). */
-export function collectSubtreeBlocksInDocumentOrder(
-  doc: Document,
-  rootBlockId: string
-): Document["blocks"][number][] | null {
-  const blockById = new Map(doc.blocks.map((block) => [block.id, block]));
-  if (!blockById.get(rootBlockId)) {
-    return null;
-  }
-  const ordered: Document["blocks"][number][] = [];
-  const visit = (id: string) => {
-    const block = blockById.get(id);
-    if (!block) {
-      return;
-    }
-    ordered.push(block);
-    for (const childId of getChildBlockIds(block)) {
-      visit(childId);
-    }
-  };
-  visit(rootBlockId);
-  return ordered;
-}
-
-function isDescendantOf(
-  doc: Document,
-  possibleDescendantId: string,
-  ancestorId: string
-): boolean {
-  const blockById = new Map(doc.blocks.map((block) => [block.id, block]));
-  const visit = (blockId: string): boolean => {
-    const block = blockById.get(blockId);
-    if (!block) return false;
-    for (const childBlockId of getChildBlockIds(block)) {
-      if (childBlockId === possibleDescendantId) return true;
-      if (visit(childBlockId)) return true;
-    }
-    return false;
-  };
-
-  return visit(ancestorId);
 }
 
 function isInvalidNestedDestination(
@@ -257,15 +80,6 @@ function destinationParentBlockId(
     return null;
   }
   return destination.parentBlockId;
-}
-
-/** True if `descendantId` is strictly nested under `ancestorId` (not equal). */
-export function isNestedInsideBlock(
-  doc: Document,
-  ancestorId: string,
-  descendantId: string
-): boolean {
-  return isDescendantOf(doc, descendantId, ancestorId);
 }
 
 /** Moving would place the block inside its own subtree (invalid). */
@@ -637,17 +451,8 @@ export function deleteBlockFromDocument(
     return null;
   }
 
-  const collectSubtreeIds = (id: string, into: Set<string>) => {
-    into.add(id);
-    const block = blockById.get(id);
-    if (!block) return;
-    for (const childId of getChildBlockIds(block)) {
-      collectSubtreeIds(childId, into);
-    }
-  };
-
   const toRemove = new Set<string>();
-  collectSubtreeIds(blockId, toRemove);
+  collectSubtreeIdsInto(doc.blocks, blockId, toRemove);
 
   const next: Document = {
     ...doc,

@@ -1,20 +1,9 @@
 import { z } from "zod";
 import { BlockSchema, type Block } from "./blocks";
-import { newClientBlockId } from "./apply-block-move";
+import { newClientBlockId } from "./core/client-ids";
+import { getChildBlockIds, getStructuralRootBlocks } from "./core/graph";
 
 export const COPY_PASTE_CLIPBOARD_ACTION = "copy-paste" as const;
-
-function blockChildIds(b: Block): string[] {
-  switch (b.type) {
-    case "text":
-      return [];
-    case "section":
-    case "list":
-      return b.blocks;
-    case "columns":
-      return b.blocks.map((c) => c.blockId);
-  }
-}
 
 /**
  * Clipboard payload: one structural root and its descendants (all `Block` rows).
@@ -40,7 +29,7 @@ export const CopyPasteClipboardSchema = z
 
     for (let i = 0; i < data.blocks.length; i++) {
       const b = data.blocks[i]!;
-      for (const cid of blockChildIds(b)) {
+      for (const cid of getChildBlockIds(b)) {
         if (!idSet.has(cid)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -51,13 +40,7 @@ export const CopyPasteClipboardSchema = z
       }
     }
 
-    const referencedAsChild = new Set<string>();
-    for (const b of data.blocks) {
-      for (const cid of blockChildIds(b)) {
-        referencedAsChild.add(cid);
-      }
-    }
-    const roots = data.blocks.filter((b) => !referencedAsChild.has(b.id));
+    const roots = getStructuralRootBlocks(data.blocks);
     if (roots.length !== 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

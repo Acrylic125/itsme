@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 import { Block, DEFAULT_STYLE_SHEET, StyleSheetSchema } from "../blocks/blocks";
+import { convexDataToClientBlock } from "../blocks/core/persistence/convex-codec";
 import { TextStyleSheetSchema } from "../blocks/text/schema";
 import { pdfToBlocks } from "../lib/pdf-to-blocks/server";
 import { CreateProjectFromPdfInputSchema } from "@/lib/pdf-to-blocks/schema";
@@ -302,64 +303,9 @@ function mapBlockDataForDuplicate(args: {
 
 type StyleSheet = z.infer<typeof StyleSheetSchema>;
 
-/** Maps a Convex block row to the client `Block` union (same shape as `mapBlocks` in `blocks/retriever.ts`). */
+/** Maps a Convex block row to the client `Block` union. */
 export function convexBlockToClientBlock(row: Doc<"blocks">): Block {
-  const d = row.data;
-  const id = row._id;
-
-  if (d.type === "text") {
-    return {
-      id,
-      type: "text",
-      text: d.text,
-      align: d.align,
-      style: d.style,
-      ref: d.ref ?? undefined,
-      ...(d.fontSize !== undefined ? { fontSize: d.fontSize } : {}),
-      ...(d.fontWeight !== undefined ? { fontWeight: d.fontWeight } : {}),
-    };
-  }
-
-  if (d.type === "section") {
-    return {
-      id,
-      type: "section",
-      blocks: [...d.children],
-      ref: d.ref ?? undefined,
-    };
-  }
-
-  if (d.type === "columns") {
-    return {
-      id,
-      type: "columns",
-      blocks: d.children.map((c) => ({
-        span: c.span,
-        blockId: c.blockId,
-      })),
-      ref: d.ref ?? undefined,
-    };
-  }
-
-  const bullet =
-    d.bulletType === "normal"
-      ? {
-          type: "normal" as const,
-          value: d.bulletValue ?? "-",
-        }
-      : ({
-          type: d.bulletType,
-        } as const);
-
-  return {
-    id,
-    type: "list",
-    blocks: [...d.children],
-    bullet,
-    leftSpace: d.leftSpace ?? undefined,
-    rightSpace: d.rightSpace ?? undefined,
-    ref: d.ref ?? undefined,
-  };
+  return convexDataToClientBlock({ id: row._id, data: row.data });
 }
 
 function mapStylesFromDocumentRows(args: {

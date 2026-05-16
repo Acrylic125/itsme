@@ -11,7 +11,6 @@ import {
   type ReactNode,
 } from "react";
 import { useMutation } from "convex/react";
-import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand/react";
 import z from "zod";
 import {
@@ -19,10 +18,8 @@ import {
   renderDocumentLayout,
   RenderedLayoutBlock,
 } from "./renderer";
-import {
-  collectSubtreeBlocksInDocumentOrder,
-  sanitizeRootLayout,
-} from "./apply-block-move";
+import { collectSubtreeBlocksInDocumentOrder } from "./core/graph";
+import { sanitizeRootLayout } from "./core/graph";
 import type { Block } from "./blocks";
 import {
   parseCopyPasteClipboardPayload,
@@ -35,12 +32,79 @@ import {
   redoHistory,
   undoHistory,
 } from "./session-store";
-import { BlockTree, BlockTreeReorderBoundingBox, Pos } from "./renderer-types";
+import { BlockTree } from "./renderer-types";
 import { useQueryWithStatus } from "@/components/convex-hooks";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { DEFAULT_STYLE_SHEET, PAGE_SIZE, StyleSheetSchema } from "./blocks";
 import { Loader2 } from "lucide-react";
+import { isClientId } from "./core/client-ids";
+import {
+  clientBlockToConvexData,
+  remapConvexBlockRowData,
+  type ConvexBlockRowData,
+} from "./core/persistence/convex-codec";
+import {
+  documentBlocksSnapshotToDocument,
+  mapBlockIdForMutation,
+  snapshotConvexToClient,
+  type DocumentBlocksSnapshot,
+} from "./core/persistence/snapshot";
+import {
+  asAddBlockAction,
+  asEditBlockAction,
+  asFocusBlockAction,
+  asMoveBlockAction,
+  asPasteBlockAction,
+  asResizeColumnAction,
+  createDocumentStore,
+  selectActiveBlockId,
+  selectAddBlockAction,
+  selectEditBlockAction,
+  selectFocusBlockId,
+  selectMoveBlockAction,
+  selectPasteBlockAction,
+  selectResizeColumnAction,
+  type ClientIdMappings,
+  type DocumentStore,
+  type DocumentStoreAction,
+  type DocumentStoreAddBlockAction,
+  type DocumentStoreEditBlockAction,
+  type DocumentStoreFocusBlockAction,
+  type DocumentStoreMoveBlockAction,
+  type DocumentStorePasteBlockAction,
+  type DocumentStoreResizeColumnAction,
+  type DocumentStoreState,
+} from "./core/document-store";
+
+export {
+  asAddBlockAction,
+  asEditBlockAction,
+  asFocusBlockAction,
+  asMoveBlockAction,
+  asPasteBlockAction,
+  asResizeColumnAction,
+  createDocumentStore,
+  documentBlocksSnapshotToDocument,
+  selectActiveBlockId,
+  selectAddBlockAction,
+  selectEditBlockAction,
+  selectFocusBlockId,
+  selectMoveBlockAction,
+  selectPasteBlockAction,
+  selectResizeColumnAction,
+  type ClientIdMappings,
+  type DocumentBlocksSnapshot,
+  type DocumentStore,
+  type DocumentStoreAction,
+  type DocumentStoreAddBlockAction,
+  type DocumentStoreEditBlockAction,
+  type DocumentStoreFocusBlockAction,
+  type DocumentStoreMoveBlockAction,
+  type DocumentStorePasteBlockAction,
+  type DocumentStoreResizeColumnAction,
+  type DocumentStoreState,
+};
 
 export type DocumentId = string;
 
@@ -79,134 +143,6 @@ type UpdateDocumentBlocksInput = {
 };
 type BlockSyncAction = UpdateDocumentBlocksInput["blocks"][number];
 
-const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
-
-function isClientId(id: string): boolean {
-  return id.startsWith(CLIENT_ID_PREFIX);
-}
-
-/** Session-local bidirectional map: client-generated ids ↔ Convex block ids. */
-export type ClientIdMappings = {
-  clientToConvex: Map<string, string>;
-  convexToClient: Map<string, string>;
-};
-
-function createEmptyClientIdMappings(): ClientIdMappings {
-  return {
-    clientToConvex: new Map(),
-    convexToClient: new Map(),
-  };
-}
-
-function mergeClientIdMappingRecord(
-  prev: ClientIdMappings,
-  record: Record<string, string>
-): ClientIdMappings {
-  const clientToConvex = new Map(prev.clientToConvex);
-  const convexToClient = new Map(prev.convexToClient);
-  for (const [clientId, convexId] of Object.entries(record)) {
-    if (!isClientId(clientId)) continue;
-    clientToConvex.set(clientId, convexId);
-    convexToClient.set(convexId, clientId);
-  }
-  return { clientToConvex, convexToClient };
-}
-
-/** Replace ids using `remap(id)`; unknown ids stay unchanged. */
-function remapSnapshotIds(
-  snapshot: DocumentBlocksSnapshot,
-  remap: (id: string) => string
-): DocumentBlocksSnapshot {
-  return {
-    ...snapshot,
-    layout: snapshot.layout.map((id) => remap(id)) as Id<"blocks">[],
-    blocks: snapshot.blocks.map((block) => {
-      const id = remap(block.id);
-      const ref = block.ref ? remap(block.ref) : undefined;
-      switch (block.type) {
-        case "text":
-          return { ...block, id, ...(ref ? { ref } : {}) };
-        case "section":
-        case "list":
-          return {
-            ...block,
-            id,
-            blocks: block.blocks.map((childId) => remap(childId)),
-            ...(ref ? { ref } : {}),
-          };
-        case "columns":
-          return {
-            ...block,
-            id,
-            blocks: block.blocks.map((child) => ({
-              ...child,
-              blockId: remap(child.blockId),
-            })),
-            ...(ref ? { ref } : {}),
-          };
-      }
-    }),
-    document: {
-      ...snapshot.document,
-      id: remap(snapshot.document.id) as Id<"documents">,
-    },
-  };
-}
-
-/** Convex → client ids for display and for diffing against local snapshots. */
-function snapshotConvexToClient(
-  snapshot: DocumentBlocksSnapshot,
-  convexToClient: Map<string, string>
-): DocumentBlocksSnapshot {
-  if (convexToClient.size === 0) return snapshot;
-  return remapSnapshotIds(snapshot, (id) => convexToClient.get(id) ?? id);
-}
-
-function mapBlockIdForMutation(
-  id: string,
-  clientToConvex: Map<string, string>
-): string {
-  if (isClientId(id)) {
-    return clientToConvex.get(id) ?? id;
-  }
-  return id;
-}
-
-function remapConvexBlockRowData(
-  data: ConvexBlockRowData,
-  clientToConvex: Map<string, string>
-): ConvexBlockRowData {
-  const m = (id: string) => mapBlockIdForMutation(id, clientToConvex);
-  switch (data.type) {
-    case "text":
-      return {
-        ...data,
-        ref: data.ref ? m(data.ref) : undefined,
-      };
-    case "section":
-      return {
-        ...data,
-        children: data.children.map(m),
-        ref: data.ref ? m(data.ref) : undefined,
-      };
-    case "columns":
-      return {
-        ...data,
-        children: data.children.map((c) => ({
-          ...c,
-          blockId: m(c.blockId),
-        })),
-        ref: data.ref ? m(data.ref) : undefined,
-      };
-    case "list":
-      return {
-        ...data,
-        children: data.children.map(m),
-        ref: data.ref ? m(data.ref) : undefined,
-      };
-  }
-}
-
 function areBlocksEqual(a: Block, b: Block): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -240,25 +176,6 @@ function buildDocumentBlockDiff(
   return [...createOrUpdate, ...deletes];
 }
 
-/** Snapshot shape returned by `documentTasks.getDocumentBlocks`. */
-export type DocumentBlocksSnapshot = {
-  document: { id: Id<"documents">; name: string };
-  layout: Id<"blocks">[];
-  blocks: Block[];
-};
-
-export function documentBlocksSnapshotToDocument(
-  snapshot: DocumentBlocksSnapshot
-): Document {
-  return {
-    name: snapshot.document.name,
-    pageSize: PAGE_SIZE,
-    styleSheet: DEFAULT_STYLE_SHEET,
-    blocks: snapshot.blocks,
-    layout: snapshot.layout,
-  };
-}
-
 function toDiffDocument(snapshot: DocumentBlocksSnapshot): Document {
   return documentBlocksSnapshotToDocument(snapshot);
 }
@@ -276,95 +193,6 @@ function layoutPatchIfChanged(
     }
   }
   return undefined;
-}
-
-/** Row `data` shape for `blocks` table — matches Convex `blockDataValidator`. */
-type ConvexBlockRowData =
-  | {
-      type: "text";
-      text: string;
-      align: "left" | "center" | "right";
-      style: "default" | "h1" | "h2" | "h3";
-      fontSize?: number;
-      fontWeight?: "normal" | "bold";
-      ref?: string;
-    }
-  | {
-      type: "section";
-      children: string[];
-      ref?: string;
-    }
-  | {
-      type: "columns";
-      children: { span: number; blockId: string }[];
-      ref?: string;
-    }
-  | {
-      type: "list";
-      children: string[];
-      bulletType: "normal" | "alphabetical" | "numerical";
-      bulletValue?: string;
-      leftSpace?: number;
-      rightSpace?: number;
-      ref?: string;
-    };
-
-function clientBlockToConvexData(block: Block): ConvexBlockRowData {
-  switch (block.type) {
-    case "text":
-      return {
-        type: "text",
-        text: block.text,
-        align: block.align,
-        style: block.style,
-        ...(block.fontSize !== undefined ? { fontSize: block.fontSize } : {}),
-        ...(block.fontWeight !== undefined
-          ? { fontWeight: block.fontWeight }
-          : {}),
-        ref: block.ref ? block.ref : undefined,
-      };
-    case "section":
-      return {
-        type: "section",
-        children: block.blocks,
-        ref: block.ref ? block.ref : undefined,
-      };
-    case "columns":
-      return {
-        type: "columns",
-        children: block.blocks.map((c) => ({
-          span: c.span,
-          blockId: c.blockId,
-        })),
-        ref: block.ref ? block.ref : undefined,
-      };
-    case "list": {
-      const bullet = block.bullet;
-      if (bullet.type === "normal") {
-        return {
-          type: "list",
-          children: block.blocks,
-          bulletType: "normal" as const,
-          bulletValue: bullet.value,
-          leftSpace: block.leftSpace,
-          rightSpace: block.rightSpace,
-          ref: block.ref ? block.ref : undefined,
-        };
-      }
-      return {
-        type: "list",
-        children: block.blocks,
-        bulletType: bullet.type,
-        leftSpace: block.leftSpace,
-        rightSpace: block.rightSpace,
-        ref: block.ref ? block.ref : undefined,
-      };
-    }
-    default: {
-      const _x: never = block;
-      return _x;
-    }
-  }
 }
 
 type UpdateDocumentBlocksAction =
@@ -390,7 +218,7 @@ function blockSyncActionsToMutationActions(
     }
     const data = remapConvexBlockRowData(
       clientBlockToConvexData(action.block),
-      clientToConvex
+      (id) => mapBlockIdForMutation(id, clientToConvex)
     );
     if (action.type === "create") {
       out.push({
@@ -410,235 +238,6 @@ function blockSyncActionsToMutationActions(
     }
   }
   return out;
-}
-
-/**
- * The single in-flight user interaction with the document.
- *
- * At any moment the user is doing exactly one of: editing a block, selecting a
- * block without editing (text blocks only), moving a block (drag in flight),
- * placing a new block, or resizing a column.
- * These are mutually exclusive, so they share one slot rather than living as
- * parallel fields.
- */
-export type DocumentStoreAction =
-  | {
-      type: "edit-block";
-      blockId: string;
-    }
-  | {
-      /** Text blocks: selected (focus ring) but textarea not open yet. */
-      type: "focus-block";
-      blockId: string;
-    }
-  | {
-      type: "move-block";
-      current: {
-        position: Pos;
-        blockIds: string[];
-      };
-      targetBlock: BlockTreeReorderBoundingBox | null;
-    }
-  | {
-      type: "add-block";
-      blockType: "text" | "list";
-      current: {
-        position: Pos;
-      } | null;
-      targetBlock: BlockTreeReorderBoundingBox | null;
-    }
-  | {
-      /** Place clipboard block (validated JSON) using the same targets as add-block. */
-      type: "paste-block";
-      current: {
-        position: Pos;
-      } | null;
-      targetBlock: BlockTreeReorderBoundingBox | null;
-    }
-  | {
-      /**
-       * Drag-resize on a column-child boundary. Distinct from `move-block`
-       * because the gesture starts on the same block but should never trigger
-       * reorder targets / layout reflow.
-       */
-      type: "resize-column";
-      /** Direct child block being dragged. */
-      blockId: string;
-      /** Parent columns block id. */
-      columnsBlockId: string;
-      childIndex: number;
-      siblingCount: number;
-      /** Which boundary of `blockId` is being dragged. */
-      kind: "left" | "right";
-      /** Inner width of the columns row in canvas px (matches resize context). */
-      columnRowWidthPx: number;
-      /** Pointer position at drag start (canvas coords). */
-      pointerStart: Pos;
-      /** Current pointer position (canvas coords). */
-      pointerCurrent: Pos;
-    };
-
-export type DocumentStoreEditBlockAction = Extract<
-  DocumentStoreAction,
-  { type: "edit-block" }
->;
-
-export type DocumentStoreFocusBlockAction = Extract<
-  DocumentStoreAction,
-  { type: "focus-block" }
->;
-
-export type DocumentStoreMoveBlockAction = Extract<
-  DocumentStoreAction,
-  { type: "move-block" }
->;
-
-export type DocumentStoreAddBlockAction = Extract<
-  DocumentStoreAction,
-  { type: "add-block" }
->;
-
-export type DocumentStorePasteBlockAction = Extract<
-  DocumentStoreAction,
-  { type: "paste-block" }
->;
-
-export type DocumentStoreResizeColumnAction = Extract<
-  DocumentStoreAction,
-  { type: "resize-column" }
->;
-
-export type DocumentStoreState = {
-  action: DocumentStoreAction | null;
-  setAction: (
-    action:
-      | DocumentStoreAction
-      | null
-      | ((current: DocumentStoreAction | null) => DocumentStoreAction | null)
-  ) => void;
-  /** Bidirectional client id ↔ Convex block id for this session (this document). */
-  clientIdMappings: ClientIdMappings;
-  mergeClientIdMappings: (record: Record<string, string>) => void;
-};
-
-export type DocumentStore = ReturnType<typeof createDocumentStore>;
-
-export function createDocumentStore() {
-  return createStore<DocumentStoreState>((set) => ({
-    action: null,
-    setAction: (input) => {
-      set((state) => {
-        const next = typeof input === "function" ? input(state.action) : input;
-        return { action: next };
-      });
-    },
-    clientIdMappings: createEmptyClientIdMappings(),
-    mergeClientIdMappings: (record) => {
-      set((state) => ({
-        clientIdMappings: mergeClientIdMappingRecord(
-          state.clientIdMappings,
-          record
-        ),
-      }));
-    },
-  }));
-}
-
-export function asEditBlockAction(
-  action: DocumentStoreAction | null
-): DocumentStoreEditBlockAction | null {
-  return action?.type === "edit-block" ? action : null;
-}
-
-export function asFocusBlockAction(
-  action: DocumentStoreAction | null
-): DocumentStoreFocusBlockAction | null {
-  return action?.type === "focus-block" ? action : null;
-}
-
-export function asMoveBlockAction(
-  action: DocumentStoreAction | null
-): DocumentStoreMoveBlockAction | null {
-  return action?.type === "move-block" ? action : null;
-}
-
-export function asAddBlockAction(
-  action: DocumentStoreAction | null
-): DocumentStoreAddBlockAction | null {
-  return action?.type === "add-block" ? action : null;
-}
-
-export function asPasteBlockAction(
-  action: DocumentStoreAction | null
-): DocumentStorePasteBlockAction | null {
-  return action?.type === "paste-block" ? action : null;
-}
-
-export function asResizeColumnAction(
-  action: DocumentStoreAction | null
-): DocumentStoreResizeColumnAction | null {
-  return action?.type === "resize-column" ? action : null;
-}
-
-export function selectEditBlockAction(
-  state: DocumentStoreState
-): DocumentStoreEditBlockAction | null {
-  return asEditBlockAction(state.action);
-}
-
-export function selectMoveBlockAction(
-  state: DocumentStoreState
-): DocumentStoreMoveBlockAction | null {
-  return asMoveBlockAction(state.action);
-}
-
-export function selectAddBlockAction(
-  state: DocumentStoreState
-): DocumentStoreAddBlockAction | null {
-  return asAddBlockAction(state.action);
-}
-
-export function selectPasteBlockAction(
-  state: DocumentStoreState
-): DocumentStorePasteBlockAction | null {
-  return asPasteBlockAction(state.action);
-}
-
-export function selectResizeColumnAction(
-  state: DocumentStoreState
-): DocumentStoreResizeColumnAction | null {
-  return asResizeColumnAction(state.action);
-}
-
-/** Block id currently being edited, or null when no edit is in flight. */
-export function selectFocusBlockId(state: DocumentStoreState): string | null {
-  return selectEditBlockAction(state)?.blockId ?? null;
-}
-
-/**
- * Block id the user is currently interacting with — the block being edited
- * for `edit-block`, the block being dragged for `move-block`, or the column
- * child whose boundary is being dragged for `resize-column`. Used by sibling
- * blocks to decide whether they can still respond to input.
- *
- * Distinct from `selectFocusBlockId`, which is purely about the editing
- * focus / focus ring and is null during a drag.
- */
-export function selectActiveBlockId(state: DocumentStoreState): string | null {
-  const action = state.action;
-  if (!action) return null;
-  switch (action.type) {
-    case "edit-block":
-    case "focus-block":
-      return action.blockId;
-    case "move-block":
-      return action.current.blockIds[0] ?? null;
-    case "resize-column":
-      return action.blockId;
-    case "add-block":
-    case "paste-block":
-      return null;
-  }
 }
 
 type DocumentContextValue = {
@@ -716,16 +315,12 @@ export function DocumentStoresProvider({
 
   const masterBlocksQuery = useQueryWithStatus(
     api.documentTasks.getDocumentBlocks,
-    shouldLoadSeparateMasterDocument
-      ? { documentId: masterDocumentId }
-      : "skip"
+    shouldLoadSeparateMasterDocument ? { documentId: masterDocumentId } : "skip"
   );
 
   const masterStylesQuery = useQueryWithStatus(
     api.documentTasks.getDocumentStyles,
-    shouldLoadSeparateMasterDocument
-      ? { documentId: masterDocumentId }
-      : "skip"
+    shouldLoadSeparateMasterDocument ? { documentId: masterDocumentId } : "skip"
   );
 
   const updateDocumentBlocksMutation = useMutation(

@@ -8,17 +8,7 @@ import {
   REORDER_BOUNDING_BOX_TARGET_SIZE,
   REORDER_BOUNDING_BOX_VISUAL_SIZE,
 } from "../renderer-types";
-import {
-  InteractableBlock,
-  useInteractableBlock,
-} from "@/components/shared-block";
-import { useShallow } from "zustand/react/shallow";
-import { useStore } from "zustand/react";
-import {
-  selectActiveBlockId,
-  selectFocusBlockId,
-  useDocument,
-} from "../document-context";
+import { ContainerBlockFrame } from "../container-block-frame";
 
 function ColumnsBlockComponent({
   dimensions,
@@ -35,37 +25,17 @@ function ColumnsBlockComponent({
   blockId: string;
   columnsResizeContext?: ColumnsResizeContext;
 }) {
-  const { documentStore, blockTree } = useDocument();
-  const { setAction, focusBlockId, activeBlockId } = useStore(
-    documentStore,
-    useShallow((s) => ({
-      setAction: s.setAction,
-      focusBlockId: selectFocusBlockId(s),
-      activeBlockId: selectActiveBlockId(s),
-    }))
-  );
-
-  const isDisabled = useInteractableBlock({
-    activeBlockId,
-    parents,
-    blockId,
-    blockTree,
-  });
-
   return (
-    <InteractableBlock
+    <ContainerBlockFrame
       blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      disabled={isDisabled}
-      inFocus={focusBlockId === blockId}
+      parents={parents}
+      nodes={nodes}
       columnsResizeContext={columnsResizeContext}
-      onClick={() => setAction({ type: "edit-block", blockId })}
-    >
-      {nodes}
-    </InteractableBlock>
+    />
   );
 }
 

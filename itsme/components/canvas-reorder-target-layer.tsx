@@ -29,15 +29,8 @@ import type {
   BlockTreeReorderBoundingBox,
   Pos,
 } from "@/blocks/renderer-types";
-import { nanoid } from "nanoid";
 import { useStore } from "zustand/react";
-
-const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
-
-function createClientId(args: { kind: string }): string {
-  const token = nanoid(12);
-  return `${CLIENT_ID_PREFIX}${args.kind}-${token}`;
-}
+import { newClientBlockId } from "@/blocks/core/client-ids";
 
 type ParentRef =
   | { container: "document"; index: number }
@@ -421,7 +414,7 @@ export function buildMoveUpdatesForReorder(args: {
     return null;
   }
 
-  const newColumnsId = createClientId({ kind: "columns" });
+  const newColumnsId = newClientBlockId("columns");
   const movingWidth = getBlockWidthPx(blockTree, movingBlockId);
   const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
   const movingSpan = Math.max(0.1, movingWidth / Math.max(1, targetWidth));
@@ -636,7 +629,7 @@ export function buildNextDocumentForBlockPlacement(args: {
     return null;
   }
 
-  const newColumnsId = createClientId({ kind: "columns" });
+  const newColumnsId = newClientBlockId("columns");
   const targetWidth = getBlockWidthPx(blockTree, targetBox.blockId);
   const assumedNewWidth = Math.max(1, targetWidth * 0.45);
   const movingSpan = Math.max(0.1, assumedNewWidth / Math.max(1, targetWidth));
@@ -700,7 +693,7 @@ export function buildNextDocumentForAddBlockPlacement(args: {
   targetBox: BlockTreeReorderBoundingBox;
 }): AddBlockPlacementResult | null {
   const { blockType, ...rest } = args;
-  const newId = createClientId({ kind: blockType });
+  const newId = newClientBlockId(blockType);
   const newBlock: Block =
     blockType === "text"
       ? {

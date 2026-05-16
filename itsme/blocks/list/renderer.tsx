@@ -12,17 +12,8 @@ import {
 } from "../renderer-types";
 import { BlockSchema, DEFAULT_STYLE_SHEET } from "../blocks";
 import { ListBulletSchema } from "./schema";
-import {
-  InteractableBlock,
-  useInteractableBlock,
-} from "@/components/shared-block";
-import { useStore } from "zustand/react";
-import { useShallow } from "zustand/react/shallow";
-import {
-  selectActiveBlockId,
-  selectFocusBlockId,
-  useDocument,
-} from "../document-context";
+import { useDocument } from "../document-context";
+import { ContainerBlockFrame } from "../container-block-frame";
 
 function EmptyListBlockComponent({
   blockId,
@@ -37,67 +28,53 @@ function EmptyListBlockComponent({
   parents: string[];
   columnsResizeContext?: ColumnsResizeContext;
 }) {
-  const { documentStore, blockTree, document, dpi } = useDocument();
+  const { document, dpi } = useDocument();
   const defaultTextStyle =
     document?.styleSheet.text.default ?? DEFAULT_STYLE_SHEET.text.default;
   const fontSizePx = (defaultTextStyle.fontSize * dpi) / 72;
-  const { setAction, focusBlockId, activeBlockId } = useStore(
-    documentStore,
-    useShallow((s) => ({
-      setAction: s.setAction,
-      focusBlockId: selectFocusBlockId(s),
-      activeBlockId: selectActiveBlockId(s),
-    }))
-  );
-
-  const isDisabled = useInteractableBlock({
-    activeBlockId,
-    parents,
-    blockId,
-    blockTree,
-  });
 
   return (
-    <InteractableBlock
+    <ContainerBlockFrame
       blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      disabled={isDisabled}
-      inFocus={focusBlockId === blockId}
+      parents={parents}
       columnsResizeContext={columnsResizeContext}
-      onClick={() => setAction({ type: "edit-block", blockId })}
-    >
-      <Rect
-        x={0}
-        y={0}
-        width={dimensions.width}
-        height={dimensions.height}
-        fill="#ffffff"
-        stroke="#8a8a8a"
-        strokeWidth={2}
-        dash={[5, 5]}
-        perfectDrawEnabled={false}
-        listening={false}
-      />
-      <Text
-        x={0}
-        y={0}
-        width={dimensions.width}
-        height={dimensions.height}
-        text="Drag or add text block here"
-        fontFamily={defaultTextStyle.fontFamily}
-        fontSize={fontSizePx}
-        lineHeight={defaultTextStyle.lineHeight}
-        fontStyle={defaultTextStyle.fontWeight === "bold" ? "bold" : "normal"}
-        align="center"
-        verticalAlign="middle"
-        fill="#9a9a9a"
-        perfectDrawEnabled={false}
-        listening={false}
-      />
-    </InteractableBlock>
+      nodes={[
+        <Rect
+          key="bg"
+          x={0}
+          y={0}
+          width={dimensions.width}
+          height={dimensions.height}
+          fill="#ffffff"
+          stroke="#8a8a8a"
+          strokeWidth={2}
+          dash={[5, 5]}
+          perfectDrawEnabled={false}
+          listening={false}
+        />,
+        <Text
+          key="label"
+          x={0}
+          y={0}
+          width={dimensions.width}
+          height={dimensions.height}
+          text="Drag or add text block here"
+          fontFamily={defaultTextStyle.fontFamily}
+          fontSize={fontSizePx}
+          lineHeight={defaultTextStyle.lineHeight}
+          fontStyle={defaultTextStyle.fontWeight === "bold" ? "bold" : "normal"}
+          align="center"
+          verticalAlign="middle"
+          fill="#9a9a9a"
+          perfectDrawEnabled={false}
+          listening={false}
+        />,
+      ]}
+    />
   );
 }
 
@@ -116,37 +93,17 @@ function ListBlockComponent({
   nodes: React.ReactNode[];
   columnsResizeContext?: ColumnsResizeContext;
 }) {
-  const { documentStore, blockTree } = useDocument();
-  const { setAction, focusBlockId, activeBlockId } = useStore(
-    documentStore,
-    useShallow((s) => ({
-      setAction: s.setAction,
-      focusBlockId: selectFocusBlockId(s),
-      activeBlockId: selectActiveBlockId(s),
-    }))
-  );
-
-  const isDisabled = useInteractableBlock({
-    activeBlockId,
-    parents,
-    blockId,
-    blockTree,
-  });
-
   return (
-    <InteractableBlock
+    <ContainerBlockFrame
       blockId={blockId}
       x={pos.x}
       y={pos.y}
       width={dimensions.width}
       height={dimensions.height}
-      disabled={isDisabled}
-      inFocus={focusBlockId === blockId}
+      parents={parents}
+      nodes={nodes}
       columnsResizeContext={columnsResizeContext}
-      onClick={() => setAction({ type: "edit-block", blockId })}
-    >
-      {nodes}
-    </InteractableBlock>
+    />
   );
 }
 
