@@ -2,28 +2,42 @@
 
 import { useMemo } from "react";
 import { Group, Rect } from "react-konva";
+import { useStore } from "zustand/react";
 import { useDocument } from "@/blocks/document-context";
+import { hasBlockDiffToMaster } from "@/blocks/master-diff";
 import type { RenderedLayoutBlock } from "@/blocks/renderer";
 
-function flattenRenderedTrees(
-  roots: RenderedLayoutBlock["tree"][]
-): RenderedLayoutBlock["tree"][] {
-  const flat: RenderedLayoutBlock["tree"][] = [];
+function findTreeNodeByBlockId(
+  roots: RenderedLayoutBlock["tree"][],
+  blockId: string
+): RenderedLayoutBlock["tree"] | null {
   const queue = [...roots];
   while (queue.length > 0) {
     const next = queue.shift();
     if (!next) {
       continue;
     }
-    flat.push(next);
+    if (next.blockId === blockId) {
+      return next;
+    }
     queue.push(...next.children);
   }
-  return flat;
+  return null;
 }
 
 export function MasterDiffLayer() {
-  const { blocks, document, masterDocument, masterDocumentId, projectId } =
-    useDocument();
+  const {
+    blocks,
+    document,
+    masterDocument,
+    masterDocumentId,
+    projectId,
+    documentStore,
+  } = useDocument();
+  const clientToConvex = useStore(
+    documentStore,
+    (state) => state.clientIdMappings.clientToConvex
+  );
 
   const diffBlocks = useMemo(() => {
     if (
@@ -36,23 +50,26 @@ export function MasterDiffLayer() {
       return [];
     }
 
-    const currentBlocksById = new Map(
-      document.blocks.map((block) => [block.id, block])
-    );
-    const masterBlockIds = new Set(
-      masterDocument.blocks.map((block) => block.id)
-    );
-
-    return flattenRenderedTrees(blocks.map((block) => block.tree)).filter(
-      (node) => {
-        const block = currentBlocksById.get(node.blockId);
-        if (!block) {
-          return false;
-        }
-        return block.ref === undefined || !masterBlockIds.has(block.ref);
-      }
-    );
-  }, [blocks, document, masterDocument, masterDocumentId, projectId]);
+    const renderTrees = blocks.map((block) => block.tree);
+    return document.blocks
+      .filter((block) =>
+        hasBlockDiffToMaster({
+          document,
+          masterDocument,
+          blockId: block.id,
+          clientToConvex,
+        })
+      )
+      .map((block) => findTreeNodeByBlockId(renderTrees, block.id))
+      .filter((node): node is RenderedLayoutBlock["tree"] => node != null);
+  }, [
+    blocks,
+    clientToConvex,
+    document,
+    masterDocument,
+    masterDocumentId,
+    projectId,
+  ]);
 
   if (
     projectId === null ||
@@ -73,7 +90,7 @@ export function MasterDiffLayer() {
           y={block.estimatedDimensions.y}
           width={block.estimatedDimensions.width}
           height={block.estimatedDimensions.height}
-          fill="#FEFCE8"
+          fill="#FFFBEB"
           stroke="#FEE685"
           strokeWidth={2}
           cornerRadius={6}

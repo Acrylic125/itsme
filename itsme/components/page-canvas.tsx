@@ -130,6 +130,7 @@ export function PageCanvas() {
           pixelRatio={pixelRatio}
           ref={stageRef}
         >
+          <Layer scaleX={scale} scaleY={scale} listening={false}></Layer>
           <Layer scaleX={scale} scaleY={scale} ref={layerRef}>
             <Rect
               x={0}
@@ -158,18 +159,21 @@ export function PageCanvas() {
                 </Group>
               );
             })}
+          </Layer>
+
+          <Layer scaleX={scale} scaleY={scale}>
+            <MasterDiffLayer />
             <Group>
-              <MasterDiffLayer />
               {blocks.map((block) => (
                 <Group key={block.id}>{block.component()}</Group>
               ))}
-              <MoveReorderLayer />
-              <AddBlockPlacementLayer
-                scale={scale}
-                stageWidth={stageWidth}
-                stageHeight={stageHeight}
-              />
             </Group>
+            <MoveReorderLayer />
+            <AddBlockPlacementLayer
+              scale={scale}
+              stageWidth={stageWidth}
+              stageHeight={stageHeight}
+            />
           </Layer>
         </Stage>
       </div>

@@ -6,6 +6,8 @@ import { useDebouncedCallback } from "use-debounce";
 import { TextBlockSchema } from "./schema";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import type { Block } from "@/blocks/blocks";
+import { SyncToMasterButton } from "@/blocks/sync-to-master-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +59,7 @@ const ALIGN_OPTIONS: {
 ];
 
 type EditTextToolbarProps = {
+  block: Block;
   className?: string;
   onClose: () => void;
   blockStyle: TextStyleKey;
@@ -80,6 +83,7 @@ type EditTextToolbarProps = {
 };
 
 export function EditTextToolbar({
+  block,
   className,
   onClose,
   blockStyle,
@@ -176,6 +180,7 @@ export function EditTextToolbar({
           >
             <X className="size-4" />
           </Button>
+          <SyncToMasterButton block={block} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

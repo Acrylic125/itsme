@@ -4,8 +4,16 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 import { Block, DEFAULT_STYLE_SHEET, StyleSheetSchema } from "../blocks/blocks";
-import { isClientId } from "../blocks/core/client-ids";
-import { convexDataToClientBlock } from "../blocks/core/persistence/convex-codec";
+import { isClientId, newClientBlockId } from "../blocks/core/client-ids";
+import {
+  buildBlockByIdMap,
+  findParentRef,
+  type ParentRef,
+} from "../blocks/core/graph";
+import {
+  clientBlockToConvexData,
+  convexDataToClientBlock,
+} from "../blocks/core/persistence/convex-codec";
 import { TextStyleSheetSchema } from "../blocks/text/schema";
 import { pdfToBlocks } from "../lib/pdf-to-blocks/server";
 import { CreateProjectFromPdfInputSchema } from "@/lib/pdf-to-blocks/schema";
@@ -352,6 +360,564 @@ function mapStylesFromDocumentRows(args: {
           rightSpace: args.listStyles.rightSpace,
         }
       : DEFAULT_STYLE_SHEET.list,
+  };
+}
+
+type ClientBlockDocument = {
+  layout: string[];
+  blocks: Block[];
+};
+
+type UpdateDocumentBlocksActionArg =
+  | {
+      type: "create";
+      clientId?: string;
+      data: (typeof blockDataWithClientIdsValidator)["type"];
+    }
+  | {
+      type: "update";
+      blockId: string;
+      data: (typeof blockDataWithClientIdsValidator)["type"];
+    }
+  | {
+      type: "delete";
+      blockId: string;
+    };
+
+type ApplyDocumentBlocksArgs = {
+  documentId: Id<"documents">;
+  layout?: string[];
+  actions: UpdateDocumentBlocksActionArg[];
+};
+
+type ApplyDocumentBlocksResult = {
+  created: number;
+  updated: number;
+  deleted: number;
+  createdBlockIds: Id<"blocks">[];
+  clientIdToBlockId: Record<string, Id<"blocks">>;
+};
+
+function cloneBlock(block: Block): Block {
+  switch (block.type) {
+    case "text":
+      return { ...block };
+    case "section":
+    case "list":
+      return { ...block, blocks: [...block.blocks] };
+    case "columns":
+      return {
+        ...block,
+        blocks: block.blocks.map((child) => ({ ...child })),
+      };
+  }
+}
+
+function cloneBlockDocument(doc: ClientBlockDocument): ClientBlockDocument {
+  return {
+    layout: [...doc.layout],
+    blocks: doc.blocks.map(cloneBlock),
+  };
+}
+
+function sameParentRef(
+  a: ParentRef | null,
+  b: ParentRef
+): boolean {
+  if (!a) return false;
+  if (a.container !== b.container) return false;
+  if (a.container === "document") {
+    return a.index === b.index;
+  }
+  if (b.container === "document") {
+    return false;
+  }
+  if (a.parentBlockId !== b.parentBlockId || a.index !== b.index) {
+    return false;
+  }
+  if (a.container === "columns" && b.container === "columns") {
+    return a.span === b.span;
+  }
+  return true;
+}
+
+function getDocumentContainerChildIds(
+  doc: ClientBlockDocument,
+  parentBlockId: string | null
+): string[] {
+  if (parentBlockId == null) {
+    return [...doc.layout];
+  }
+  const parent = doc.blocks.find((block) => block.id === parentBlockId);
+  if (!parent) {
+    return [];
+  }
+  if (parent.type === "columns") {
+    return parent.blocks.map((child) => child.blockId);
+  }
+  if (parent.type === "section" || parent.type === "list") {
+    return [...parent.blocks];
+  }
+  return [];
+}
+
+function removeBlockReferenceFromDocument(
+  doc: ClientBlockDocument,
+  source: ParentRef
+) {
+  switch (source.container) {
+    case "document":
+      doc.layout.splice(source.index, 1);
+      return;
+    case "section": {
+      const parent = doc.blocks.find(
+        (block): block is Extract<Block, { type: "section" }> =>
+          block.id === source.parentBlockId && block.type === "section"
+      );
+      parent?.blocks.splice(source.index, 1);
+      return;
+    }
+    case "list": {
+      const parent = doc.blocks.find(
+        (block): block is Extract<Block, { type: "list" }> =>
+          block.id === source.parentBlockId && block.type === "list"
+      );
+      parent?.blocks.splice(source.index, 1);
+      return;
+    }
+    case "columns": {
+      const parent = doc.blocks.find(
+        (block): block is Extract<Block, { type: "columns" }> =>
+          block.id === source.parentBlockId && block.type === "columns"
+      );
+      parent?.blocks.splice(source.index, 1);
+    }
+  }
+}
+
+function insertBlockReferenceIntoDocument(
+  doc: ClientBlockDocument,
+  blockId: string,
+  destination: ParentRef
+) {
+  switch (destination.container) {
+    case "document":
+      doc.layout.splice(destination.index, 0, blockId);
+      return;
+    case "section": {
+      const parent = doc.blocks.find(
+        (block): block is Extract<Block, { type: "section" }> =>
+          block.id === destination.parentBlockId && block.type === "section"
+      );
+      parent?.blocks.splice(destination.index, 0, blockId);
+      return;
+    }
+    case "list": {
+      const parent = doc.blocks.find(
+        (block): block is Extract<Block, { type: "list" }> =>
+          block.id === destination.parentBlockId && block.type === "list"
+      );
+      parent?.blocks.splice(destination.index, 0, blockId);
+      return;
+    }
+    case "columns": {
+      const parent = doc.blocks.find(
+        (block): block is Extract<Block, { type: "columns" }> =>
+          block.id === destination.parentBlockId && block.type === "columns"
+      );
+      parent?.blocks.splice(destination.index, 0, {
+        blockId,
+        span: destination.span,
+      });
+    }
+  }
+}
+
+function moveBlockInDocument(args: {
+  doc: ClientBlockDocument;
+  blockId: string;
+  destination: ParentRef;
+}) {
+  const source = findParentRef(args.doc, args.blockId);
+  if (source) {
+    let destinationIndex = args.destination.index;
+    if (
+      source.container === args.destination.container &&
+      source.container === "document" &&
+      source.index < destinationIndex
+    ) {
+      destinationIndex -= 1;
+    }
+    if (
+      source.container !== "document" &&
+      args.destination.container !== "document" &&
+      source.parentBlockId === args.destination.parentBlockId &&
+      source.index < destinationIndex
+    ) {
+      destinationIndex -= 1;
+    }
+    removeBlockReferenceFromDocument(args.doc, source);
+    insertBlockReferenceIntoDocument(args.doc, args.blockId, {
+      ...args.destination,
+      index: destinationIndex,
+    } as ParentRef);
+    return;
+  }
+  insertBlockReferenceIntoDocument(args.doc, args.blockId, args.destination);
+}
+
+function replaceBlockInDocument(args: {
+  doc: ClientBlockDocument;
+  nextBlock: Block;
+}) {
+  args.doc.blocks = args.doc.blocks.map((block) =>
+    block.id === args.nextBlock.id ? cloneBlock(args.nextBlock) : block
+  );
+}
+
+function resolveMasterBlockIdForCurrentBlock(args: {
+  currentBlock: Block;
+  masterBlockById: Map<string, Block>;
+}): string | null {
+  if (
+    args.currentBlock.ref !== undefined &&
+    args.masterBlockById.has(args.currentBlock.ref)
+  ) {
+    return args.currentBlock.ref;
+  }
+  if (args.masterBlockById.has(args.currentBlock.id)) {
+    return args.currentBlock.id;
+  }
+  return null;
+}
+
+function createMasterPlaceholderBlock(args: {
+  currentBlock: Block;
+  newId: string;
+}): Block {
+  const { currentBlock, newId } = args;
+  switch (currentBlock.type) {
+    case "text":
+      return {
+        id: newId,
+        type: "text",
+        text: currentBlock.text,
+        align: currentBlock.align,
+        style: currentBlock.style,
+        ...(currentBlock.fontSize !== undefined
+          ? { fontSize: currentBlock.fontSize }
+          : {}),
+        ...(currentBlock.fontWeight !== undefined
+          ? { fontWeight: currentBlock.fontWeight }
+          : {}),
+      };
+    case "section":
+      return {
+        id: newId,
+        type: "section",
+        blocks: [],
+      };
+    case "columns":
+      return {
+        id: newId,
+        type: "columns",
+        blocks: [],
+      };
+    case "list":
+      return {
+        id: newId,
+        type: "list",
+        blocks: [],
+        bullet: currentBlock.bullet,
+        ...(currentBlock.leftSpace !== undefined
+          ? { leftSpace: currentBlock.leftSpace }
+          : {}),
+        ...(currentBlock.rightSpace !== undefined
+          ? { rightSpace: currentBlock.rightSpace }
+          : {}),
+      };
+  }
+}
+
+function buildSyncedMasterBlock(args: {
+  currentBlock: Block;
+  masterBlockId: string;
+  existingMasterBlock?: Block;
+  childMasterIds?: string[];
+  columnChildEntries?: Array<{ blockId: string; span: number }>;
+}): Block {
+  const {
+    currentBlock,
+    masterBlockId,
+    existingMasterBlock,
+    childMasterIds,
+    columnChildEntries,
+  } = args;
+  const preservedRef =
+    existingMasterBlock?.ref !== undefined
+      ? { ref: existingMasterBlock.ref }
+      : {};
+
+  switch (currentBlock.type) {
+    case "text":
+      return existingMasterBlock?.type === "text"
+        ? {
+            ...existingMasterBlock,
+            text: currentBlock.text,
+          }
+        : {
+            id: masterBlockId,
+            type: "text",
+            text: currentBlock.text,
+            align: currentBlock.align,
+            style: currentBlock.style,
+            ...(currentBlock.fontSize !== undefined
+              ? { fontSize: currentBlock.fontSize }
+              : {}),
+            ...(currentBlock.fontWeight !== undefined
+              ? { fontWeight: currentBlock.fontWeight }
+              : {}),
+          };
+    case "section":
+      return {
+        id: masterBlockId,
+        type: "section",
+        blocks: [...(childMasterIds ?? [])],
+        ...preservedRef,
+      };
+    case "columns":
+      return {
+        id: masterBlockId,
+        type: "columns",
+        blocks:
+          columnChildEntries ??
+          currentBlock.blocks.map((child, index) => ({
+            blockId: childMasterIds?.[index] ?? child.blockId,
+            span: child.span,
+          })),
+        ...preservedRef,
+      };
+    case "list":
+      return {
+        id: masterBlockId,
+        type: "list",
+        blocks: [...(childMasterIds ?? [])],
+        bullet: currentBlock.bullet,
+        ...(currentBlock.leftSpace !== undefined
+          ? { leftSpace: currentBlock.leftSpace }
+          : {}),
+        ...(currentBlock.rightSpace !== undefined
+          ? { rightSpace: currentBlock.rightSpace }
+          : {}),
+        ...preservedRef,
+      };
+  }
+}
+
+function setBlockDataRef(
+  data: (typeof blockDataValidator)["type"],
+  ref: Id<"blocks">
+): (typeof blockDataValidator)["type"] {
+  return {
+    ...data,
+    ref,
+  };
+}
+
+function areDocumentsEqualByLayout(
+  left: string[],
+  right: string[]
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((id, index) => id === right[index]);
+}
+
+function buildDocumentMutationPatch(args: {
+  documentId: Id<"documents">;
+  before: ClientBlockDocument;
+  after: ClientBlockDocument;
+}): ApplyDocumentBlocksArgs {
+  const beforeById = buildBlockByIdMap(args.before.blocks);
+  const afterById = buildBlockByIdMap(args.after.blocks);
+  const actions: UpdateDocumentBlocksActionArg[] = [];
+
+  for (const block of args.after.blocks) {
+    const previous = beforeById.get(block.id);
+    if (!previous) {
+      actions.push({
+        type: "create",
+        ...(isClientId(block.id) ? { clientId: block.id } : {}),
+        data: clientBlockToConvexData(block),
+      });
+      continue;
+    }
+    if (JSON.stringify(previous) !== JSON.stringify(block)) {
+      actions.push({
+        type: "update",
+        blockId: block.id,
+        data: clientBlockToConvexData(block),
+      });
+    }
+  }
+
+  for (const previous of args.before.blocks) {
+    if (!afterById.has(previous.id)) {
+      actions.push({
+        type: "delete",
+        blockId: previous.id,
+      });
+    }
+  }
+
+  return {
+    documentId: args.documentId,
+    actions,
+    ...(areDocumentsEqualByLayout(args.before.layout, args.after.layout)
+      ? {}
+      : { layout: [...args.after.layout] }),
+  };
+}
+
+async function applyDocumentBlocksMutation(
+  ctx: MutationCtx,
+  args: ApplyDocumentBlocksArgs
+): Promise<ApplyDocumentBlocksResult> {
+  if (args.actions.length === 0 && !args.layout) {
+    return {
+      created: 0,
+      updated: 0,
+      deleted: 0,
+      createdBlockIds: [],
+      clientIdToBlockId: {},
+    };
+  }
+
+  const doc = await ctx.db.get(args.documentId);
+  if (!doc) throw new Error("Document not found.");
+
+  const createdBlockIds: Id<"blocks">[] = [];
+  const clientIdToBlockId = new Map<string, Id<"blocks">>();
+  let created = 0;
+  let updated = 0;
+  let deleted = 0;
+
+  const creates = args.actions.filter(
+    (a): a is Extract<ApplyDocumentBlocksArgs["actions"][number], { type: "create" }> =>
+      a.type === "create"
+  );
+  const updates = args.actions.filter(
+    (a): a is Extract<ApplyDocumentBlocksArgs["actions"][number], { type: "update" }> =>
+      a.type === "update"
+  );
+  const deletes = args.actions.filter(
+    (a): a is Extract<ApplyDocumentBlocksArgs["actions"][number], { type: "delete" }> =>
+      a.type === "delete"
+  );
+
+  const pendingCreates = creates.slice();
+  while (pendingCreates.length > 0) {
+    const before = pendingCreates.length;
+
+    for (let i = pendingCreates.length - 1; i >= 0; i--) {
+      const action = pendingCreates[i]!;
+      const referenced = collectReferencedIdsFromBlockData(action.data).filter((id) =>
+        isClientId(id)
+      );
+      const unresolved = referenced.filter((cid) => !clientIdToBlockId.has(cid));
+      if (unresolved.length > 0) continue;
+
+      const mappedData = remapBlockDataClientIds({
+        data: action.data,
+        idMap: clientIdToBlockId,
+      });
+
+      const id = await ctx.db.insert("blocks", {
+        documentId: args.documentId,
+        data: mappedData,
+      });
+      createdBlockIds.push(id);
+      created += 1;
+
+      if (action.clientId && isClientId(action.clientId)) {
+        clientIdToBlockId.set(action.clientId, id);
+      }
+
+      pendingCreates.splice(i, 1);
+    }
+
+    if (pendingCreates.length === before) {
+      const sample = pendingCreates
+        .slice(0, 3)
+        .map((c) => c.clientId ?? "(missing clientId)");
+      throw new Error(
+        `Could not resolve create dependencies for client ids: ${sample.join(", ")}`
+      );
+    }
+  }
+
+  for (const action of updates) {
+    const mappedBlockId = isClientId(action.blockId)
+      ? clientIdToBlockId.get(action.blockId)
+      : (action.blockId as Id<"blocks">);
+    if (!mappedBlockId) {
+      throw new Error(`Unresolved client id '${action.blockId}' for update.`);
+    }
+
+    const block = await ctx.db.get(mappedBlockId);
+    if (!block || block.documentId !== args.documentId) {
+      throw new Error("updateDocumentBlocks only supports one document.");
+    }
+
+    await ctx.db.patch(mappedBlockId, {
+      data: remapBlockDataClientIds({
+        data: action.data,
+        idMap: clientIdToBlockId,
+      }),
+    });
+    updated += 1;
+  }
+
+  for (const action of deletes) {
+    const mappedBlockId = isClientId(action.blockId)
+      ? clientIdToBlockId.get(action.blockId)
+      : (action.blockId as Id<"blocks">);
+    if (!mappedBlockId) {
+      throw new Error(`Unresolved client id '${action.blockId}' for delete.`);
+    }
+
+    const block = await ctx.db.get(mappedBlockId);
+    if (!block || block.documentId !== args.documentId) {
+      throw new Error("updateDocumentBlocks only supports one document.");
+    }
+    await ctx.db.delete(mappedBlockId);
+    deleted += 1;
+  }
+
+  if (args.layout) {
+    const mappedLayoutAfterMutation = args.layout.map((id) => {
+      if (!isClientId(id)) return id as Id<"blocks">;
+      const mapped = clientIdToBlockId.get(id);
+      if (!mapped) throw new Error(`Unresolved client id '${id}' in layout.`);
+      return mapped;
+    });
+    await ctx.db.patch(args.documentId, {
+      layout: mappedLayoutAfterMutation,
+    });
+  }
+
+  const clientIdToBlockIdRecord: Record<string, Id<"blocks">> = {};
+  for (const [clientId, blockId] of clientIdToBlockId) {
+    clientIdToBlockIdRecord[clientId] = blockId;
+  }
+
+  return {
+    created,
+    updated,
+    deleted,
+    createdBlockIds,
+    clientIdToBlockId: clientIdToBlockIdRecord,
   };
 }
 
@@ -852,151 +1418,343 @@ export const updateDocumentBlocks = mutation({
   },
   handler: async (ctx, args) => {
     await requireIdentity(ctx);
+    return await applyDocumentBlocksMutation(ctx, {
+      documentId: args.documentId,
+      actions: args.actions,
+      layout: args.layout,
+    });
+  },
+});
 
-    if (args.actions.length === 0 && !args.layout) {
-      return {
-        created: 0,
-        updated: 0,
-        deleted: 0,
-        createdBlockIds: [] as Id<"blocks">[],
-        clientIdToBlockId: {} as Record<string, Id<"blocks">>,
-      };
+export const syncBlockToMaster = mutation({
+  args: {
+    documentId: v.id("documents"),
+    blockId: v.id("blocks"),
+  },
+  returns: v.object({
+    masterBlockId: v.id("blocks"),
+    createdMasterBlockIds: v.array(v.id("blocks")),
+    updatedRefCount: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    await requireIdentity(ctx);
+
+    const currentDocumentRow = await ctx.db.get(args.documentId);
+    if (!currentDocumentRow) {
+      throw new Error("Document not found.");
     }
 
-    const doc = await ctx.db.get(args.documentId);
-    if (!doc) throw new Error("Document not found.");
+    const masterLink = await ctx.db
+      .query("projectMasterDocuments")
+      .withIndex("by_projectId", (q) => q.eq("projectId", currentDocumentRow.projectId))
+      .first();
+    if (!masterLink) {
+      throw new Error("Master document not found.");
+    }
+    if (masterLink.documentId === args.documentId) {
+      throw new Error("Cannot sync the master document to itself.");
+    }
 
-    const createdBlockIds: Id<"blocks">[] = [];
-    const clientIdToBlockId = new Map<string, Id<"blocks">>();
-    let created = 0;
-    let updated = 0;
-    let deleted = 0;
+    const [currentBlockRows, masterDocumentRow, masterBlockRows, projectDocuments] =
+      await Promise.all([
+        ctx.db
+          .query("blocks")
+          .withIndex("by_documentId", (q) => q.eq("documentId", args.documentId))
+          .collect(),
+        ctx.db.get(masterLink.documentId),
+        ctx.db
+          .query("blocks")
+          .withIndex("by_documentId", (q) => q.eq("documentId", masterLink.documentId))
+          .collect(),
+        ctx.db
+          .query("documents")
+          .withIndex("by_projectId", (q) => q.eq("projectId", currentDocumentRow.projectId))
+          .collect(),
+      ]);
+    if (!masterDocumentRow) {
+      throw new Error("Master document not found.");
+    }
 
-    const creates = args.actions.filter(
-      (a): a is Extract<(typeof args.actions)[number], { type: "create" }> =>
-        a.type === "create"
-    );
-    const updates = args.actions.filter(
-      (a): a is Extract<(typeof args.actions)[number], { type: "update" }> =>
-        a.type === "update"
-    );
-    const deletes = args.actions.filter(
-      (a): a is Extract<(typeof args.actions)[number], { type: "delete" }> =>
-        a.type === "delete"
-    );
+    const currentDocument: ClientBlockDocument = {
+      layout: [...currentDocumentRow.layout],
+      blocks: currentBlockRows.map((row) => convexBlockToClientBlock(row)),
+    };
+    const originalMasterDocument: ClientBlockDocument = {
+      layout: [...masterDocumentRow.layout],
+      blocks: masterBlockRows.map((row) => convexBlockToClientBlock(row)),
+    };
+    const workingMasterDocument = cloneBlockDocument(originalMasterDocument);
 
-    // Insert create actions in dependency order (parents before children) so
-    // any client ids referenced by children are mapped first.
-    const pendingCreates = creates.slice();
-    while (pendingCreates.length > 0) {
-      const before = pendingCreates.length;
+    const currentBlockById = buildBlockByIdMap(currentDocument.blocks);
+    const targetCurrentBlock = currentBlockById.get(args.blockId);
+    if (!targetCurrentBlock) {
+      throw new Error("Block not found in document.");
+    }
 
-      for (let i = pendingCreates.length - 1; i >= 0; i--) {
-        const action = pendingCreates[i]!;
-        const referenced = collectReferencedIdsFromBlockData(
-          action.data
-        ).filter((id) => isClientId(id));
-        const unresolved = referenced.filter(
-          (cid) => !clientIdToBlockId.has(cid)
-        );
-        if (unresolved.length > 0) continue;
+    const createdBindings = new Map<
+      string,
+      { currentBlockId: string; previousRef?: string; workingMasterId: string }
+    >();
 
-        const mappedData = remapBlockDataClientIds({
-          data: action.data,
-          idMap: clientIdToBlockId,
-        });
+    const resolveCurrentToMasterId = (currentBlockId: string): string | null => {
+      const currentBlock = currentBlockById.get(currentBlockId);
+      if (!currentBlock) {
+        return null;
+      }
+      const created = createdBindings.get(currentBlockId);
+      if (created) {
+        return created.workingMasterId;
+      }
+      const workingMasterBlockById = buildBlockByIdMap(workingMasterDocument.blocks);
+      return resolveMasterBlockIdForCurrentBlock({
+        currentBlock,
+        masterBlockById: workingMasterBlockById,
+      });
+    };
 
-        const id = await ctx.db.insert("blocks", {
-          documentId: args.documentId,
-          data: mappedData,
-        });
-        createdBlockIds.push(id);
-        created += 1;
+    const findMasterBlockPlacement = (currentBlockId: string): ParentRef => {
+      const currentParent = findParentRef(currentDocument, currentBlockId);
+      if (!currentParent) {
+        throw new Error("Block placement not found in current document.");
+      }
 
-        if (action.clientId && isClientId(action.clientId)) {
-          clientIdToBlockId.set(action.clientId, id);
+      const currentParentBlockId =
+        currentParent.container === "document" ? null : currentParent.parentBlockId;
+      const masterParentBlockId =
+        currentParentBlockId != null ? resolveCurrentToMasterId(currentParentBlockId) : null;
+      const currentContainerIds = getDocumentContainerChildIds(
+        currentDocument,
+        currentParentBlockId
+      );
+      const masterContainerIds = getDocumentContainerChildIds(
+        workingMasterDocument,
+        masterParentBlockId
+      );
+      const currentIndex = currentContainerIds.indexOf(currentBlockId);
+      const span = currentParent.container === "columns" ? currentParent.span : undefined;
+
+      const makeDestination = (index: number): ParentRef => {
+        switch (currentParent.container) {
+          case "document":
+            return { container: "document", index };
+          case "section":
+            return {
+              container: "section",
+              parentBlockId: masterParentBlockId!,
+              index,
+            };
+          case "list":
+            return {
+              container: "list",
+              parentBlockId: masterParentBlockId!,
+              index,
+            };
+          case "columns":
+            return {
+              container: "columns",
+              parentBlockId: masterParentBlockId!,
+              index,
+              span: span ?? 1,
+            };
         }
+      };
 
-        pendingCreates.splice(i, 1);
+      for (let i = currentIndex - 1; i >= 0; i--) {
+        const siblingMasterId = resolveCurrentToMasterId(currentContainerIds[i]!);
+        if (!siblingMasterId) {
+          continue;
+        }
+        const masterIndex = masterContainerIds.indexOf(siblingMasterId);
+        if (masterIndex >= 0) {
+          return makeDestination(masterIndex + 1);
+        }
       }
 
-      if (pendingCreates.length === before) {
-        const sample = pendingCreates
-          .slice(0, 3)
-          .map((c) => c.clientId ?? "(missing clientId)");
-        throw new Error(
-          `Could not resolve create dependencies for client ids: ${sample.join(
-            ", "
-          )}`
+      for (let i = currentIndex + 1; i < currentContainerIds.length; i++) {
+        const siblingMasterId = resolveCurrentToMasterId(currentContainerIds[i]!);
+        if (!siblingMasterId) {
+          continue;
+        }
+        const masterIndex = masterContainerIds.indexOf(siblingMasterId);
+        if (masterIndex >= 0) {
+          return makeDestination(masterIndex);
+        }
+      }
+
+      return makeDestination(masterContainerIds.length);
+    };
+
+    const ensureMasterPlacement = (currentBlockId: string): string => {
+      const currentBlock = currentBlockById.get(currentBlockId);
+      if (!currentBlock) {
+        throw new Error("Current block missing.");
+      }
+
+      const currentParent = findParentRef(currentDocument, currentBlockId);
+      if (!currentParent) {
+        throw new Error("Current block has no parent placement.");
+      }
+      if (currentParent.container !== "document") {
+        ensureMasterPlacement(currentParent.parentBlockId);
+      }
+
+      const destination = findMasterBlockPlacement(currentBlockId);
+      const existingMasterId = resolveCurrentToMasterId(currentBlockId);
+      if (!existingMasterId) {
+        const workingMasterId = newClientBlockId(currentBlock.type);
+        workingMasterDocument.blocks.push(
+          createMasterPlaceholderBlock({
+            currentBlock,
+            newId: workingMasterId,
+          })
         );
-      }
-    }
-
-    for (const action of updates) {
-      const mappedBlockId = isClientId(action.blockId)
-        ? clientIdToBlockId.get(action.blockId)
-        : (action.blockId as Id<"blocks">);
-      if (!mappedBlockId) {
-        throw new Error(`Unresolved client id '${action.blockId}' for update.`);
-      }
-
-      const block = await ctx.db.get(mappedBlockId);
-      if (!block || block.documentId !== args.documentId) {
-        throw new Error("updateDocumentBlocks only supports one document.");
+        insertBlockReferenceIntoDocument(
+          workingMasterDocument,
+          workingMasterId,
+          destination
+        );
+        createdBindings.set(currentBlockId, {
+          currentBlockId,
+          previousRef: currentBlock.ref,
+          workingMasterId,
+        });
+        return workingMasterId;
       }
 
-      await ctx.db.patch(mappedBlockId, {
-        data: remapBlockDataClientIds({
-          data: action.data,
-          idMap: clientIdToBlockId,
+      const source = findParentRef(workingMasterDocument, existingMasterId);
+      if (!sameParentRef(source, destination)) {
+        moveBlockInDocument({
+          doc: workingMasterDocument,
+          blockId: existingMasterId,
+          destination,
+        });
+      }
+      return existingMasterId;
+    };
+
+    const syncSubtreeToMaster = (currentBlockId: string): string => {
+      const currentBlock = currentBlockById.get(currentBlockId);
+      if (!currentBlock) {
+        throw new Error("Current block missing.");
+      }
+
+      const masterBlockId = ensureMasterPlacement(currentBlockId);
+      const existingMasterBlock = buildBlockByIdMap(workingMasterDocument.blocks).get(
+        masterBlockId
+      );
+
+      if (currentBlock.type === "text") {
+        replaceBlockInDocument({
+          doc: workingMasterDocument,
+          nextBlock: buildSyncedMasterBlock({
+            currentBlock,
+            masterBlockId,
+            existingMasterBlock,
+          }),
+        });
+        return masterBlockId;
+      }
+
+      if (currentBlock.type === "columns") {
+        const columnChildEntries = currentBlock.blocks.flatMap((child) => {
+          if (!currentBlockById.has(child.blockId)) {
+            return [];
+          }
+          return [
+            {
+              blockId: syncSubtreeToMaster(child.blockId),
+              span: child.span,
+            },
+          ];
+        });
+
+        replaceBlockInDocument({
+          doc: workingMasterDocument,
+          nextBlock: buildSyncedMasterBlock({
+            currentBlock,
+            masterBlockId,
+            existingMasterBlock,
+            columnChildEntries,
+          }),
+        });
+        return masterBlockId;
+      }
+
+      const childMasterIds = currentBlock.blocks.flatMap((childId) =>
+        currentBlockById.has(childId) ? [syncSubtreeToMaster(childId)] : []
+      );
+
+      replaceBlockInDocument({
+        doc: workingMasterDocument,
+        nextBlock: buildSyncedMasterBlock({
+          currentBlock,
+          masterBlockId,
+          existingMasterBlock,
+          childMasterIds,
         }),
       });
-      updated += 1;
-    }
+      return masterBlockId;
+    };
 
-    for (const action of deletes) {
-      const mappedBlockId = isClientId(action.blockId)
-        ? clientIdToBlockId.get(action.blockId)
-        : (action.blockId as Id<"blocks">);
-      if (!mappedBlockId) {
-        throw new Error(`Unresolved client id '${action.blockId}' for delete.`);
+    const targetWorkingMasterId = syncSubtreeToMaster(args.blockId);
+    const masterPatch = buildDocumentMutationPatch({
+      documentId: masterLink.documentId,
+      before: originalMasterDocument,
+      after: workingMasterDocument,
+    });
+    const masterUpdateResult = await applyDocumentBlocksMutation(ctx, masterPatch);
+
+    const resolveWorkingMasterIdToActual = (id: string): Id<"blocks"> => {
+      if (!isClientId(id)) {
+        return id as Id<"blocks">;
+      }
+      const mapped = masterUpdateResult.clientIdToBlockId[id];
+      if (!mapped) {
+        throw new Error(`Missing created master mapping for '${id}'.`);
+      }
+      return mapped;
+    };
+
+    const projectBlockRows = (
+      await Promise.all(
+        projectDocuments.map((document) =>
+          ctx.db
+            .query("blocks")
+            .withIndex("by_documentId", (q) => q.eq("documentId", document._id))
+            .collect()
+        )
+      )
+    ).flat();
+
+    let updatedRefCount = 0;
+    for (const binding of createdBindings.values()) {
+      const actualMasterId = resolveWorkingMasterIdToActual(binding.workingMasterId);
+      if (binding.previousRef) {
+        for (const row of projectBlockRows) {
+          if (row.data.ref !== binding.previousRef) {
+            continue;
+          }
+          await ctx.db.patch(row._id, {
+            data: setBlockDataRef(row.data, actualMasterId),
+          });
+          updatedRefCount += 1;
+        }
+        continue;
       }
 
-      const block = await ctx.db.get(mappedBlockId);
-      if (!block || block.documentId !== args.documentId) {
-        throw new Error("updateDocumentBlocks only supports one document.");
+      const currentRow = currentBlockRows.find((row) => row._id === binding.currentBlockId);
+      if (currentRow) {
+        await ctx.db.patch(currentRow._id, {
+          data: setBlockDataRef(currentRow.data, actualMasterId),
+        });
+        updatedRefCount += 1;
       }
-      await ctx.db.delete(mappedBlockId);
-      deleted += 1;
-    }
-
-    let mappedLayoutAfterMutation: Id<"blocks">[] | undefined;
-    if (args.layout) {
-      mappedLayoutAfterMutation = args.layout.map((id) => {
-        if (!isClientId(id)) return id as Id<"blocks">;
-        const mapped = clientIdToBlockId.get(id);
-        if (!mapped) throw new Error(`Unresolved client id '${id}' in layout.`);
-        return mapped;
-      });
-      await ctx.db.patch(args.documentId, {
-        layout: mappedLayoutAfterMutation,
-      });
-    }
-    // Do not append created rows to `layout` when `layout` is omitted. Nested
-    // creates (e.g. text inside a list) only update parent block data; the
-    // client intentionally skips `layout` when the root order is unchanged.
-
-    const clientIdToBlockIdRecord: Record<string, Id<"blocks">> = {};
-    for (const [clientId, blockId] of clientIdToBlockId) {
-      clientIdToBlockIdRecord[clientId] = blockId;
     }
 
     return {
-      created,
-      updated,
-      deleted,
-      createdBlockIds,
-      clientIdToBlockId: clientIdToBlockIdRecord,
+      masterBlockId: resolveWorkingMasterIdToActual(targetWorkingMasterId),
+      createdMasterBlockIds: masterUpdateResult.createdBlockIds,
+      updatedRefCount,
     };
   },
 });

@@ -659,6 +659,7 @@ function TextBlockComponent({
           >
             <div className="relative h-0 w-full">
               <EditTextToolbar
+                block={block}
                 onClose={closeTextFocus}
                 blockStyle={blockStyle}
                 onTextStylePresetSelect={(nextStyle) => {
