@@ -9,6 +9,7 @@ import {
   blockSyncActionsToMutationActions,
   documentBlocksSnapshotToDocument,
   layoutPatchIfChanged,
+  rebaseResurrectedSnapshotIds,
 } from "../document-sync";
 import {
   mapBlockIdForMutation,
@@ -40,9 +41,9 @@ export function useDocumentBlocksSync(args: {
     useState<DocumentBlocksSnapshot | null>(null);
   const modifiedBlocksRef = useRef<DocumentBlocksSnapshot | null>(null);
   const blocksQueryRawRef = useRef<BlocksQueryData | null>(null);
-  const commitTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(
-    null
-  );
+  const commitTimerRef = useRef<ReturnType<
+    typeof globalThis.setTimeout
+  > | null>(null);
   const inFlightCommitRef = useRef<Promise<unknown> | null>(null);
   const pendingCommitRef = useRef(false);
   const suppressHistoryForBlocksTransformRef = useRef(false);
@@ -84,7 +85,11 @@ export function useDocumentBlocksSync(args: {
     const serverNormalized = snapshotConvexToClient(rawServer, convexToClient);
 
     const serverDoc = documentBlocksSnapshotToDocument(serverNormalized);
-    const modifiedDoc = documentBlocksSnapshotToDocument(modified);
+    const rebasedModified = rebaseResurrectedSnapshotIds({
+      serverDocument: serverDoc,
+      snapshot: modified,
+    });
+    const modifiedDoc = documentBlocksSnapshotToDocument(rebasedModified);
     const blockActions = buildDocumentBlockDiff(serverDoc, modifiedDoc);
     const mutationActions = blockSyncActionsToMutationActions(
       blockActions,
@@ -92,7 +97,7 @@ export function useDocumentBlocksSync(args: {
     );
     const layoutPatch = layoutPatchIfChanged(
       serverNormalized.layout,
-      modified.layout
+      rebasedModified.layout
     );
     const layoutForMutation =
       layoutPatch !== undefined
@@ -106,7 +111,7 @@ export function useDocumentBlocksSync(args: {
       return;
     }
 
-    const optimisticSnapshot = structuredClone(modified);
+    const optimisticSnapshot = structuredClone(rebasedModified);
 
     const run = updateDocumentBlocksMutation.withOptimisticUpdate(
       (localStore) => {

@@ -420,10 +420,7 @@ function cloneBlockDocument(doc: ClientBlockDocument): ClientBlockDocument {
   };
 }
 
-function sameParentRef(
-  a: ParentRef | null,
-  b: ParentRef
-): boolean {
+function sameParentRef(a: ParentRef | null, b: ParentRef): boolean {
   if (!a) return false;
   if (a.container !== b.container) return false;
   if (a.container === "document") {
@@ -724,10 +721,7 @@ function setBlockDataRef(
   };
 }
 
-function areDocumentsEqualByLayout(
-  left: string[],
-  right: string[]
-): boolean {
+function areDocumentsEqualByLayout(left: string[], right: string[]): boolean {
   if (left.length !== right.length) {
     return false;
   }
@@ -804,16 +798,28 @@ async function applyDocumentBlocksMutation(
   let deleted = 0;
 
   const creates = args.actions.filter(
-    (a): a is Extract<ApplyDocumentBlocksArgs["actions"][number], { type: "create" }> =>
-      a.type === "create"
+    (
+      a
+    ): a is Extract<
+      ApplyDocumentBlocksArgs["actions"][number],
+      { type: "create" }
+    > => a.type === "create"
   );
   const updates = args.actions.filter(
-    (a): a is Extract<ApplyDocumentBlocksArgs["actions"][number], { type: "update" }> =>
-      a.type === "update"
+    (
+      a
+    ): a is Extract<
+      ApplyDocumentBlocksArgs["actions"][number],
+      { type: "update" }
+    > => a.type === "update"
   );
   const deletes = args.actions.filter(
-    (a): a is Extract<ApplyDocumentBlocksArgs["actions"][number], { type: "delete" }> =>
-      a.type === "delete"
+    (
+      a
+    ): a is Extract<
+      ApplyDocumentBlocksArgs["actions"][number],
+      { type: "delete" }
+    > => a.type === "delete"
   );
 
   const pendingCreates = creates.slice();
@@ -822,10 +828,12 @@ async function applyDocumentBlocksMutation(
 
     for (let i = pendingCreates.length - 1; i >= 0; i--) {
       const action = pendingCreates[i]!;
-      const referenced = collectReferencedIdsFromBlockData(action.data).filter((id) =>
-        isClientId(id)
+      const referenced = collectReferencedIdsFromBlockData(action.data).filter(
+        (id) => isClientId(id)
       );
-      const unresolved = referenced.filter((cid) => !clientIdToBlockId.has(cid));
+      const unresolved = referenced.filter(
+        (cid) => !clientIdToBlockId.has(cid)
+      );
       if (unresolved.length > 0) continue;
 
       const mappedData = remapBlockDataClientIds({
@@ -1446,7 +1454,9 @@ export const syncBlockToMaster = mutation({
 
     const masterLink = await ctx.db
       .query("projectMasterDocuments")
-      .withIndex("by_projectId", (q) => q.eq("projectId", currentDocumentRow.projectId))
+      .withIndex("by_projectId", (q) =>
+        q.eq("projectId", currentDocumentRow.projectId)
+      )
       .first();
     if (!masterLink) {
       throw new Error("Master document not found.");
@@ -1455,22 +1465,30 @@ export const syncBlockToMaster = mutation({
       throw new Error("Cannot sync the master document to itself.");
     }
 
-    const [currentBlockRows, masterDocumentRow, masterBlockRows, projectDocuments] =
-      await Promise.all([
-        ctx.db
-          .query("blocks")
-          .withIndex("by_documentId", (q) => q.eq("documentId", args.documentId))
-          .collect(),
-        ctx.db.get(masterLink.documentId),
-        ctx.db
-          .query("blocks")
-          .withIndex("by_documentId", (q) => q.eq("documentId", masterLink.documentId))
-          .collect(),
-        ctx.db
-          .query("documents")
-          .withIndex("by_projectId", (q) => q.eq("projectId", currentDocumentRow.projectId))
-          .collect(),
-      ]);
+    const [
+      currentBlockRows,
+      masterDocumentRow,
+      masterBlockRows,
+      projectDocuments,
+    ] = await Promise.all([
+      ctx.db
+        .query("blocks")
+        .withIndex("by_documentId", (q) => q.eq("documentId", args.documentId))
+        .collect(),
+      ctx.db.get(masterLink.documentId),
+      ctx.db
+        .query("blocks")
+        .withIndex("by_documentId", (q) =>
+          q.eq("documentId", masterLink.documentId)
+        )
+        .collect(),
+      ctx.db
+        .query("documents")
+        .withIndex("by_projectId", (q) =>
+          q.eq("projectId", currentDocumentRow.projectId)
+        )
+        .collect(),
+    ]);
     if (!masterDocumentRow) {
       throw new Error("Master document not found.");
     }
@@ -1496,7 +1514,9 @@ export const syncBlockToMaster = mutation({
       { currentBlockId: string; previousRef?: string; workingMasterId: string }
     >();
 
-    const resolveCurrentToMasterId = (currentBlockId: string): string | null => {
+    const resolveCurrentToMasterId = (
+      currentBlockId: string
+    ): string | null => {
       const currentBlock = currentBlockById.get(currentBlockId);
       if (!currentBlock) {
         return null;
@@ -1505,7 +1525,9 @@ export const syncBlockToMaster = mutation({
       if (created) {
         return created.workingMasterId;
       }
-      const workingMasterBlockById = buildBlockByIdMap(workingMasterDocument.blocks);
+      const workingMasterBlockById = buildBlockByIdMap(
+        workingMasterDocument.blocks
+      );
       return resolveMasterBlockIdForCurrentBlock({
         currentBlock,
         masterBlockById: workingMasterBlockById,
@@ -1519,9 +1541,13 @@ export const syncBlockToMaster = mutation({
       }
 
       const currentParentBlockId =
-        currentParent.container === "document" ? null : currentParent.parentBlockId;
+        currentParent.container === "document"
+          ? null
+          : currentParent.parentBlockId;
       const masterParentBlockId =
-        currentParentBlockId != null ? resolveCurrentToMasterId(currentParentBlockId) : null;
+        currentParentBlockId != null
+          ? resolveCurrentToMasterId(currentParentBlockId)
+          : null;
       const currentContainerIds = getDocumentContainerChildIds(
         currentDocument,
         currentParentBlockId
@@ -1531,7 +1557,8 @@ export const syncBlockToMaster = mutation({
         masterParentBlockId
       );
       const currentIndex = currentContainerIds.indexOf(currentBlockId);
-      const span = currentParent.container === "columns" ? currentParent.span : undefined;
+      const span =
+        currentParent.container === "columns" ? currentParent.span : undefined;
 
       const makeDestination = (index: number): ParentRef => {
         switch (currentParent.container) {
@@ -1560,7 +1587,9 @@ export const syncBlockToMaster = mutation({
       };
 
       for (let i = currentIndex - 1; i >= 0; i--) {
-        const siblingMasterId = resolveCurrentToMasterId(currentContainerIds[i]!);
+        const siblingMasterId = resolveCurrentToMasterId(
+          currentContainerIds[i]!
+        );
         if (!siblingMasterId) {
           continue;
         }
@@ -1571,7 +1600,9 @@ export const syncBlockToMaster = mutation({
       }
 
       for (let i = currentIndex + 1; i < currentContainerIds.length; i++) {
-        const siblingMasterId = resolveCurrentToMasterId(currentContainerIds[i]!);
+        const siblingMasterId = resolveCurrentToMasterId(
+          currentContainerIds[i]!
+        );
         if (!siblingMasterId) {
           continue;
         }
@@ -1639,9 +1670,9 @@ export const syncBlockToMaster = mutation({
       }
 
       const masterBlockId = ensureMasterPlacement(currentBlockId);
-      const existingMasterBlock = buildBlockByIdMap(workingMasterDocument.blocks).get(
-        masterBlockId
-      );
+      const existingMasterBlock = buildBlockByIdMap(
+        workingMasterDocument.blocks
+      ).get(masterBlockId);
 
       if (currentBlock.type === "text") {
         replaceBlockInDocument({
@@ -1702,7 +1733,10 @@ export const syncBlockToMaster = mutation({
       before: originalMasterDocument,
       after: workingMasterDocument,
     });
-    const masterUpdateResult = await applyDocumentBlocksMutation(ctx, masterPatch);
+    const masterUpdateResult = await applyDocumentBlocksMutation(
+      ctx,
+      masterPatch
+    );
 
     const resolveWorkingMasterIdToActual = (id: string): Id<"blocks"> => {
       if (!isClientId(id)) {
@@ -1728,7 +1762,9 @@ export const syncBlockToMaster = mutation({
 
     let updatedRefCount = 0;
     for (const binding of createdBindings.values()) {
-      const actualMasterId = resolveWorkingMasterIdToActual(binding.workingMasterId);
+      const actualMasterId = resolveWorkingMasterIdToActual(
+        binding.workingMasterId
+      );
       if (binding.previousRef) {
         for (const row of projectBlockRows) {
           if (row.data.ref !== binding.previousRef) {
@@ -1742,7 +1778,9 @@ export const syncBlockToMaster = mutation({
         continue;
       }
 
-      const currentRow = currentBlockRows.find((row) => row._id === binding.currentBlockId);
+      const currentRow = currentBlockRows.find(
+        (row) => row._id === binding.currentBlockId
+      );
       if (currentRow) {
         await ctx.db.patch(currentRow._id, {
           data: setBlockDataRef(currentRow.data, actualMasterId),

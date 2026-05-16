@@ -1,6 +1,7 @@
 import type { Id } from "@/convex/_generated/dataModel";
 import type { Block } from "./blocks";
 import { isClientId } from "./core/client-ids";
+import { newClientBlockId } from "./core/client-ids";
 import {
   clientBlockToConvexData,
   remapConvexBlockRowData,
@@ -9,6 +10,7 @@ import {
 import {
   documentBlocksSnapshotToDocument,
   mapBlockIdForMutation,
+  remapSnapshotIds,
   type Document,
   type DocumentBlocksSnapshot,
 } from "./core/persistence/snapshot";
@@ -48,6 +50,30 @@ export function buildDocumentBlockDiff(
     }));
 
   return [...createOrUpdate, ...deletes];
+}
+
+export function rebaseResurrectedSnapshotIds(args: {
+  serverDocument: Document;
+  snapshot: DocumentBlocksSnapshot;
+}): DocumentBlocksSnapshot {
+  const serverBlockIds = new Set(args.serverDocument.blocks.map((block) => block.id));
+  const resurrectedIdMap = new Map<string, string>();
+
+  for (const block of args.snapshot.blocks) {
+    if (isClientId(block.id) || serverBlockIds.has(block.id)) {
+      continue;
+    }
+    resurrectedIdMap.set(block.id, newClientBlockId(block.type));
+  }
+
+  if (resurrectedIdMap.size === 0) {
+    return args.snapshot;
+  }
+
+  return remapSnapshotIds(
+    args.snapshot,
+    (id) => resurrectedIdMap.get(id) ?? id
+  );
 }
 
 export function layoutPatchIfChanged(
