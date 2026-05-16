@@ -33,6 +33,7 @@ export function remapClientBlockIds(
           style: b.style,
           ...(b.fontSize !== undefined ? { fontSize: b.fontSize } : {}),
           ...(b.fontWeight !== undefined ? { fontWeight: b.fontWeight } : {}),
+          ...(b.lineHeight !== undefined ? { lineHeight: b.lineHeight } : {}),
           ...refFields(b.ref),
         };
       case "section":

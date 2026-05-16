@@ -9,6 +9,7 @@ export type ConvexBlockRowData =
       style: "default" | "h1" | "h2" | "h3";
       fontSize?: number;
       fontWeight?: "normal" | "bold";
+      lineHeight?: number;
       ref?: string;
     }
   | {
@@ -47,6 +48,9 @@ export function clientBlockToConvexData(block: Block): ConvexBlockRowData {
         ...(block.fontSize !== undefined ? { fontSize: block.fontSize } : {}),
         ...(block.fontWeight !== undefined
           ? { fontWeight: block.fontWeight }
+          : {}),
+        ...(block.lineHeight !== undefined
+          ? { lineHeight: block.lineHeight }
           : {}),
         ref: block.ref ? block.ref : undefined,
       };
@@ -116,6 +120,7 @@ export function convexDataToClientBlock(args: {
       ref: data.ref ?? undefined,
       ...(data.fontSize !== undefined ? { fontSize: data.fontSize } : {}),
       ...(data.fontWeight !== undefined ? { fontWeight: data.fontWeight } : {}),
+      ...(data.lineHeight !== undefined ? { lineHeight: data.lineHeight } : {}),
     };
   }
 

@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
-import { useDebouncedCallback } from "use-debounce";
 import { TextBlockSchema } from "./schema";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -24,9 +22,13 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { FontSizeInput } from "./font-size-input";
+import { LineHeightInput } from "./line-height-input";
+import { clampTextEditFontSizePt } from "./schema";
+
+export { clampTextEditFontSizePt } from "./schema";
 
 export const TEXT_STYLE_OPTIONS = [
   { value: "default" as const, label: "Body" },
@@ -35,16 +37,13 @@ export const TEXT_STYLE_OPTIONS = [
   { value: "h3" as const, label: "Heading 3" },
 ] as const;
 
-export function clampTextEditFontSizePt(n: number) {
-  return Math.min(96, Math.max(1, Math.round(Number.isFinite(n) ? n : 1)));
-}
-
 type TextStyleKey = z.infer<typeof TextBlockSchema>["style"];
 type TextAlign = z.infer<typeof TextBlockSchema>["align"];
 
 export type BlockFormattingPersistArgs = {
   fontSizePt: number;
   fontWeight: "normal" | "bold";
+  lineHeight: number;
   align: TextAlign;
 };
 
@@ -71,11 +70,13 @@ type EditTextToolbarProps = {
   onContentPresetSelect: (text: string) => void;
   fontSizePt: number;
   onFontSizePtCommit: (pt: number) => void;
+  lineHeight: number;
+  onLineHeightCommit: (lineHeight: number) => void;
   fontWeightUi: "normal" | "bold";
   onFontWeightUiChange: (w: "normal" | "bold") => void;
   align: TextAlign;
   onAlignChange: (align: TextAlign) => void;
-  /** Debounced upstream: persists font size, weight, and align on the text block. */
+  /** Debounced upstream: persists font size, weight, line height, and align on the text block. */
   persistBlockFormatting: (args: BlockFormattingPersistArgs) => void;
   onSyncDocumentPresetToMatch: () => void;
   onSyncAllDocumentsPresetToMatch: () => void;
@@ -93,6 +94,8 @@ export function EditTextToolbar({
   onContentPresetSelect,
   fontSizePt,
   onFontSizePtCommit,
+  lineHeight,
+  onLineHeightCommit,
   fontWeightUi,
   onFontWeightUiChange,
   align,
@@ -116,12 +119,12 @@ export function EditTextToolbar({
 
   const styleLabel =
     TEXT_STYLE_OPTIONS.find((o) => o.value === blockStyle)?.label ?? "Body";
-  const [fontSizeDraft, setFontSizeDraft] = useState(() => String(fontSizePt));
 
   const pushFormatting = (overrides?: Partial<BlockFormattingPersistArgs>) => {
     persistBlockFormatting({
       fontSizePt,
       fontWeight: fontWeightUi,
+      lineHeight,
       align,
       ...overrides,
     });
@@ -132,38 +135,9 @@ export function EditTextToolbar({
   const AlignTriggerIcon =
     ALIGN_OPTIONS.find((o) => o.value === align)?.Icon ?? AlignLeft;
 
-  const parseValidFontSizeDraft = (draft: string) => {
-    const trimmed = draft.trim();
-    if (!/^\d+$/.test(trimmed)) {
-      return null;
-    }
-
-    const parsed = Number(trimmed);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 96) {
-      return null;
-    }
-
-    return parsed;
-  };
-
-  const commitValidFontSizeDebounced = useDebouncedCallback(
-    (nextFontSizePt: number) => {
-      onFontSizePtCommit(nextFontSizePt);
-      pushFormatting({ fontSizePt: nextFontSizePt });
-    },
-    300
-  );
-
-  useEffect(() => {
-    return () => {
-      commitValidFontSizeDebounced.cancel();
-    };
-  }, [commitValidFontSizeDebounced]);
-
   return (
     <div
       className={cn(
-        // Temporarily removed: max-w-[min(100vw-1rem,36rem)]
         "pointer-events-auto absolute bottom-full left-0 z-10 mb-2 flex flex-row w-fit gap-2",
         className
       )}
@@ -224,22 +198,19 @@ export function EditTextToolbar({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            aria-label="Font size in points"
-            className="h-7 w-12"
-            value={fontSizeDraft}
-            onChange={(e) => {
-              const nextDraft = e.target.value;
-              setFontSizeDraft(nextDraft);
-              const parsed = parseValidFontSizeDraft(nextDraft);
-              if (parsed == null) {
-                return;
-              }
-              commitValidFontSizeDebounced(parsed);
-            }}
+          <FontSizeInput
+            fontSizePt={fontSizePt}
+            onFontSizePtCommit={onFontSizePtCommit}
+            onPersist={(nextFontSizePt) =>
+              pushFormatting({ fontSizePt: nextFontSizePt })
+            }
+          />
+          <LineHeightInput
+            lineHeight={lineHeight}
+            onLineHeightCommit={onLineHeightCommit}
+            onPersist={(nextLineHeight) =>
+              pushFormatting({ lineHeight: nextLineHeight })
+            }
           />
           <Button
             type="button"
@@ -261,9 +232,6 @@ export function EditTextToolbar({
             <Bold className="size-4" />
           </Button>
         </div>
-        {/* <div className="w-px h-6 shrink-0 self-center border-l border-border" /> */}
-
-        {/* <div className="flex flex-row items-center gap-1"></div> */}
       </div>
       <div className="flex flex-row items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-1 shadow-md">
         <DropdownMenu>
@@ -334,9 +302,6 @@ export function EditTextToolbar({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {/* {contentPresetVariants.length > 0 || contentPresetVariantsLoading ? (
-          
-        ) : null} */}
       </div>
     </div>
   );

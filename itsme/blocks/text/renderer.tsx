@@ -38,7 +38,11 @@ import { useStore } from "zustand/react";
 import { Html } from "react-konva-utils";
 import { useDebouncedCallback } from "use-debounce";
 import { caretOffsetFromLocalPoint } from "./caret-from-pointer";
-import { EditTextToolbar, clampTextEditFontSizePt } from "./edit-text-toolbar";
+import { EditTextToolbar } from "./edit-text-toolbar";
+import {
+  clampTextEditFontSizePt,
+  clampTextEditLineHeight,
+} from "./schema";
 import type { PdfDrawSurface } from "../pdf/pdf-draw-context-types";
 import type {
   BlockRenderLayoutResult,
@@ -263,16 +267,21 @@ function TextBlockComponent({
   );
   const resolvedFontWeightUi =
     block.fontWeight ?? textSheet[block.style].fontWeight;
+  const resolvedLineHeight = clampTextEditLineHeight(
+    block.lineHeight ?? textSheet[block.style].lineHeight
+  );
   const [formattingDraft, setFormattingDraft] = useState<{
     blockStyle: z.infer<typeof TextBlockSchema>["style"];
     fontSizePt: number;
     fontWeightUi: "normal" | "bold";
+    lineHeight: number;
     alignUi: z.infer<typeof TextBlockSchema>["align"];
   } | null>(null);
 
   const blockStyle = formattingDraft?.blockStyle ?? block.style;
   const fontSizePt = formattingDraft?.fontSizePt ?? resolvedFontSizePt;
   const fontWeightUi = formattingDraft?.fontWeightUi ?? resolvedFontWeightUi;
+  const lineHeightUi = formattingDraft?.lineHeight ?? resolvedLineHeight;
   const alignUi = formattingDraft?.alignUi ?? block.align;
 
   const updateFormattingDraft = useCallback(
@@ -281,6 +290,7 @@ function TextBlockComponent({
         blockStyle: z.infer<typeof TextBlockSchema>["style"];
         fontSizePt: number;
         fontWeightUi: "normal" | "bold";
+        lineHeight: number;
         alignUi: z.infer<typeof TextBlockSchema>["align"];
       }>
     ) => {
@@ -288,11 +298,18 @@ function TextBlockComponent({
         blockStyle: current?.blockStyle ?? block.style,
         fontSizePt: current?.fontSizePt ?? resolvedFontSizePt,
         fontWeightUi: current?.fontWeightUi ?? resolvedFontWeightUi,
+        lineHeight: current?.lineHeight ?? resolvedLineHeight,
         alignUi: current?.alignUi ?? block.align,
         ...patch,
       }));
     },
-    [block.align, block.style, resolvedFontSizePt, resolvedFontWeightUi]
+    [
+      block.align,
+      block.style,
+      resolvedFontSizePt,
+      resolvedFontWeightUi,
+      resolvedLineHeight,
+    ]
   );
 
   const localResolvedStyle = useMemo(() => {
@@ -301,8 +318,9 @@ function TextBlockComponent({
       ...sheet,
       fontSize: clampTextEditFontSizePt(fontSizePt),
       fontWeight: fontWeightUi,
+      lineHeight: clampTextEditLineHeight(lineHeightUi),
     };
-  }, [textSheet, blockStyle, fontSizePt, fontWeightUi]);
+  }, [textSheet, blockStyle, fontSizePt, fontWeightUi, lineHeightUi]);
 
   const debouncedPersistBlockFormatting = useDebouncedCallback(
     (args: {
@@ -310,8 +328,10 @@ function TextBlockComponent({
       align: z.infer<typeof TextBlockSchema>["align"];
       fontSizePt: number;
       fontWeight: "normal" | "bold";
+      lineHeight: number;
       sheetFontSize: number;
       sheetFontWeight: "normal" | "bold";
+      sheetLineHeight: number;
     }) => {
       const fontSizePtSafe = clampTextEditFontSizePt(args.fontSizePt);
       const argsSafe = { ...args, fontSizePt: fontSizePtSafe };
@@ -320,6 +340,7 @@ function TextBlockComponent({
         align: z.infer<typeof TextBlockSchema>["align"];
         fontSize: number | undefined;
         fontWeight: "normal" | "bold" | undefined;
+        lineHeight: number | undefined;
       } | null = null;
 
       updateBlocks(
@@ -333,6 +354,7 @@ function TextBlockComponent({
             align: currentBlock.align,
             fontSize: currentBlock.fontSize,
             fontWeight: currentBlock.fontWeight,
+            lineHeight: currentBlock.lineHeight,
           };
           return {
             ...current,
@@ -357,6 +379,11 @@ function TextBlockComponent({
                 next.fontWeight = argsSafe.fontWeight;
               } else {
                 delete next.fontWeight;
+              }
+              if (argsSafe.lineHeight !== argsSafe.sheetLineHeight) {
+                next.lineHeight = argsSafe.lineHeight;
+              } else {
+                delete next.lineHeight;
               }
               return next;
             }),
@@ -390,6 +417,11 @@ function TextBlockComponent({
                 } else {
                   delete next.fontWeight;
                 }
+                if (previousFields.lineHeight !== undefined) {
+                  next.lineHeight = previousFields.lineHeight;
+                } else {
+                  delete next.lineHeight;
+                }
                 return next;
               }),
             }));
@@ -411,6 +443,7 @@ function TextBlockComponent({
     (args: {
       fontSizePt: number;
       fontWeight: "normal" | "bold";
+      lineHeight: number;
       align: z.infer<typeof TextBlockSchema>["align"];
     }) => {
       const sh = textSheet[blockStyle];
@@ -418,9 +451,11 @@ function TextBlockComponent({
         style: blockStyle,
         fontSizePt: args.fontSizePt,
         fontWeight: args.fontWeight,
+        lineHeight: clampTextEditLineHeight(args.lineHeight),
         align: args.align,
         sheetFontSize: sh.fontSize,
         sheetFontWeight: sh.fontWeight,
+        sheetLineHeight: sh.lineHeight,
       });
     },
     [blockStyle, debouncedPersistBlockFormatting, textSheet]
@@ -546,9 +581,9 @@ function TextBlockComponent({
               text: block.text,
               widthPx: dimensions.width,
               fontSizePx,
-              lineHeight: style.lineHeight,
-              fontFamily: style.fontFamily,
-              fontWeight: style.fontWeight,
+              lineHeight: localResolvedStyle.lineHeight,
+              fontFamily: localResolvedStyle.fontFamily,
+              fontWeight: localResolvedStyle.fontWeight,
               align: block.align,
               localX: local.x,
               localY: local.y,
@@ -581,9 +616,9 @@ function TextBlockComponent({
       documentStore,
       fontSizePx,
       setAction,
-      style.fontFamily,
-      style.fontWeight,
-      style.lineHeight,
+      localResolvedStyle.fontFamily,
+      localResolvedStyle.fontWeight,
+      localResolvedStyle.lineHeight,
     ]
   );
 
@@ -645,7 +680,7 @@ function TextBlockComponent({
           text={block.text === "" ? EMPTY_TEXT_DISPLAY : block.text}
           fontFamily={style.fontFamily}
           fontSize={fontSizePx}
-          lineHeight={style.lineHeight}
+          lineHeight={localResolvedStyle.lineHeight}
           fontStyle={style.fontWeight === "bold" ? "bold" : "normal"}
           align={block.align}
           fill={block.text === "" ? "#9a9a9a" : "#000000"}
@@ -674,11 +709,13 @@ function TextBlockComponent({
                     blockStyle: nextStyle,
                     fontSizePt: sh.fontSize,
                     fontWeightUi: sh.fontWeight,
+                    lineHeight: sh.lineHeight,
                   });
                   persistBlockFormatting({
                     align: alignUi,
                     fontSizePt: sh.fontSize,
                     fontWeight: sh.fontWeight,
+                    lineHeight: sh.lineHeight,
                   });
                 }}
                 convexDocumentId={convexDocumentId}
@@ -687,6 +724,10 @@ function TextBlockComponent({
                 fontSizePt={fontSizePt}
                 onFontSizePtCommit={(nextFontSizePt) => {
                   updateFormattingDraft({ fontSizePt: nextFontSizePt });
+                }}
+                lineHeight={lineHeightUi}
+                onLineHeightCommit={(nextLineHeight) => {
+                  updateFormattingDraft({ lineHeight: nextLineHeight });
                 }}
                 fontWeightUi={fontWeightUi}
                 onFontWeightUiChange={(nextWeight) =>
@@ -773,6 +814,9 @@ function renderTextBlockPdf(
       ? { fontSize: clampTextEditFontSizePt(block.fontSize) }
       : {}),
     ...(block.fontWeight != null ? { fontWeight: block.fontWeight } : {}),
+    ...(block.lineHeight != null
+      ? { lineHeight: clampTextEditLineHeight(block.lineHeight) }
+      : {}),
   };
 
   pdf.drawWrappedText({
@@ -796,6 +840,9 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
         ? { fontSize: clampTextEditFontSizePt(block.fontSize) }
         : {}),
       ...(block.fontWeight != null ? { fontWeight: block.fontWeight } : {}),
+      ...(block.lineHeight != null
+        ? { lineHeight: clampTextEditLineHeight(block.lineHeight) }
+        : {}),
     };
     // Text styles are authored in points; renderer layout works in canvas pixels.
     const fontSizePx = (style.fontSize * ctx.dpi) / 72;

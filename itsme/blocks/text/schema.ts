@@ -28,6 +28,8 @@ export const TextBlockSchema = z.object({
   /** Points; overrides `documentTextStyles` for this block when set. */
   fontSize: z.number().min(1).max(96).optional(),
   fontWeight: z.enum(["normal", "bold"]).optional(),
+  /** Multiplier; overrides `documentTextStyles` for this block when set. */
+  lineHeight: z.number().min(0.5).max(4).optional(),
   ref: z.string().optional(),
 });
 
@@ -45,4 +47,16 @@ export const TextBlockUpdateSchema = z.object({
   ]),
   fontSize: z.number().min(1).max(96).optional(),
   fontWeight: z.enum(["normal", "bold"]).optional(),
+  lineHeight: z.number().min(0.5).max(4).optional(),
 });
+
+export function clampTextEditFontSizePt(n: number) {
+  return Math.min(96, Math.max(1, Math.round(Number.isFinite(n) ? n : 1)));
+}
+
+export const TEXT_LINE_HEIGHT_PRESETS = [1, 1.5, 2] as const;
+
+export function clampTextEditLineHeight(n: number) {
+  const rounded = Math.round((Number.isFinite(n) ? n : 1.2) * 100) / 100;
+  return Math.min(4, Math.max(0.5, rounded));
+}

@@ -48,6 +48,7 @@ export const blockDataValidator = v.union(
     style: textStyle,
     fontSize: v.optional(v.float64()),
     fontWeight: v.optional(v.union(v.literal("normal"), v.literal("bold"))),
+    lineHeight: v.optional(v.float64()),
     ref: v.optional(v.id("blocks")),
   }),
   v.object({
@@ -90,6 +91,7 @@ const blockDataWithClientIdsValidator = v.union(
     style: textStyle,
     fontSize: v.optional(v.float64()),
     fontWeight: v.optional(v.union(v.literal("normal"), v.literal("bold"))),
+    lineHeight: v.optional(v.float64()),
     ref: v.optional(blockIdLike),
   }),
   v.object({
@@ -164,6 +166,7 @@ function remapBlockDataClientIds(args: {
       ref: remap(d.ref),
       ...(d.fontSize !== undefined ? { fontSize: d.fontSize } : {}),
       ...(d.fontWeight !== undefined ? { fontWeight: d.fontWeight } : {}),
+      ...(d.lineHeight !== undefined ? { lineHeight: d.lineHeight } : {}),
     };
   }
   if (args.data.type === "spacer") {
@@ -637,6 +640,9 @@ function createMasterPlaceholderBlock(args: {
         ...(currentBlock.fontWeight !== undefined
           ? { fontWeight: currentBlock.fontWeight }
           : {}),
+        ...(currentBlock.lineHeight !== undefined
+          ? { lineHeight: currentBlock.lineHeight }
+          : {}),
       };
     case "section":
       return {
@@ -709,6 +715,9 @@ function buildSyncedMasterBlock(args: {
               : {}),
             ...(currentBlock.fontWeight !== undefined
               ? { fontWeight: currentBlock.fontWeight }
+              : {}),
+            ...(currentBlock.lineHeight !== undefined
+              ? { lineHeight: currentBlock.lineHeight }
               : {}),
           };
     case "section":
@@ -1278,6 +1287,9 @@ export const duplicateDocument = mutation({
               : {}),
             ...(b.data.fontWeight !== undefined
               ? { fontWeight: b.data.fontWeight }
+              : {}),
+            ...(b.data.lineHeight !== undefined
+              ? { lineHeight: b.data.lineHeight }
               : {}),
           };
         }
@@ -1901,7 +1913,13 @@ async function clearTextBlockTypographyOverridesForDocumentAndStyle(
   for (const row of rows) {
     const d = row.data;
     if (d.type !== "text" || d.style !== style) continue;
-    if (d.fontSize === undefined && d.fontWeight === undefined) continue;
+    if (
+      d.fontSize === undefined &&
+      d.fontWeight === undefined &&
+      d.lineHeight === undefined
+    ) {
+      continue;
+    }
     await ctx.db.patch(row._id, {
       data: {
         type: "text",
@@ -2100,6 +2118,7 @@ export const createProjectFromPdf = mutation({
             ref?: string;
             fontSize?: number;
             fontWeight?: "normal" | "bold";
+            lineHeight?: number;
           };
           return {
             type: "text" as const,
@@ -2110,6 +2129,7 @@ export const createProjectFromPdf = mutation({
             ...(tb.fontWeight !== undefined
               ? { fontWeight: tb.fontWeight }
               : {}),
+            ...(tb.lineHeight !== undefined ? { lineHeight: tb.lineHeight } : {}),
           };
         }
         if (b.type === "section") {
@@ -2165,6 +2185,7 @@ export const createProjectFromPdf = mutation({
           ref?: string;
           fontSize?: number;
           fontWeight?: "normal" | "bold";
+          lineHeight?: number;
         };
         await ctx.db.patch(newId, {
           data: {
@@ -2177,6 +2198,7 @@ export const createProjectFromPdf = mutation({
             ...(tb.fontWeight !== undefined
               ? { fontWeight: tb.fontWeight }
               : {}),
+            ...(tb.lineHeight !== undefined ? { lineHeight: tb.lineHeight } : {}),
           },
         });
         continue;
