@@ -1,13 +1,111 @@
 "use client";
 
 import Link from "next/link";
+import { useMutation } from "convex/react";
+import { useEffect, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
 import { ArrowLeft } from "lucide-react";
 import { ViewDocumentContextMenu } from "@/components/view-document-context-menu";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useQueryWithStatus } from "./convex-hooks";
+
+function ProjectDocumentSidebarItem({
+  projectId,
+  document,
+  isActive,
+  isMaster,
+}: {
+  projectId: string;
+  document: { id: Id<"documents">; name: string };
+  isActive: boolean;
+  isMaster: boolean;
+}) {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(document.name);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const renameDocument = useMutation(api.documentTasks.renameDocument);
+
+  useEffect(() => {
+    if (!isRenaming || !textareaRef.current) {
+      return;
+    }
+    const textarea = textareaRef.current;
+    textarea.focus();
+    textarea.select();
+  }, [isRenaming]);
+
+  const cancelRename = () => {
+    setIsRenaming(false);
+    setDraftName(document.name);
+  };
+
+  const commitRename = async () => {
+    const trimmed = draftName.trim();
+    if (!trimmed || trimmed === document.name) {
+      cancelRename();
+      return;
+    }
+
+    try {
+      await renameDocument({
+        projectId: projectId as Id<"projects">,
+        documentId: document.id,
+        name: trimmed,
+      });
+      setIsRenaming(false);
+    } catch {
+      cancelRename();
+    }
+  };
+
+  return (
+    <ViewDocumentContextMenu
+      projectId={projectId}
+      documentId={document.id}
+      isDeleteDisabled={isMaster}
+      onRename={() => {
+        setDraftName(document.name);
+        setIsRenaming(true);
+      }}
+    >
+      <Button
+        variant={isActive ? "default" : "ghost"}
+        className="w-full justify-start px-2 text-base py-1 h-fit"
+        asChild={!isRenaming}
+      >
+        {isRenaming ? (
+          <Textarea
+            ref={textareaRef}
+            value={draftName}
+            rows={1}
+            className="min-h-0 h-auto w-full resize-none border-0 bg-transparent px-0 py-0 text-base shadow-none focus-visible:border-0 focus-visible:ring-0"
+            onChange={(e) => setDraftName(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void commitRename();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                cancelRename();
+              }
+            }}
+            onClick={(e) => e.preventDefault()}
+            onMouseDown={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <Link href={`/projects/${projectId}/resume/${document.id}`}>
+            {document.name}
+          </Link>
+        )}
+      </Button>
+    </ViewDocumentContextMenu>
+  );
+}
 
 export function ProjectDocumentsSidebar({
   projectId,
@@ -50,29 +148,16 @@ export function ProjectDocumentsSidebar({
     const { documents, masterDocumentId } = projectDocumentsQuery.data;
     documentEntriesEle = (
       <div className="flex flex-col">
-        {documents.map((document) => {
-          const isActive = document.id === activeDocumentId;
-          const isMaster = document.id === masterDocumentId;
-          return (
-            <li key={document.id}>
-              <ViewDocumentContextMenu
-                projectId={projectId}
-                documentId={document.id}
-                isDeleteDisabled={isMaster}
-              >
-                <Button
-                  variant={isActive ? "default" : "ghost"}
-                  className="w-full justify-start px-2 text-base py-1 h-fit"
-                  asChild
-                >
-                  <Link href={`/projects/${projectId}/resume/${document.id}`}>
-                    {document.name}
-                  </Link>
-                </Button>
-              </ViewDocumentContextMenu>
-            </li>
-          );
-        })}
+        {documents.map((document) => (
+          <li key={document.id}>
+            <ProjectDocumentSidebarItem
+              projectId={projectId}
+              document={document}
+              isActive={document.id === activeDocumentId}
+              isMaster={document.id === masterDocumentId}
+            />
+          </li>
+        ))}
       </div>
     );
   }

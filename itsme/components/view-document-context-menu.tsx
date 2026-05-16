@@ -19,11 +19,13 @@ export function ViewDocumentContextMenu({
   projectId,
   documentId,
   isDeleteDisabled = false,
+  onRename,
 }: {
   children: React.ReactNode;
   projectId: string;
   documentId: string;
   isDeleteDisabled?: boolean;
+  onRename?: () => void;
 }) {
   const router = useRouter();
   const inFlightRef = React.useRef(false);
@@ -38,6 +40,16 @@ export function ViewDocumentContextMenu({
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent>
+        {onRename ? (
+          <ContextMenuItem
+            onSelect={(e) => {
+              e.preventDefault();
+              onRename();
+            }}
+          >
+            Rename
+          </ContextMenuItem>
+        ) : null}
         <ContextMenuItem
           onSelect={(e) => {
             e.preventDefault();

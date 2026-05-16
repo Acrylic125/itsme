@@ -1401,6 +1401,38 @@ export const deleteDocument = mutation({
   },
 });
 
+export const renameDocument = mutation({
+  args: {
+    projectId: v.id("projects"),
+    documentId: v.id("documents"),
+    name: v.string(),
+  },
+  returns: v.object({
+    documentId: v.id("documents"),
+    name: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    await requireIdentity(ctx);
+
+    const trimmed = args.name.trim();
+    if (!trimmed) {
+      throw new Error("Document name cannot be empty.");
+    }
+
+    const doc = await ctx.db.get(args.documentId);
+    if (!doc || doc.projectId !== args.projectId) {
+      throw new Error("Document not found.");
+    }
+
+    await ctx.db.patch(args.documentId, { name: trimmed });
+
+    return {
+      documentId: args.documentId,
+      name: trimmed,
+    };
+  },
+});
+
 export const updateDocumentBlocks = mutation({
   args: {
     documentId: v.id("documents"),
