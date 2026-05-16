@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 import { Block, DEFAULT_STYLE_SHEET, StyleSheetSchema } from "../blocks/blocks";
+import { isClientId } from "../blocks/core/client-ids";
 import { convexDataToClientBlock } from "../blocks/core/persistence/convex-codec";
 import { TextStyleSheetSchema } from "../blocks/text/schema";
 import { pdfToBlocks } from "../lib/pdf-to-blocks/server";
@@ -28,12 +29,6 @@ const listBulletType = v.union(
   v.literal("alphabetical"),
   v.literal("numerical")
 );
-
-const CLIENT_ID_PREFIX = "CLIENT_ID:" as const;
-
-function isClientId(id: string): boolean {
-  return id.startsWith(CLIENT_ID_PREFIX);
-}
 
 const blockIdLike = v.string();
 

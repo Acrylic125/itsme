@@ -12,18 +12,15 @@ import {
 } from "@/blocks/apply-block-move";
 import {
   useDocument,
-  asEditBlockAction,
-  asFocusBlockAction,
-  asMoveBlockAction,
-  asResizeColumnAction,
-  documentBlocksSnapshotToDocument,
-  selectMoveBlockAction,
-  selectResizeColumnAction,
   type DocumentBlocksSnapshot,
+} from "@/blocks/document-context";
+import { documentBlocksSnapshotToDocument } from "@/blocks/document-sync";
+import {
+  documentActionOf,
   type DocumentStore,
   type DocumentStoreResizeColumnAction,
   type DocumentStoreState,
-} from "@/blocks/document-context";
+} from "@/blocks/core/document-store";
 import { useStore } from "zustand/react";
 // import { useBlockDragContext } from "./block-dnd-context";
 // import { useBlockFocusContext } from "./block-focus-context";
@@ -220,7 +217,8 @@ function patchColumnSpansAfterResizeDrag(args: {
       return {
         ...current,
         blocks: current.blocks.map((b) => {
-          if (b.type !== "columns" || b.id !== resizeCtx.columnsBlockId) return b;
+          if (b.type !== "columns" || b.id !== resizeCtx.columnsBlockId)
+            return b;
           if (b.blocks.length !== resizeCtx.siblingCount) return b;
           return {
             ...b,
@@ -387,8 +385,8 @@ function useInteractableBlockController(args: {
 
   const hotkeysTargetThis = useStore(documentStore, (s) => {
     const a = s.action;
-    const focus = asFocusBlockAction(a);
-    const edit = asEditBlockAction(a);
+    const focus = documentActionOf(a, "focus-block");
+    const edit = documentActionOf(a, "edit-block");
     if (focus?.blockId === blockId) return true;
     if (
       blockHotkeyScope === "focus-or-edit-block" &&
@@ -580,7 +578,7 @@ function useInteractableBlockController(args: {
 
       let isResizing = false;
       setAction((current) => {
-        const r = asResizeColumnAction(current);
+        const r = documentActionOf(current, "resize-column");
         if (!r || r.blockId !== blockId) return current;
         isResizing = true;
         return { ...r, pointerCurrent: pointerCanvasPosition };
@@ -591,7 +589,7 @@ function useInteractableBlockController(args: {
       }
 
       setAction((current) => {
-        const moveAction = asMoveBlockAction(current);
+        const moveAction = documentActionOf(current, "move-block");
         if (!moveAction) return current;
         return {
           ...moveAction,
@@ -612,7 +610,7 @@ function useInteractableBlockController(args: {
 
       let endedResize: DocumentStoreResizeColumnAction | null = null;
       setAction((current) => {
-        const r = asResizeColumnAction(current);
+        const r = documentActionOf(current, "resize-column");
         if (!r || r.blockId !== blockId) return current;
         endedResize = r;
         return null;
@@ -658,8 +656,8 @@ function useInteractableBlockController(args: {
     const node = groupRef.current;
     setIsDragging(false);
     setAction((current) => {
-      if (asMoveBlockAction(current)) return null;
-      const r = asResizeColumnAction(current);
+      if (documentActionOf(current, "move-block")) return null;
+      const r = documentActionOf(current, "resize-column");
       if (r && r.blockId === blockId) return null;
       return current;
     });
@@ -692,8 +690,8 @@ function useInteractableBlockController(args: {
 
     const onKeyDown = (event: KeyboardEvent) => {
       const a = documentStore.getState().action;
-      const focus = asFocusBlockAction(a);
-      const edit = asEditBlockAction(a);
+      const focus = documentActionOf(a, "focus-block");
+      const edit = documentActionOf(a, "edit-block");
       const targetsThis =
         focus?.blockId === blockId ||
         (blockHotkeyScope === "focus-or-edit-block" &&
@@ -731,13 +729,13 @@ function useInteractableBlockController(args: {
         );
         if (didDelete) {
           setAction((current) => {
-            const edit = asEditBlockAction(current);
+            const edit = documentActionOf(current, "edit-block");
             if (edit?.blockId === blockId) {
               return parentIdAfterDelete != null
                 ? { type: "focus-block", blockId: parentIdAfterDelete }
                 : null;
             }
-            const focus = asFocusBlockAction(current);
+            const focus = documentActionOf(current, "focus-block");
             if (focus?.blockId === blockId) {
               return parentIdAfterDelete != null
                 ? { type: "focus-block", blockId: parentIdAfterDelete }
@@ -865,11 +863,11 @@ export function InteractableBlock({
   const commitReorder = useCallback(() => {
     if (!document) return;
     const state = documentStore.getState();
-    const moveAction = selectMoveBlockAction(state);
+    const moveAction = documentActionOf(state.action, "move-block");
     if (!moveAction?.targetBlock) {
       // No drop target — discard the in-flight move without mutating the doc.
       state.setAction((current) =>
-        asMoveBlockAction(current) ? null : current
+        documentActionOf(current, "move-block") ? null : current
       );
       return;
     }
@@ -897,11 +895,15 @@ export function InteractableBlock({
       }
     );
 
-    state.setAction((current) => (asMoveBlockAction(current) ? null : current));
+    state.setAction((current) =>
+      documentActionOf(current, "move-block") ? null : current
+    );
   }, [document, documentStore, updateBlocks, blockTree]);
 
   const setAction = useStore(documentStore, (s) => s.setAction);
-  const resizeColumnAction = useStore(documentStore, selectResizeColumnAction);
+  const resizeColumnAction = useStore(documentStore, (s) =>
+    documentActionOf(s.action, "resize-column")
+  );
 
   const {
     assignGroupRef,

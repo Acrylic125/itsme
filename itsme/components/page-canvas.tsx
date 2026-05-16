@@ -5,11 +5,7 @@ import { Layer, Rect, Group, Stage } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { getPageLayoutMetrics } from "@/blocks/renderer";
-import {
-  asAddBlockAction,
-  asPasteBlockAction,
-  useDocument,
-} from "@/blocks/document-context";
+import { documentActionOf, useDocument } from "@/blocks/document-context";
 import { useStore } from "zustand/react";
 import { cn } from "@/lib/utils";
 import {
@@ -36,13 +32,14 @@ export function PageCanvas() {
   const isAddOrPastePlacementMode = useStore(
     documentStore,
     (s) =>
-      asAddBlockAction(s.action) != null || asPasteBlockAction(s.action) != null
+      documentActionOf(s.action, "add-block") != null ||
+      documentActionOf(s.action, "paste-block") != null
   );
 
   const toggleAddBlockMode = useCallback(
     (blockType: "text" | "list") => {
       const { action } = documentStore.getState();
-      const cur = asAddBlockAction(action);
+      const cur = documentActionOf(action, "add-block");
       documentStore.setState({
         action:
           cur?.blockType === blockType

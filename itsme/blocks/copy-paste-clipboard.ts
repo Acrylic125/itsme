@@ -18,7 +18,7 @@ export const CopyPasteClipboardSchema = z
     for (const b of data.blocks) {
       if (idSet.has(b.id)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message: "Duplicate block id in clipboard",
           path: ["blocks"],
         });
@@ -32,7 +32,7 @@ export const CopyPasteClipboardSchema = z
       for (const cid of getChildBlockIds(b)) {
         if (!idSet.has(cid)) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             message: `Block ${b.id} references missing child ${cid}`,
             path: ["blocks", i],
           });
@@ -43,7 +43,7 @@ export const CopyPasteClipboardSchema = z
     const roots = getStructuralRootBlocks(data.blocks);
     if (roots.length !== 1) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: "custom",
         message:
           roots.length === 0
             ? "No root block (every block is referenced as a child)"
@@ -89,6 +89,59 @@ export function stripDanglingTextRefsInSubtree(blocks: Block[]): Block[] {
   });
 }
 
+function remapBlocksWithIdMap(
+  blocks: Block[],
+  mapId: (oldId: string) => string,
+  options?: { preserveRefs?: boolean }
+): Block[] {
+  const preserveRefs = options?.preserveRefs ?? false;
+  const refFields = (ref: string | undefined) =>
+    preserveRefs && ref !== undefined ? { ref } : {};
+
+  return blocks.map((b) => {
+    switch (b.type) {
+      case "text":
+        return {
+          type: "text",
+          id: mapId(b.id),
+          text: b.text,
+          align: b.align,
+          style: b.style,
+          ...(b.fontSize !== undefined ? { fontSize: b.fontSize } : {}),
+          ...(b.fontWeight !== undefined ? { fontWeight: b.fontWeight } : {}),
+          ...refFields(b.ref),
+        };
+      case "section":
+        return {
+          type: "section",
+          id: mapId(b.id),
+          blocks: b.blocks.map(mapId),
+          ...refFields(b.ref),
+        };
+      case "list":
+        return {
+          type: "list",
+          id: mapId(b.id),
+          blocks: b.blocks.map(mapId),
+          bullet: b.bullet,
+          ...(b.leftSpace !== undefined ? { leftSpace: b.leftSpace } : {}),
+          ...(b.rightSpace !== undefined ? { rightSpace: b.rightSpace } : {}),
+          ...refFields(b.ref),
+        };
+      case "columns":
+        return {
+          type: "columns",
+          id: mapId(b.id),
+          blocks: b.blocks.map((c) => ({
+            ...c,
+            blockId: mapId(c.blockId),
+          })),
+          ...refFields(b.ref),
+        };
+    }
+  });
+}
+
 /**
  * Assign fresh client ids for a paste. By default omits `ref` on pasted blocks.
  * With `preserveRefsInSubtree`, keeps the original `ref` string unchanged so
@@ -103,53 +156,8 @@ export function remapCopyPasteBlocksToClientIds(
   for (const b of blocks) {
     oldToNew.set(b.id, newClientBlockId(b.type));
   }
-  const r = (id: string) => oldToNew.get(id) ?? id;
-
-  const refIfPreserving = (
-    ref: string | undefined
-  ): { ref: string } | Record<string, never> => {
-    if (!preserveRefs || ref === undefined) return {};
-    return { ref };
-  };
-
-  return blocks.map((b) => {
-    switch (b.type) {
-      case "text":
-        return {
-          type: "text",
-          id: r(b.id),
-          text: b.text,
-          align: b.align,
-          style: b.style,
-          ...(b.fontSize !== undefined ? { fontSize: b.fontSize } : {}),
-          ...(b.fontWeight !== undefined ? { fontWeight: b.fontWeight } : {}),
-          ...refIfPreserving(b.ref),
-        } as Block;
-      case "section":
-        return {
-          type: "section",
-          id: r(b.id),
-          blocks: b.blocks.map(r),
-          ...refIfPreserving(b.ref),
-        } as Block;
-      case "list":
-        return {
-          type: "list",
-          id: r(b.id),
-          blocks: b.blocks.map(r),
-          bullet: b.bullet,
-          ...(b.leftSpace !== undefined ? { leftSpace: b.leftSpace } : {}),
-          ...(b.rightSpace !== undefined ? { rightSpace: b.rightSpace } : {}),
-          ...refIfPreserving(b.ref),
-        } as Block;
-      case "columns":
-        return {
-          type: "columns",
-          id: r(b.id),
-          blocks: b.blocks.map((c) => ({ ...c, blockId: r(c.blockId) })),
-          ...refIfPreserving(b.ref),
-        } as Block;
-    }
+  return remapBlocksWithIdMap(blocks, (id) => oldToNew.get(id) ?? id, {
+    preserveRefs,
   });
 }
 
@@ -165,7 +173,6 @@ export function serializeCopyPasteClipboard(blocks: Block[]): string {
 /**
  * Parses and validates clipboard JSON; returns blocks with fresh client ids
  * (root first), or null if invalid.
- * @param options.preserveRefs — when true, keeps `ref` unchanged and skips stripping dangling text refs before remap.
  */
 export function parseCopyPasteClipboardPayload(
   text: string,

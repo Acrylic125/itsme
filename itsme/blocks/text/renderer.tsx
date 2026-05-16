@@ -19,10 +19,8 @@ import {
 } from "@/components/shared-block";
 import { AnchorRect } from "@/components/dom-popup";
 import {
-  asEditBlockAction,
-  asFocusBlockAction,
+  documentActionOf,
   selectActiveBlockId,
-  selectEditBlockAction,
   useDocument,
 } from "@/blocks/document-context";
 import Konva from "konva";
@@ -237,8 +235,8 @@ function TextBlockComponent({
     documentStore,
     useShallow((s) => ({
       setAction: s.setAction,
-      editAction: selectEditBlockAction(s),
-      focusAction: asFocusBlockAction(s.action),
+      editAction: documentActionOf(s.action, "edit-block"),
+      focusAction: documentActionOf(s.action, "focus-block"),
       activeBlockId: selectActiveBlockId(s),
       clientIdMappings: s.clientIdMappings,
     }))
@@ -508,7 +506,7 @@ function TextBlockComponent({
     setAnchor(null);
     setInitialCaretOffset(0);
     setAction((current) => {
-      const editAction = asEditBlockAction(current);
+      const editAction = documentActionOf(current, "edit-block");
       if (editAction?.blockId !== block.id) return current;
       return { type: "focus-block", blockId: block.id };
     });
@@ -520,11 +518,11 @@ function TextBlockComponent({
     setAnchor(null);
     setInitialCaretOffset(0);
     setAction((current) => {
-      const edit = asEditBlockAction(current);
+      const edit = documentActionOf(current, "edit-block");
       if (edit?.blockId === block.id) {
         return null;
       }
-      const focus = asFocusBlockAction(current);
+      const focus = documentActionOf(current, "focus-block");
       return focus?.blockId === block.id ? null : current;
     });
   }, [block.id, debouncedPersistBlockFormatting, setAction]);
@@ -552,8 +550,8 @@ function TextBlockComponent({
           : 0;
 
       const { action } = documentStore.getState();
-      const currentEdit = asEditBlockAction(action);
-      const currentFocus = asFocusBlockAction(action);
+      const currentEdit = documentActionOf(action, "edit-block");
+      const currentFocus = documentActionOf(action, "focus-block");
 
       if (currentEdit?.blockId === block.id) {
         return;
@@ -601,7 +599,7 @@ function TextBlockComponent({
       if (event.key === "Escape") {
         event.preventDefault();
         setAction((current) => {
-          const f = asFocusBlockAction(current);
+          const f = documentActionOf(current, "focus-block");
           return f?.blockId === block.id ? null : current;
         });
       }
