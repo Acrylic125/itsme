@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BlockSchema, type Block } from "./blocks";
-import { newClientBlockId } from "./core/client-ids";
+import { newClientBlockId, remapClientBlockIds } from "./core/client-ids";
 import { getChildBlockIds, getStructuralRootBlocks } from "./core/graph";
 
 export const COPY_PASTE_CLIPBOARD_ACTION = "copy-paste" as const;
@@ -89,59 +89,6 @@ export function stripDanglingTextRefsInSubtree(blocks: Block[]): Block[] {
   });
 }
 
-function remapBlocksWithIdMap(
-  blocks: Block[],
-  mapId: (oldId: string) => string,
-  options?: { preserveRefs?: boolean }
-): Block[] {
-  const preserveRefs = options?.preserveRefs ?? false;
-  const refFields = (ref: string | undefined) =>
-    preserveRefs && ref !== undefined ? { ref } : {};
-
-  return blocks.map((b) => {
-    switch (b.type) {
-      case "text":
-        return {
-          type: "text",
-          id: mapId(b.id),
-          text: b.text,
-          align: b.align,
-          style: b.style,
-          ...(b.fontSize !== undefined ? { fontSize: b.fontSize } : {}),
-          ...(b.fontWeight !== undefined ? { fontWeight: b.fontWeight } : {}),
-          ...refFields(b.ref),
-        };
-      case "section":
-        return {
-          type: "section",
-          id: mapId(b.id),
-          blocks: b.blocks.map(mapId),
-          ...refFields(b.ref),
-        };
-      case "list":
-        return {
-          type: "list",
-          id: mapId(b.id),
-          blocks: b.blocks.map(mapId),
-          bullet: b.bullet,
-          ...(b.leftSpace !== undefined ? { leftSpace: b.leftSpace } : {}),
-          ...(b.rightSpace !== undefined ? { rightSpace: b.rightSpace } : {}),
-          ...refFields(b.ref),
-        };
-      case "columns":
-        return {
-          type: "columns",
-          id: mapId(b.id),
-          blocks: b.blocks.map((c) => ({
-            ...c,
-            blockId: mapId(c.blockId),
-          })),
-          ...refFields(b.ref),
-        };
-    }
-  });
-}
-
 /**
  * Assign fresh client ids for a paste. By default omits `ref` on pasted blocks.
  * With `preserveRefsInSubtree`, keeps the original `ref` string unchanged so
@@ -156,7 +103,7 @@ export function remapCopyPasteBlocksToClientIds(
   for (const b of blocks) {
     oldToNew.set(b.id, newClientBlockId(b.type));
   }
-  return remapBlocksWithIdMap(blocks, (id) => oldToNew.get(id) ?? id, {
+  return remapClientBlockIds(blocks, (id) => oldToNew.get(id) ?? id, {
     preserveRefs,
   });
 }
