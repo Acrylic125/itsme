@@ -1938,6 +1938,7 @@ const textStylePatchValidator = v.object({
   style: textStyle,
   fontSize: v.optional(v.float64()),
   fontWeight: v.optional(v.union(v.literal("normal"), v.literal("bold"))),
+  lineHeight: v.optional(v.float64()),
 });
 
 export const updateDocumentTextStyles = mutation({
@@ -1960,7 +1961,11 @@ export const updateDocumentTextStyles = mutation({
     let updated = 0;
     let blocksTypographyCleared = 0;
     for (const p of args.patches) {
-      if (p.fontSize === undefined && p.fontWeight === undefined) {
+      if (
+        p.fontSize === undefined &&
+        p.fontWeight === undefined &&
+        p.lineHeight === undefined
+      ) {
         continue;
       }
       const row = await ctx.db
@@ -1974,9 +1979,14 @@ export const updateDocumentTextStyles = mutation({
           `Missing documentTextStyles row for style '${p.style}'.`
         );
       }
-      const patch: { fontSize?: number; fontWeight?: "normal" | "bold" } = {};
+      const patch: {
+        fontSize?: number;
+        fontWeight?: "normal" | "bold";
+        lineHeight?: number;
+      } = {};
       if (p.fontSize !== undefined) patch.fontSize = p.fontSize;
       if (p.fontWeight !== undefined) patch.fontWeight = p.fontWeight;
+      if (p.lineHeight !== undefined) patch.lineHeight = p.lineHeight;
       if (Object.keys(patch).length > 0) {
         await ctx.db.patch(row._id, patch);
         updated += 1;
@@ -1999,6 +2009,7 @@ export const syncProjectTextStylePresetAllDocuments = mutation({
     style: textStyle,
     fontSize: v.float64(),
     fontWeight: v.union(v.literal("normal"), v.literal("bold")),
+    lineHeight: v.float64(),
   },
   handler: async (ctx, args) => {
     await requireIdentity(ctx);
@@ -2021,6 +2032,7 @@ export const syncProjectTextStylePresetAllDocuments = mutation({
       await ctx.db.patch(row._id, {
         fontSize: args.fontSize,
         fontWeight: args.fontWeight,
+        lineHeight: args.lineHeight,
       });
       rowsUpdated += 1;
       blocksTypographyCleared +=

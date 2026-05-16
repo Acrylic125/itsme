@@ -17,6 +17,7 @@ function applyTextStylePatchListToStyleSheet(
     style: DocumentTextPresetKey;
     fontSize?: number;
     fontWeight?: "normal" | "bold";
+    lineHeight?: number;
   }>
 ): StyleSheet {
   const text = { ...styleSheet.text };
@@ -25,6 +26,7 @@ function applyTextStylePatchListToStyleSheet(
       ...text[p.style],
       ...(p.fontSize !== undefined ? { fontSize: p.fontSize } : {}),
       ...(p.fontWeight !== undefined ? { fontWeight: p.fontWeight } : {}),
+      ...(p.lineHeight !== undefined ? { lineHeight: p.lineHeight } : {}),
     };
   }
   return { ...styleSheet, text };
@@ -51,6 +53,7 @@ export function useDocumentTextPresets(args: {
       style: DocumentTextPresetKey;
       fontSize: number;
       fontWeight: "normal" | "bold";
+      lineHeight: number;
     }) => {
       const run = updateDocumentTextStylesMutation.withOptimisticUpdate(
         (localStore, mutationArgs) => {
@@ -91,6 +94,7 @@ export function useDocumentTextPresets(args: {
                   style: patch.style,
                   fontSize: prev.fontSize,
                   fontWeight: prev.fontWeight,
+                  lineHeight: prev.lineHeight,
                 },
               ],
             });
@@ -112,6 +116,7 @@ export function useDocumentTextPresets(args: {
       style: DocumentTextPresetKey;
       fontSize: number;
       fontWeight: "normal" | "bold";
+      lineHeight: number;
     }) => {
       if (!convexProjectId) {
         return;
@@ -125,6 +130,7 @@ export function useDocumentTextPresets(args: {
         style: patch.style,
         fontSize: patch.fontSize,
         fontWeight: patch.fontWeight,
+        lineHeight: patch.lineHeight,
       });
 
       if (styleSheet) {
@@ -135,6 +141,7 @@ export function useDocumentTextPresets(args: {
               style: patch.style,
               fontSize: prev.fontSize,
               fontWeight: prev.fontWeight,
+              lineHeight: prev.lineHeight,
             });
           },
           up: () => {

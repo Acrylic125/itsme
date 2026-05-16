@@ -466,16 +466,30 @@ function TextBlockComponent({
       style: blockStyle,
       fontSize: clampTextEditFontSizePt(fontSizePt),
       fontWeight: fontWeightUi,
+      lineHeight: clampTextEditLineHeight(lineHeightUi),
     });
-  }, [blockStyle, fontSizePt, fontWeightUi, syncDocumentTextPresetToMatch]);
+  }, [
+    blockStyle,
+    fontSizePt,
+    fontWeightUi,
+    lineHeightUi,
+    syncDocumentTextPresetToMatch,
+  ]);
 
   const handleSyncAllDocumentsPresetToMatch = useCallback(async () => {
     await syncProjectTextPresetToMatch({
       style: blockStyle,
       fontSize: clampTextEditFontSizePt(fontSizePt),
       fontWeight: fontWeightUi,
+      lineHeight: clampTextEditLineHeight(lineHeightUi),
     });
-  }, [blockStyle, fontSizePt, fontWeightUi, syncProjectTextPresetToMatch]);
+  }, [
+    blockStyle,
+    fontSizePt,
+    fontWeightUi,
+    lineHeightUi,
+    syncProjectTextPresetToMatch,
+  ]);
 
   const convexDocumentId = document
     ? (document as unknown as { id: Id<"documents"> }).id
