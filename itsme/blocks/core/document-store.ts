@@ -30,7 +30,7 @@ export type DocumentStoreAction =
     }
   | {
       type: "add-block";
-      blockType: "text" | "list";
+      blockType: "text" | "list" | "spacer";
       current: {
         position: Pos;
       } | null;

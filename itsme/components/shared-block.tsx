@@ -32,6 +32,22 @@ import { useStore } from "zustand/react";
  */
 export type BlockHotkeyScope = "focus-block-only" | "focus-or-edit-block";
 
+function isEditableEventTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  const tagName = target.tagName.toLowerCase();
+  return (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    target.closest("[contenteditable='true']") != null
+  );
+}
+
 export function useInteractableBlock({
   activeBlockId,
   parents,
@@ -689,6 +705,10 @@ function useInteractableBlockController(args: {
     if (!hotkeysTargetThis || disabled || !documentBlocks) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableEventTarget(event.target)) {
+        return;
+      }
+
       const a = documentStore.getState().action;
       const focus = documentActionOf(a, "focus-block");
       const edit = documentActionOf(a, "edit-block");

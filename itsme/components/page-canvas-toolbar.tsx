@@ -1,7 +1,11 @@
 "use client";
 
 import { useDocument } from "@/blocks/document-context";
-import { ListBulletIcon, TextIcon } from "@radix-ui/react-icons";
+import {
+  ListBulletIcon,
+  SpaceBetweenHorizontallyIcon,
+  TextIcon,
+} from "@radix-ui/react-icons";
 import { Loader2 } from "lucide-react";
 import { FavIcon } from "./icon/favicon";
 import { Button } from "./ui/button";
@@ -9,10 +13,17 @@ import { Button } from "./ui/button";
 export function PageCanvasToolbar(props: {
   onToggleAddText: () => void;
   onToggleAddList: () => void;
+  onToggleAddSpacer: () => void;
   onDownload: () => void;
   isDownloading?: boolean;
 }) {
-  const { onToggleAddText, onToggleAddList, onDownload, isDownloading } = props;
+  const {
+    onToggleAddText,
+    onToggleAddList,
+    onToggleAddSpacer,
+    onDownload,
+    isDownloading,
+  } = props;
   const { isSaving } = useDocument();
 
   return (
@@ -40,6 +51,12 @@ export function PageCanvasToolbar(props: {
           <div className="flex flex-row items-center gap-2">
             <ListBulletIcon />
             <span>List</span>
+          </div>
+        </Button>
+        <Button variant="outline" type="button" onClick={onToggleAddSpacer}>
+          <div className="flex flex-row items-center gap-2">
+            <SpaceBetweenHorizontallyIcon />
+            <span>Spacer</span>
           </div>
         </Button>
       </div>

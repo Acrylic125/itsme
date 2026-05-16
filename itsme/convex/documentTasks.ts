@@ -73,6 +73,11 @@ export const blockDataValidator = v.union(
     leftSpace: v.optional(v.float64()),
     rightSpace: v.optional(v.float64()),
     ref: v.optional(v.id("blocks")),
+  }),
+  v.object({
+    type: v.literal("spacer"),
+    height: v.float64(),
+    ref: v.optional(v.id("blocks")),
   })
 );
 
@@ -110,13 +115,20 @@ const blockDataWithClientIdsValidator = v.union(
     leftSpace: v.optional(v.float64()),
     rightSpace: v.optional(v.float64()),
     ref: v.optional(blockIdLike),
+  }),
+  v.object({
+    type: v.literal("spacer"),
+    height: v.float64(),
+    ref: v.optional(blockIdLike),
   })
 );
 
 function collectReferencedIdsFromBlockData(
   data: (typeof blockDataWithClientIdsValidator)["type"]
 ): string[] {
-  if (data.type === "text") return data.ref ? [data.ref] : [];
+  if (data.type === "text" || data.type === "spacer") {
+    return data.ref ? [data.ref] : [];
+  }
   if (data.type === "section" || data.type === "list") {
     return [...data.children, ...(data.ref ? [data.ref] : [])];
   }
@@ -152,6 +164,13 @@ function remapBlockDataClientIds(args: {
       ref: remap(d.ref),
       ...(d.fontSize !== undefined ? { fontSize: d.fontSize } : {}),
       ...(d.fontWeight !== undefined ? { fontWeight: d.fontWeight } : {}),
+    };
+  }
+  if (args.data.type === "spacer") {
+    return {
+      type: "spacer",
+      height: args.data.height,
+      ref: remap(args.data.ref),
     };
   }
   if (args.data.type === "section") {
@@ -245,6 +264,16 @@ function mapBlockDataIds(args: {
     const data = args.data as Extract<
       (typeof blockDataValidator)["type"],
       { type: "text" }
+    >;
+    return {
+      ...data,
+      ref: mapId(data.ref),
+    };
+  }
+  if (d.type === "spacer") {
+    const data = args.data as Extract<
+      (typeof blockDataValidator)["type"],
+      { type: "spacer" }
     >;
     return {
       ...data,
@@ -401,6 +430,7 @@ type ApplyDocumentBlocksResult = {
 function cloneBlock(block: Block): Block {
   switch (block.type) {
     case "text":
+    case "spacer":
       return { ...block };
     case "section":
     case "list":
@@ -633,6 +663,12 @@ function createMasterPlaceholderBlock(args: {
           ? { rightSpace: currentBlock.rightSpace }
           : {}),
       };
+    case "spacer":
+      return {
+        id: newId,
+        type: "spacer",
+        height: currentBlock.height,
+      };
   }
 }
 
@@ -708,6 +744,17 @@ function buildSyncedMasterBlock(args: {
           : {}),
         ...preservedRef,
       };
+    case "spacer":
+      return existingMasterBlock?.type === "spacer"
+        ? {
+            ...existingMasterBlock,
+            height: currentBlock.height,
+          }
+        : {
+            id: masterBlockId,
+            type: "spacer",
+            height: currentBlock.height,
+          };
   }
 }
 
@@ -1246,6 +1293,12 @@ export const duplicateDocument = mutation({
             children: [],
           };
         }
+        if (b.data.type === "spacer") {
+          return {
+            type: "spacer" as const,
+            height: b.data.height,
+          };
+        }
         return {
           type: "list" as const,
           children: [],
@@ -1706,7 +1759,7 @@ export const syncBlockToMaster = mutation({
         workingMasterDocument.blocks
       ).get(masterBlockId);
 
-      if (currentBlock.type === "text") {
+      if (currentBlock.type === "text" || currentBlock.type === "spacer") {
         replaceBlockInDocument({
           doc: workingMasterDocument,
           nextBlock: buildSyncedMasterBlock({

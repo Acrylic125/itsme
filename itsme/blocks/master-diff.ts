@@ -71,6 +71,16 @@ export function hasBlockDiffToMaster(args: {
       }
       return currentBlock.text !== masterBlock.text;
     }
+    case "spacer": {
+      if (!masterBlockId) {
+        return true;
+      }
+      const masterBlock = masterBlockById.get(masterBlockId);
+      if (!masterBlock || masterBlock.type !== "spacer") {
+        return true;
+      }
+      return currentBlock.height !== masterBlock.height;
+    }
     case "section":
     case "list":
     case "columns":

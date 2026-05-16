@@ -74,6 +74,11 @@ export default defineSchema({
         leftSpace: v.optional(v.float64()),
         rightSpace: v.optional(v.float64()),
         ref: v.optional(v.id("blocks")),
+      }),
+      v.object({
+        type: v.literal("spacer"),
+        height: v.float64(),
+        ref: v.optional(v.id("blocks")),
       })
     ),
   }).index("by_documentId", ["documentId"]),

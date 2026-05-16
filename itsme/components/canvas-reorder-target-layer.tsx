@@ -58,6 +58,7 @@ function cloneSnapshot(
             blocks: block.blocks.map((child) => ({ ...child })),
           };
         case "text":
+        case "spacer":
           return block;
       }
     }),
@@ -102,6 +103,7 @@ function findParentRefFromBlockTree(
         };
       }
       case "text":
+      case "spacer":
         return null;
     }
   }
@@ -686,7 +688,7 @@ export function buildNextDocumentForBlockPlacement(args: {
 export function buildNextDocumentForAddBlockPlacement(args: {
   snapshot: DocumentBlocksSnapshot;
   blockTree: BlockTree;
-  blockType: "text" | "list";
+  blockType: "text" | "list" | "spacer";
   targetBox: BlockTreeReorderBoundingBox;
 }): AddBlockPlacementResult | null {
   const { blockType, ...rest } = args;
@@ -700,12 +702,18 @@ export function buildNextDocumentForAddBlockPlacement(args: {
           align: "left",
           style: "default",
         }
-      : {
-          id: newId,
-          type: "list",
-          blocks: [],
-          bullet: { type: "normal", value: "-" },
-        };
+      : blockType === "list"
+        ? {
+            id: newId,
+            type: "list",
+            blocks: [],
+            bullet: { type: "normal", value: "-" },
+          }
+        : {
+            id: newId,
+            type: "spacer",
+            height: 24,
+          };
   return buildNextDocumentForBlockPlacement({
     ...rest,
     newSubtreeBlocks: [newBlock],
@@ -973,6 +981,11 @@ export function AddBlockPlacementLayer({
     labelRectWidth = 150;
     labelRectHeight = 44;
     labelFontSize = 28;
+  } else if (addAction?.blockType === "spacer") {
+    blockLabel = "Spacer";
+    labelRectWidth = 150;
+    labelRectHeight = 44;
+    labelFontSize = 28;
   } else {
     blockLabel = "Text";
     labelRectWidth = 150;
@@ -1022,7 +1035,7 @@ export function AddBlockPlacementLayer({
       }
 
       let targetBox: BlockTreeReorderBoundingBox | null = null;
-      let blockType: "text" | "list" | null = null;
+      let blockType: "text" | "list" | "spacer" | null = null;
       let newSubtreeForPaste: Block[] | null = null;
 
       if (add?.targetBlock) {

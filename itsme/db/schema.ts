@@ -9,7 +9,7 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
-const BLOCK_TYPES = ["text", "section", "columns", "list"] as const;
+const BLOCK_TYPES = ["text", "section", "columns", "list", "spacer"] as const;
 
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),

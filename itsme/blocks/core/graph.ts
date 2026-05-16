@@ -31,6 +31,7 @@ export function getChildBlockIds(block: Block): string[] {
     case "columns":
       return block.blocks.map((child) => child.blockId);
     case "text":
+    case "spacer":
       return [];
   }
 }
@@ -142,6 +143,7 @@ export function findParentRef(
         break;
       }
       case "text":
+      case "spacer":
         break;
     }
   }

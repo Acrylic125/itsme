@@ -62,6 +62,13 @@ export function remapClientBlockIds(
           })),
           ...refFields(b.ref),
         };
+      case "spacer":
+        return {
+          type: "spacer",
+          id: mapId(b.id),
+          height: b.height,
+          ...refFields(b.ref),
+        };
     }
   });
 }

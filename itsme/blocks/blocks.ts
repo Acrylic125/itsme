@@ -3,12 +3,14 @@ import { TextBlockSchema, TextStyleSheetSchema } from "./text/schema";
 import { SectionBlockSchema } from "./section/schema";
 import { ColumnsBlockSchema } from "./columns/schema";
 import { ListBlockSchema, ListStylesheetSchema } from "./list/schema";
+import { SpacerBlockSchema } from "./spacer/schema";
 
 export const BlockSchema = z.union([
   TextBlockSchema,
   SectionBlockSchema,
   ColumnsBlockSchema,
   ListBlockSchema,
+  SpacerBlockSchema,
 ]);
 
 export type Block = z.infer<typeof BlockSchema>;

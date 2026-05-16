@@ -59,6 +59,7 @@ function remapBlockIdsInBlock(args: {
 
   switch (args.block.type) {
     case "text":
+    case "spacer":
       return { ...args.block, id, ...(ref ? { ref } : {}) };
     case "section":
     case "list":
@@ -102,6 +103,7 @@ function getProjectNameFromBlocks(
 function getChildBlockIds(block: Block): string[] {
   switch (block.type) {
     case "text":
+    case "spacer":
       return [];
     case "section":
     case "list":

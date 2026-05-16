@@ -227,6 +227,7 @@ export function applyBlockMove(
             blocks: block.blocks.map((child) => ({ ...child })),
           };
         case "text":
+        case "spacer":
           return block;
       }
     }),
@@ -348,6 +349,7 @@ export function applyInsertSubtreeAtDestination(
             blocks: block.blocks.map((child) => ({ ...child })),
           };
         case "text":
+        case "spacer":
           return block;
       }
     }),
@@ -468,6 +470,7 @@ export function deleteBlockFromDocument(
             blocks: block.blocks.map((child) => ({ ...child })),
           };
         case "text":
+        case "spacer":
           return block;
       }
     }),
@@ -554,6 +557,14 @@ export function duplicateBlockBelowInDocument(
           id: remapId(b.id),
         };
       }
+      case "spacer": {
+        const { ref: _omitRef, ...rest } = b;
+        void _omitRef;
+        return {
+          ...rest,
+          id: remapId(b.id),
+        };
+      }
       case "section":
       case "list": {
         const { ref: _omitRef, ...rest } = b;
@@ -594,6 +605,7 @@ export function duplicateBlockBelowInDocument(
               blocks: block.blocks.map((child) => ({ ...child })),
             };
           case "text":
+          case "spacer":
             return block;
         }
       }),

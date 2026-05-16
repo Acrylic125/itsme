@@ -16,6 +16,7 @@ import { SectionBlockRenderer } from "./section/renderer";
 import { ColumnsBlockRenderer } from "./columns/renderer";
 import { TextBlockRenderer } from "./text/renderer";
 import { ListBlockRenderer } from "./list/renderer";
+import { SpacerBlockRenderer } from "./spacer/renderer";
 
 export const DocumentSchema = z.object({
   name: z.string().default("Untitled Document"),
@@ -549,6 +550,7 @@ export function createContext(
       text: TextBlockRenderer,
       columns: ColumnsBlockRenderer,
       list: ListBlockRenderer,
+      spacer: SpacerBlockRenderer,
     },
     // renderers: [
     //   SectionBlockRenderer,

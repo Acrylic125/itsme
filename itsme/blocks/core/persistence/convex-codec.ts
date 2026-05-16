@@ -29,6 +29,11 @@ export type ConvexBlockRowData =
       leftSpace?: number;
       rightSpace?: number;
       ref?: string;
+    }
+  | {
+      type: "spacer";
+      height: number;
+      ref?: string;
     };
 
 export function clientBlockToConvexData(block: Block): ConvexBlockRowData {
@@ -82,6 +87,12 @@ export function clientBlockToConvexData(block: Block): ConvexBlockRowData {
         ref: block.ref ? block.ref : undefined,
       };
     }
+    case "spacer":
+      return {
+        type: "spacer",
+        height: block.height,
+        ref: block.ref ? block.ref : undefined,
+      };
     default: {
       const _x: never = block;
       return _x;
@@ -125,6 +136,15 @@ export function convexDataToClientBlock(args: {
         span: c.span,
         blockId: c.blockId,
       })),
+      ref: data.ref ?? undefined,
+    };
+  }
+
+  if (data.type === "spacer") {
+    return {
+      id,
+      type: "spacer",
+      height: data.height,
       ref: data.ref ?? undefined,
     };
   }
@@ -179,6 +199,11 @@ export function remapConvexBlockRowData(
       return {
         ...data,
         children: data.children.map(mapId),
+        ref: data.ref,
+      };
+    case "spacer":
+      return {
+        ...data,
         ref: data.ref,
       };
   }

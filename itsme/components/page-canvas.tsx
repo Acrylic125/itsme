@@ -51,7 +51,7 @@ export function PageCanvas() {
   }, [document, dpi, isDownloading]);
 
   const toggleAddBlockMode = useCallback(
-    (blockType: "text" | "list") => {
+    (blockType: "text" | "list" | "spacer") => {
       const { action } = documentStore.getState();
       const cur = documentActionOf(action, "add-block");
       documentStore.setState({
@@ -128,6 +128,7 @@ export function PageCanvas() {
       <PageCanvasToolbar
         onToggleAddText={() => toggleAddBlockMode("text")}
         onToggleAddList={() => toggleAddBlockMode("list")}
+        onToggleAddSpacer={() => toggleAddBlockMode("spacer")}
         onDownload={handleDownload}
         isDownloading={isDownloading}
       />

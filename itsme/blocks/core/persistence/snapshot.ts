@@ -44,6 +44,7 @@ export function remapSnapshotIds(
       const ref = block.ref;
       switch (block.type) {
         case "text":
+        case "spacer":
           return { ...block, id, ...(ref ? { ref } : {}) };
         case "section":
         case "list":
