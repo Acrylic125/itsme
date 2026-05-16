@@ -162,10 +162,10 @@ export function PageCanvas() {
               );
             })}
             <Group>
+              <MasterDiffLayer />
               {blocks.map((block) => (
                 <Group key={block.id}>{block.component()}</Group>
               ))}
-              <MasterDiffLayer />
               <MoveReorderLayer />
               <AddBlockPlacementLayer
                 scale={scale}

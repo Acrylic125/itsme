@@ -36,16 +36,22 @@ export function MasterDiffLayer() {
       return [];
     }
 
-    const currentBlocksById = new Map(document.blocks.map((block) => [block.id, block]));
-    const masterBlockIds = new Set(masterDocument.blocks.map((block) => block.id));
+    const currentBlocksById = new Map(
+      document.blocks.map((block) => [block.id, block])
+    );
+    const masterBlockIds = new Set(
+      masterDocument.blocks.map((block) => block.id)
+    );
 
-    return flattenRenderedTrees(blocks.map((block) => block.tree)).filter((node) => {
-      const block = currentBlocksById.get(node.blockId);
-      if (!block) {
-        return false;
+    return flattenRenderedTrees(blocks.map((block) => block.tree)).filter(
+      (node) => {
+        const block = currentBlocksById.get(node.blockId);
+        if (!block) {
+          return false;
+        }
+        return block.ref === undefined || !masterBlockIds.has(block.ref);
       }
-      return block.ref === undefined || !masterBlockIds.has(block.ref);
-    });
+    );
   }, [blocks, document, masterDocument, masterDocumentId, projectId]);
 
   if (
@@ -67,8 +73,8 @@ export function MasterDiffLayer() {
           y={block.estimatedDimensions.y}
           width={block.estimatedDimensions.width}
           height={block.estimatedDimensions.height}
-          fill="rgba(250, 204, 21, 0.18)"
-          stroke="#eab308"
+          fill="#FEFCE8"
+          stroke="#FEE685"
           strokeWidth={2}
           cornerRadius={6}
           dash={[6, 4]}
