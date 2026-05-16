@@ -158,13 +158,13 @@ export function remapConvexBlockRowData(
     case "text":
       return {
         ...data,
-        ref: data.ref ? mapId(data.ref) : undefined,
+        ref: data.ref,
       };
     case "section":
       return {
         ...data,
         children: data.children.map(mapId),
-        ref: data.ref ? mapId(data.ref) : undefined,
+        ref: data.ref,
       };
     case "columns":
       return {
@@ -173,13 +173,13 @@ export function remapConvexBlockRowData(
           ...c,
           blockId: mapId(c.blockId),
         })),
-        ref: data.ref ? mapId(data.ref) : undefined,
+        ref: data.ref,
       };
     case "list":
       return {
         ...data,
         children: data.children.map(mapId),
-        ref: data.ref ? mapId(data.ref) : undefined,
+        ref: data.ref,
       };
   }
 }

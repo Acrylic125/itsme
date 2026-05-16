@@ -19,6 +19,10 @@ function resolveMasterBlockId(
   clientToConvex: Map<string, string>
 ): string | null {
   if (block.ref) {
+    if (masterBlockById.has(block.ref)) {
+      return block.ref;
+    }
+    // Fallback when ref was incorrectly stored as a document-local client id.
     const refInMaster = toConvexBlockId(block.ref, clientToConvex);
     if (masterBlockById.has(refInMaster)) {
       return refInMaster;

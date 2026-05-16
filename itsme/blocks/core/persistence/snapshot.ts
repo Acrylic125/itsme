@@ -40,7 +40,8 @@ export function remapSnapshotIds(
     layout: snapshot.layout.map((id) => remap(id)) as Id<"blocks">[],
     blocks: snapshot.blocks.map((block) => {
       const id = remap(block.id);
-      const ref = block.ref ? remap(block.ref) : undefined;
+      // `ref` is a stable master-anchor Convex id; never remap with client id mapping.
+      const ref = block.ref;
       switch (block.type) {
         case "text":
           return { ...block, id, ...(ref ? { ref } : {}) };

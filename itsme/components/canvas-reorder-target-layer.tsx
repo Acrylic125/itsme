@@ -964,7 +964,7 @@ export function AddBlockPlacementLayer({
   let labelRectHeight: number;
   let labelFontSize: number;
   if (pasteAction) {
-    blockLabel = "Click to Paste\nOR CMD Click to Paste with Linking";
+    blockLabel = "Click to Paste\nOR CMD Click to Paste without Linking";
     labelRectWidth = 380;
     labelRectHeight = 72;
     labelFontSize = 16;
@@ -1013,7 +1013,7 @@ export function AddBlockPlacementLayer({
   );
 
   const commitPlacement = useCallback(
-    async (placementOptions?: { pasteWithLinking?: boolean }) => {
+    async (placementOptions?: { pasteWithoutLinking?: boolean }) => {
       const raw = documentStore.getState().action;
       const add = documentActionOf(raw, "add-block");
       const paste = documentActionOf(raw, "paste-block");
@@ -1037,7 +1037,7 @@ export function AddBlockPlacementLayer({
           return;
         }
         newSubtreeForPaste = parseCopyPasteClipboardPayload(text, {
-          preserveRefs: Boolean(placementOptions?.pasteWithLinking),
+          preserveRefs: !placementOptions?.pasteWithoutLinking,
         });
         if (!newSubtreeForPaste?.length) {
           return;
@@ -1186,10 +1186,12 @@ export function AddBlockPlacementLayer({
             metaKey?: boolean;
             ctrlKey?: boolean;
           };
-          const pasteWithLinking = Boolean(
+          const pasteWithoutLinking = Boolean(
             ev.altKey || ev.metaKey || ev.ctrlKey
           );
-          void commitPlacement(pasteAction ? { pasteWithLinking } : undefined);
+          void commitPlacement(
+            pasteAction ? { pasteWithoutLinking } : undefined
+          );
         }}
       />
     </>

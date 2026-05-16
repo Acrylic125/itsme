@@ -57,20 +57,21 @@ export type CopyPasteClipboardPayload = z.infer<
   typeof CopyPasteClipboardSchema
 >;
 
+/** Master-link anchor for a block: explicit `ref`, or the source row's id. */
+export function linkAnchorRefForBlock(block: Block): string {
+  return block.ref ?? block.id;
+}
+
+export function withLinkAnchorRef(block: Block): Block {
+  return { ...block, ref: linkAnchorRefForBlock(block) };
+}
+
 /**
- * Copy should always export a stable anchor for text blocks so linking paste can
- * preserve it even when the source row itself has no explicit `ref`.
+ * Copy should always export stable anchors so linking paste can preserve master
+ * ties even when the source row has no explicit `ref`.
  */
-function ensureTextRefsForClipboard(blocks: Block[]): Block[] {
-  return blocks.map((b) => {
-    if (b.type !== "text" || b.ref !== undefined) {
-      return b;
-    }
-    return {
-      ...b,
-      ref: b.id,
-    };
-  });
+function ensureLinkRefsForClipboard(blocks: Block[]): Block[] {
+  return blocks.map(withLinkAnchorRef);
 }
 
 /** Drop `text.ref` when it does not point at another row in the same clipboard. */
@@ -90,26 +91,26 @@ export function stripDanglingTextRefsInSubtree(blocks: Block[]): Block[] {
 }
 
 /**
- * Assign fresh client ids for a paste. By default omits `ref` on pasted blocks.
- * With `preserveRefsInSubtree`, keeps the original `ref` string unchanged so
- * linking paste preserves the source anchor across documents.
+ * Assign fresh client ids for a paste. By default keeps `ref` on pasted blocks.
+ * With `preserveRefsInSubtree: false`, omits `ref` so the paste is unlinked.
  */
 export function remapCopyPasteBlocksToClientIds(
   blocks: Block[],
   options?: { preserveRefsInSubtree?: boolean }
 ): Block[] {
-  const preserveRefs = options?.preserveRefsInSubtree ?? false;
+  const preserveRefs = options?.preserveRefsInSubtree ?? true;
   const oldToNew = new Map<string, string>();
   for (const b of blocks) {
     oldToNew.set(b.id, newClientBlockId(b.type));
   }
-  return remapClientBlockIds(blocks, (id) => oldToNew.get(id) ?? id, {
+  const blocksToRemap = preserveRefs ? blocks.map(withLinkAnchorRef) : blocks;
+  return remapClientBlockIds(blocksToRemap, (id) => oldToNew.get(id) ?? id, {
     preserveRefs,
   });
 }
 
 export function serializeCopyPasteClipboard(blocks: Block[]): string {
-  const blocksForClipboard = ensureTextRefsForClipboard(blocks);
+  const blocksForClipboard = ensureLinkRefsForClipboard(blocks);
   const payload: CopyPasteClipboardPayload = {
     action: COPY_PASTE_CLIPBOARD_ACTION,
     blocks: blocksForClipboard,
@@ -135,7 +136,7 @@ export function parseCopyPasteClipboardPayload(
   if (!parsed.success) {
     return null;
   }
-  const preserveRefs = options?.preserveRefs ?? false;
+  const preserveRefs = options?.preserveRefs ?? true;
   const blocksForRemap = preserveRefs
     ? parsed.data.blocks
     : stripDanglingTextRefsInSubtree(parsed.data.blocks);
