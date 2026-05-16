@@ -587,25 +587,27 @@ function TextBlockComponent({
     if (!anchor || !isEditingThisBlock) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         closeTextEditor();
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [anchor, isEditingThisBlock, closeTextEditor]);
 
   useEffect(() => {
     if (!isFocusOnlyThisBlock) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         setAction((current) => {
           const f = asFocusBlockAction(current);
           return f?.blockId === block.id ? null : current;
         });
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [block.id, isFocusOnlyThisBlock, setAction]);
 
   const isDisabled = useInteractableBlock({

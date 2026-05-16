@@ -911,6 +911,17 @@ export function MoveReorderLayer() {
   const moveAction = useStore(documentStore, selectMoveBlockAction);
   const setAction = useStore(documentStore, (s) => s.setAction);
 
+  useEffect(() => {
+    if (!moveAction) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setAction(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [moveAction, setAction]);
+
   const syncMoveTarget = useCallback(
     (target: BlockTreeReorderBoundingBox | null) => {
       setAction((current) => {
@@ -951,13 +962,40 @@ export function AddBlockPlacementLayer({
   const setAction = useStore(documentStore, (s) => s.setAction);
 
   const pointer = placementAction?.current?.position ?? null;
-  const blockLabel = pasteAction
-    ? "Paste"
-    : addAction?.blockType === "list"
-      ? "List"
-      : "Text";
-  /** Dev Strict Mode may invoke state updaters twice; cache one placement result per commit. */
+
+  let blockLabel: string;
+  let labelRectWidth: number;
+  let labelRectHeight: number;
+  let labelFontSize: number;
+  if (pasteAction) {
+    blockLabel = "Click to Paste\nOR CMD Click to Paste with Linking";
+    labelRectWidth = 380;
+    labelRectHeight = 72;
+    labelFontSize = 16;
+  } else if (addAction?.blockType === "list") {
+    blockLabel = "List";
+    labelRectWidth = 150;
+    labelRectHeight = 44;
+    labelFontSize = 28;
+  } else {
+    blockLabel = "Text";
+    labelRectWidth = 150;
+    labelRectHeight = 44;
+    labelFontSize = 28;
+  }
+
   const placementSnapshotCacheRef = useRef<DocumentBlocksSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!placementAction) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setAction(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [placementAction, setAction]);
 
   const syncPlacementTarget = useCallback(
     (target: BlockTreeReorderBoundingBox | null) => {
@@ -978,8 +1016,9 @@ export function AddBlockPlacementLayer({
     [setAction]
   );
 
-  const commitPlacement = useCallback(async () => {
-    const raw = documentStore.getState().action;
+  const commitPlacement = useCallback(
+    async (placementOptions?: { pasteWithLinking?: boolean }) => {
+      const raw = documentStore.getState().action;
     const add = asAddBlockAction(raw);
     const paste = asPasteBlockAction(raw);
     if (!document) {
@@ -1001,7 +1040,9 @@ export function AddBlockPlacementLayer({
       } catch {
         return;
       }
-      newSubtreeForPaste = parseCopyPasteClipboardPayload(text);
+      newSubtreeForPaste = parseCopyPasteClipboardPayload(text, {
+        preserveRefs: Boolean(placementOptions?.pasteWithLinking),
+      });
       if (!newSubtreeForPaste?.length) {
         return;
       }
@@ -1074,8 +1115,8 @@ export function AddBlockPlacementLayer({
       {pointer && (
         <Group x={pointer.x + 14} y={pointer.y + 14} listening={false}>
           <Rect
-            width={140}
-            height={40}
+            width={labelRectWidth}
+            height={labelRectHeight}
             stroke="#ea580c"
             strokeWidth={2}
             dash={[5, 5]}
@@ -1084,11 +1125,12 @@ export function AddBlockPlacementLayer({
           />
           <Text
             text={blockLabel}
-            width={140}
-            height={40}
+            width={labelRectWidth}
+            height={labelRectHeight}
             align="center"
             verticalAlign="middle"
-            fontSize={24}
+            fontSize={labelFontSize}
+            lineHeight={pasteAction ? 1.25 : 1}
             fontFamily="system-ui, sans-serif"
             fill="#0f172a"
           />
@@ -1141,7 +1183,17 @@ export function AddBlockPlacementLayer({
         }}
         onClick={(e) => {
           e.cancelBubble = true;
-          void commitPlacement();
+          const ev = e.evt as {
+            altKey?: boolean;
+            metaKey?: boolean;
+            ctrlKey?: boolean;
+          };
+          const pasteWithLinking = Boolean(
+            ev.altKey || ev.metaKey || ev.ctrlKey
+          );
+          void commitPlacement(
+            pasteAction ? { pasteWithLinking } : undefined
+          );
         }}
       />
     </>
