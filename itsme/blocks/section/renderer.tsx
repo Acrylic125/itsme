@@ -99,6 +99,8 @@ export const SectionBlockRenderer: BlockRenderer<"section"> = {
     const sectionEndPosition = ctx.getNextPosition();
 
     const dimensions = {
+      x: sectionStartPosition.x,
+      y: sectionStartPosition.y,
       width: relativeTo.width,
       height: sectionEndPosition.y - sectionStartPosition.y,
     };

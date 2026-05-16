@@ -774,11 +774,15 @@ export const TextBlockRenderer: BlockRenderer<"text"> = {
     const { lineCount } = layout(prepared, relativeTo.width, style.lineHeight);
 
     const dimensions = {
+      x: 0,
+      y: 0,
       width: relativeTo.width,
       height: lineCount * fontSizePx * style.lineHeight,
     };
 
     const pos = ctx.claimBlockSpace(dimensions.height);
+    dimensions.x = pos.canvas.from.x;
+    dimensions.y = pos.canvas.from.y;
 
     const posRelativeTo = {
       parents: [...relativeTo.parents, block.id],

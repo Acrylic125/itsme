@@ -645,7 +645,9 @@ type DocumentContextValue = {
   blocks: RenderedLayoutBlock[];
   blockTree: BlockTree;
   documentStore: DocumentStore;
-  document: z.infer<typeof DocumentSchema> | null;
+  document: DocumentWithId | null;
+  masterDocument: DocumentWithId | null;
+  masterDocumentId: DocumentId | null;
   /** Convex project id when the provider was given one; otherwise null. */
   projectId: Id<"projects"> | null;
   /** Apply a pure transform to the current blocks snapshot; changes debounce then sync to Convex. */
@@ -695,9 +697,35 @@ export function DocumentStoresProvider({
     documentId ? { documentId: convexDocumentId } : "skip"
   );
 
+  const projectDocumentsQuery = useQueryWithStatus(
+    api.documentTasks.getProjectDocuments,
+    convexProjectId ? { projectId: convexProjectId } : "skip"
+  );
+
   const stylesQuery = useQueryWithStatus(
     api.documentTasks.getDocumentStyles,
     documentId ? { documentId: convexDocumentId } : "skip"
+  );
+
+  const masterDocumentId =
+    projectDocumentsQuery.status === "success"
+      ? (projectDocumentsQuery.data.masterDocumentId ?? null)
+      : null;
+  const shouldLoadSeparateMasterDocument =
+    masterDocumentId !== null && masterDocumentId !== convexDocumentId;
+
+  const masterBlocksQuery = useQueryWithStatus(
+    api.documentTasks.getDocumentBlocks,
+    shouldLoadSeparateMasterDocument
+      ? { documentId: masterDocumentId }
+      : "skip"
+  );
+
+  const masterStylesQuery = useQueryWithStatus(
+    api.documentTasks.getDocumentStyles,
+    shouldLoadSeparateMasterDocument
+      ? { documentId: masterDocumentId }
+      : "skip"
   );
 
   const updateDocumentBlocksMutation = useMutation(
@@ -1110,6 +1138,45 @@ export function DocumentStoresProvider({
     };
   }, [blocksQuery, modifiedBlocks, stylesQuery, clientIdMappings]);
 
+  const masterDocument = useMemo<DocumentWithId | null>(() => {
+    if (masterDocumentId === null) {
+      return null;
+    }
+    if (masterDocumentId === convexDocumentId) {
+      return renderedDocument;
+    }
+    if (
+      masterBlocksQuery.status !== "success" ||
+      masterStylesQuery.status !== "success"
+    ) {
+      return null;
+    }
+
+    const source = masterBlocksQuery.data;
+    const cleaned = sanitizeRootLayout({
+      name: source.document.name,
+      pageSize: PAGE_SIZE,
+      styleSheet: masterStylesQuery.data.styleSheet,
+      blocks: source.blocks,
+      layout: source.layout,
+    });
+
+    return {
+      id: source.document.id,
+      name: cleaned.name,
+      blocks: cleaned.blocks,
+      layout: cleaned.layout,
+      styleSheet: cleaned.styleSheet,
+      pageSize: cleaned.pageSize,
+    };
+  }, [
+    convexDocumentId,
+    masterBlocksQuery,
+    masterDocumentId,
+    masterStylesQuery,
+    renderedDocument,
+  ]);
+
   const canMeasureText =
     typeof window !== "undefined" &&
     (typeof OffscreenCanvas !== "undefined" ||
@@ -1131,6 +1198,8 @@ export function DocumentStoresProvider({
       blockTree: rendered.blockTree,
       documentStore,
       document: renderedDocument,
+      masterDocument,
+      masterDocumentId,
       projectId: convexProjectId,
       updateBlocks,
       syncDocumentTextPresetToMatch,
@@ -1141,6 +1210,8 @@ export function DocumentStoresProvider({
     rendered,
     dpi,
     renderedDocument,
+    masterDocument,
+    masterDocumentId,
     documentStore,
     convexProjectId,
     updateBlocks,

@@ -5,13 +5,18 @@ import { Layer, Rect, Group, Stage } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { getPageLayoutMetrics } from "@/blocks/renderer";
-import { asAddBlockAction, asPasteBlockAction, useDocument } from "@/blocks/document-context";
+import {
+  asAddBlockAction,
+  asPasteBlockAction,
+  useDocument,
+} from "@/blocks/document-context";
 import { useStore } from "zustand/react";
 import { cn } from "@/lib/utils";
 import {
   AddBlockPlacementLayer,
   MoveReorderLayer,
 } from "./canvas-reorder-target-layer";
+import { MasterDiffLayer } from "./master-diff-layer";
 import { PageCanvasToolbar } from "./page-canvas-toolbar";
 
 export function PageCanvas() {
@@ -160,6 +165,7 @@ export function PageCanvas() {
               {blocks.map((block) => (
                 <Group key={block.id}>{block.component()}</Group>
               ))}
+              <MasterDiffLayer />
               <MoveReorderLayer />
               <AddBlockPlacementLayer
                 scale={scale}

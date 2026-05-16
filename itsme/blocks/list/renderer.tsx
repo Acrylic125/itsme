@@ -192,6 +192,8 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
       ctx.claimBlockSpace(placeholderHeight);
 
       const dimensions = {
+        x: listStartPosition.x,
+        y: listStartPosition.y,
         width: relativeTo.width,
         height: placeholderHeight,
       };
@@ -352,6 +354,8 @@ export const ListBlockRenderer: BlockRenderer<"list"> = {
 
     const listEndPosition = ctx.getNextPosition();
     const dimensions = {
+      x: listStartPosition.x,
+      y: listStartPosition.y,
       width: relativeTo.width,
       height: listEndPosition.y - listStartPosition.y,
     };

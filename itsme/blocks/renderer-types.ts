@@ -6,6 +6,11 @@ export type Pos = {
   y: number;
 };
 
+export type EstimatedDimensions = Pos & {
+  width: number;
+  height: number;
+};
+
 /** Passed from `columns` renderer to direct children for edge-drag span resizing. */
 export type ColumnsResizeContext = {
   columnsBlockId: string;
@@ -182,7 +187,7 @@ export type BlockRenderer<T extends z.infer<typeof BlockSchema>["type"]> = {
     children: ReturnType<
       BlockRenderer<z.infer<typeof BlockSchema>["type"]>["render"]
     >[];
-    estimatedDimensions: { width: number; height: number };
+    estimatedDimensions: EstimatedDimensions;
     component: () => React.ReactNode;
   };
 };

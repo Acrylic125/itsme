@@ -9,6 +9,7 @@ import {
   BlockRendererContext,
   BlockTree,
   BlockTreeReorderBoundingBox,
+  EstimatedDimensions,
 } from "./renderer-types";
 import { SectionBlockRenderer } from "./section/renderer";
 import { ColumnsBlockRenderer } from "./columns/renderer";
@@ -558,11 +559,13 @@ export function createContext(
 
 export type RenderedLayoutBlock = {
   id: string;
+  estimatedDimensions: EstimatedDimensions;
   y: number;
   /** Vertical extent in document px (same space as `y`); used for pagination / canvas. */
   height: number;
   tree: {
     blockId: string;
+    estimatedDimensions: EstimatedDimensions;
     children: RenderedLayoutBlock["tree"][];
   };
   component: () => React.ReactNode;
@@ -599,12 +602,15 @@ export function renderDocumentLayout(args: {
     );
     rendered.push({
       id: block.id,
+      estimatedDimensions: result.estimatedDimensions,
       y: start.y,
       height: result.estimatedDimensions.height,
       tree: {
         blockId: result.blockId,
+        estimatedDimensions: result.estimatedDimensions,
         children: result.children.map((child) => ({
           blockId: child.blockId,
+          estimatedDimensions: child.estimatedDimensions,
           children: [],
         })),
       },
@@ -629,6 +635,7 @@ export function renderDocumentLayout(args: {
       }
       nextTree.children = next.children.map((child) => ({
         blockId: child.blockId,
+        estimatedDimensions: child.estimatedDimensions,
         children: [],
       }));
       queue.push(...next.children);

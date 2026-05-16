@@ -144,6 +144,8 @@ export const ColumnsBlockRenderer: BlockRenderer<"columns"> = {
     });
 
     const dimensions = {
+      x: groupStartPosition.x,
+      y: groupStartPosition.y,
       width: relativeTo.width,
       height: maxOffsetY,
     };
