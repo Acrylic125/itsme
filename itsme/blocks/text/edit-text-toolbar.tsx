@@ -290,47 +290,48 @@ export function EditTextToolbar({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        {contentPresetVariants.length > 0 || contentPresetVariantsLoading ? (
-          <div className="min-w-0">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={contentPresetVariantsLoading}
-                  className="h-7 w-full justify-between gap-2 py-1.5 font-normal"
-                  aria-label="Text content presets"
-                >
-                  <span className="min-w-0 whitespace-normal text-left">
-                    {contentPresetVariantsLoading ? "Preset…" : "Preset"}
-                  </span>
-                  <ChevronDown className="size-3.5 shrink-0 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-md overflow-x-visible! overflow-y-auto"
+        <div className="min-w-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={contentPresetVariantsLoading}
+                className="h-7 w-full justify-between gap-2 py-1.5 font-normal"
+                aria-label="Text content presets"
               >
-                {contentPresetVariantsLoading &&
-                contentPresetVariants.length === 0 ? (
-                  <DropdownMenuItem disabled>Loading…</DropdownMenuItem>
-                ) : null}
-                {contentPresetVariants.map((variant) => (
-                  <DropdownMenuItem
-                    key={variant}
-                    className="h-auto min-h-8 max-w-none items-start whitespace-pre-wrap wrap-break-word py-2"
-                    onSelect={() => {
-                      onContentPresetSelect(variant);
-                    }}
-                  >
-                    {variant}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : null}
+                <span className="min-w-0 whitespace-normal text-left">
+                  {contentPresetVariantsLoading ? "Preset…" : "Preset"}
+                </span>
+                <ChevronDown className="size-3.5 shrink-0 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-md overflow-x-visible! overflow-y-auto"
+            >
+              {contentPresetVariantsLoading &&
+              contentPresetVariants.length === 0 ? (
+                <DropdownMenuItem disabled>Loading…</DropdownMenuItem>
+              ) : null}
+              {contentPresetVariants.map((variant) => (
+                <DropdownMenuItem
+                  key={variant}
+                  className="h-auto min-h-8 max-w-none items-start whitespace-pre-wrap wrap-break-word py-2"
+                  onSelect={() => {
+                    onContentPresetSelect(variant);
+                  }}
+                >
+                  {variant}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        {/* {contentPresetVariants.length > 0 || contentPresetVariantsLoading ? (
+          
+        ) : null} */}
       </div>
     </div>
   );
