@@ -12,13 +12,12 @@ import { useDocument } from "./document-context";
 import { hasBlockDiffToMaster } from "./master-diff";
 
 export function SyncToMasterButton({ block }: { block: Block }) {
-  const {
-    document,
-    masterDocument,
-    masterDocumentId,
+  const { document, masterDocument, masterDocumentId, documentStore } =
+    useDocument();
+  const clientIdMappings = useStore(
     documentStore,
-  } = useDocument();
-  const clientIdMappings = useStore(documentStore, (state) => state.clientIdMappings);
+    (state) => state.clientIdMappings
+  );
   const syncBlockToMaster = useMutation(api.documentTasks.syncBlockToMaster);
   const [isPending, setIsPending] = useState(false);
 
@@ -42,7 +41,7 @@ export function SyncToMasterButton({ block }: { block: Block }) {
   );
 
   const convexDocumentId = document
-    ? ((document as { id: Id<"documents"> }).id as Id<"documents">)
+    ? ((document as unknown as { id: Id<"documents"> }).id as Id<"documents">)
     : null;
   const canShow =
     document != null &&

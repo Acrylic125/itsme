@@ -5,8 +5,12 @@ import type {
   PdfDrawSurface,
   PdfDrawWrappedTextArgs,
 } from "./pdf-draw-context-types";
+import { PdfStructureTag } from "./types";
 
-export type { PdfDrawSurface, PdfDrawWrappedTextArgs } from "./pdf-draw-context-types";
+export type {
+  PdfDrawSurface,
+  PdfDrawWrappedTextArgs,
+} from "./pdf-draw-context-types";
 
 function mapFontFamily(fontFamily: string) {
   const normalized = fontFamily.trim().toLowerCase();
@@ -45,10 +49,7 @@ export class PdfDrawContext implements PdfDrawSurface {
     this.doc.setPage(pageIndex + 1);
   }
 
-  beginMarkedGroup(
-    tag: Exclude<PdfStructureTag, "Document">,
-    yPx: number
-  ) {
+  beginMarkedGroup(tag: Exclude<PdfStructureTag, "Document">, yPx: number) {
     this.setPageForY(yPx);
     return this.markedPdf.beginMarkedContent(tag);
   }

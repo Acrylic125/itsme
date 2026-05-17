@@ -2141,7 +2141,9 @@ export const createProjectFromPdf = mutation({
             ...(tb.fontWeight !== undefined
               ? { fontWeight: tb.fontWeight }
               : {}),
-            ...(tb.lineHeight !== undefined ? { lineHeight: tb.lineHeight } : {}),
+            ...(tb.lineHeight !== undefined
+              ? { lineHeight: tb.lineHeight }
+              : {}),
           };
         }
         if (b.type === "section") {
@@ -2210,7 +2212,9 @@ export const createProjectFromPdf = mutation({
             ...(tb.fontWeight !== undefined
               ? { fontWeight: tb.fontWeight }
               : {}),
-            ...(tb.lineHeight !== undefined ? { lineHeight: tb.lineHeight } : {}),
+            ...(tb.lineHeight !== undefined
+              ? { lineHeight: tb.lineHeight }
+              : {}),
           },
         });
         continue;
