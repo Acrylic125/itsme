@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { TextBlockSchema } from "./schema";
 import { z } from "zod";
@@ -64,9 +65,10 @@ type EditTextToolbarProps = {
   blockStyle: TextStyleKey;
   /** Preset (Body / H1–H3): updates the block only. */
   onTextStylePresetSelect: (style: TextStyleKey) => void;
-  /** When both are set, loads linked text preset variants from Convex. */
+  /** When set with convexBlockId, loads linked text preset variants from Convex. */
   convexDocumentId: Id<"documents"> | null;
   convexBlockId: Id<"blocks"> | null;
+  anchorBlockId: Id<"blocks"> | null;
   onContentPresetSelect: (text: string) => void;
   fontSizePt: number;
   onFontSizePtCommit: (pt: number) => void;
@@ -91,6 +93,7 @@ export function EditTextToolbar({
   onTextStylePresetSelect,
   convexDocumentId,
   convexBlockId,
+  anchorBlockId,
   onContentPresetSelect,
   fontSizePt,
   onFontSizePtCommit,
@@ -105,12 +108,20 @@ export function EditTextToolbar({
   onSyncAllDocumentsPresetToMatch,
   canSyncAllDocuments,
 }: EditTextToolbarProps) {
+  const [contentPresetsOpen, setContentPresetsOpen] = useState(false);
   const canFetchTextContentPresets =
-    convexDocumentId != null && convexBlockId != null;
+    convexDocumentId != null &&
+    convexBlockId != null &&
+    anchorBlockId != null &&
+    contentPresetsOpen;
   const textContentPresetsQuery = useQuery(
     api.documentTasks.getTextBlockContentVariants,
     canFetchTextContentPresets
-      ? { documentId: convexDocumentId, blockId: convexBlockId }
+      ? {
+          documentId: convexDocumentId,
+          blockId: convexBlockId,
+          anchorBlockId,
+        }
       : "skip"
   );
   const contentPresetVariants = textContentPresetsQuery?.variants ?? [];
@@ -264,13 +275,19 @@ export function EditTextToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="min-w-0">
-          <DropdownMenu>
+          <DropdownMenu
+            onOpenChange={(open) => {
+              setContentPresetsOpen(open);
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={contentPresetVariantsLoading}
+                disabled={
+                  contentPresetsOpen && contentPresetVariantsLoading
+                }
                 className="h-7 w-full justify-between gap-2 py-1.5 font-normal"
                 aria-label="Text content presets"
               >

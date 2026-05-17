@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
@@ -124,6 +124,18 @@ const blockDataWithClientIdsValidator = v.union(
     ref: v.optional(blockIdLike),
   })
 );
+
+function refFromBlockData(
+  data: (typeof blockDataValidator)["type"]
+): Id<"blocks"> | undefined {
+  return data.ref;
+}
+
+/** Keeps top-level `ref` in sync with `data.ref` for `by_ref` index queries. */
+function blockRowFields(data: (typeof blockDataValidator)["type"]) {
+  const ref = refFromBlockData(data);
+  return { data, ref };
+}
 
 function collectReferencedIdsFromBlockData(
   data: (typeof blockDataWithClientIdsValidator)["type"]
@@ -899,7 +911,7 @@ async function applyDocumentBlocksMutation(
 
       const id = await ctx.db.insert("blocks", {
         documentId: args.documentId,
-        data: mappedData,
+        ...blockRowFields(mappedData),
       });
       createdBlockIds.push(id);
       created += 1;
@@ -934,12 +946,15 @@ async function applyDocumentBlocksMutation(
       throw new Error("updateDocumentBlocks only supports one document.");
     }
 
-    await ctx.db.patch(mappedBlockId, {
-      data: remapBlockDataClientIds({
-        data: action.data,
-        idMap: clientIdToBlockId,
-      }),
-    });
+    await ctx.db.patch(
+      mappedBlockId,
+      blockRowFields(
+        remapBlockDataClientIds({
+          data: action.data,
+          idMap: clientIdToBlockId,
+        })
+      )
+    );
     updated += 1;
   }
 
@@ -1017,12 +1032,13 @@ export const getDocumentBlocks = query({
 
 /**
  * Text blocks whose `ref` points at the same anchor (`_id`) share a content-variant group.
- * Loads all blocks in the document's project, then returns distinct `text` values for that group.
+ * Uses the `by_ref` index to load only blocks in that group within the project.
  */
 export const getTextBlockContentVariants = query({
   args: {
     documentId: v.id("documents"),
     blockId: v.id("blocks"),
+    anchorBlockId: v.optional(v.id("blocks")),
   },
   handler: async (ctx, args) => {
     await requireIdentity(ctx);
@@ -1042,51 +1058,63 @@ export const getTextBlockContentVariants = query({
       return { variants: [] as string[] };
     }
 
-    const projectDocuments = await ctx.db
-      .query("documents")
-      .withIndex("by_projectId", (q) =>
-        q.eq("projectId", documentRecord.projectId)
-      )
+    const anchorId =
+      args.anchorBlockId ?? row.ref ?? d.ref ?? row._id;
+
+    const projectDocIds = new Set(
+      (
+        await ctx.db
+          .query("documents")
+          .withIndex("by_projectId", (q) =>
+            q.eq("projectId", documentRecord.projectId)
+          )
+          .collect()
+      ).map((doc) => doc._id)
+    );
+
+    const linkedRows = await ctx.db
+      .query("blocks")
+      .withIndex("by_ref", (q) => q.eq("ref", anchorId))
       .collect();
 
-    const blockRows = (
-      await Promise.all(
-        projectDocuments.map((doc) =>
-          ctx.db
-            .query("blocks")
-            .withIndex("by_documentId", (q) => q.eq("documentId", doc._id))
-            .collect()
-        )
-      )
-    ).flat();
-
-    const currentBlock = blockRows.find((b) => b._id === args.blockId);
-    if (!currentBlock || currentBlock.data.type !== "text") {
-      return { variants: [] as string[] };
-    }
-
-    const texts: string[] = [];
-    for (const b of blockRows) {
-      const data = b.data;
-      if (data.type !== "text") continue;
-      if (
-        !(
-          currentBlock.data.ref === b._id ||
-          (b.data.ref !== undefined && b.data.ref === currentBlock.data.ref) ||
-          currentBlock._id === b.data.ref
-        )
-      )
-        continue;
-      texts.push(data.text);
-    }
-
     const variants = new Set<string>();
-    for (const t of texts) {
-      variants.add(t);
+
+    for (const b of linkedRows) {
+      if (!projectDocIds.has(b.documentId)) continue;
+      if (b.data.type !== "text") continue;
+      variants.add(b.data.text);
     }
-    variants.delete(currentBlock.data.text);
+
+    if (anchorId !== row._id) {
+      const anchorRow = await ctx.db.get(anchorId);
+      if (
+        anchorRow &&
+        projectDocIds.has(anchorRow.documentId) &&
+        anchorRow.data.type === "text"
+      ) {
+        variants.add(anchorRow.data.text);
+      }
+    }
+
+    variants.delete(d.text);
 
     return { variants: Array.from(variants) };
+  },
+});
+
+/** One-off: `npx convex run documentTasks:backfillBlockTopLevelRefs` */
+export const backfillBlockTopLevelRefs = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let patched = 0;
+    const rows = await ctx.db.query("blocks").collect();
+    for (const row of rows) {
+      const ref = refFromBlockData(row.data);
+      if (row.ref === ref) continue;
+      await ctx.db.patch(row._id, { ref });
+      patched += 1;
+    }
+    return { patched, total: rows.length };
   },
 });
 
@@ -1332,13 +1360,16 @@ export const duplicateDocument = mutation({
     for (const [oldId, newId] of newIdByOldId) {
       const originalData = originalDataByOldId.get(oldId);
       if (!originalData) continue;
-      await ctx.db.patch(newId, {
-        data: mapBlockDataForDuplicate({
-          oldBlockId: oldId,
-          data: originalData,
-          idMap: newIdByOldId,
-        }),
-      });
+      await ctx.db.patch(
+        newId,
+        blockRowFields(
+          mapBlockDataForDuplicate({
+            oldBlockId: oldId,
+            data: originalData,
+            idMap: newIdByOldId,
+          })
+        )
+      );
     }
 
     // 3) Patch layout with mapped ids.
@@ -1867,9 +1898,10 @@ export const syncBlockToMaster = mutation({
           if (row.data.ref !== binding.previousRef) {
             continue;
           }
-          await ctx.db.patch(row._id, {
-            data: setBlockDataRef(row.data, actualMasterId),
-          });
+          await ctx.db.patch(
+            row._id,
+            blockRowFields(setBlockDataRef(row.data, actualMasterId))
+          );
           updatedRefCount += 1;
         }
         continue;
@@ -1879,9 +1911,10 @@ export const syncBlockToMaster = mutation({
         (row) => row._id === binding.currentBlockId
       );
       if (currentRow) {
-        await ctx.db.patch(currentRow._id, {
-          data: setBlockDataRef(currentRow.data, actualMasterId),
-        });
+        await ctx.db.patch(
+          currentRow._id,
+          blockRowFields(setBlockDataRef(currentRow.data, actualMasterId))
+        );
         updatedRefCount += 1;
       }
     }
@@ -1920,15 +1953,16 @@ async function clearTextBlockTypographyOverridesForDocumentAndStyle(
     ) {
       continue;
     }
-    await ctx.db.patch(row._id, {
-      data: {
+    await ctx.db.patch(
+      row._id,
+      blockRowFields({
         type: "text",
         text: d.text,
         align: d.align,
         style: d.style,
         ...(d.ref !== undefined ? { ref: d.ref } : {}),
-      },
-    });
+      })
+    );
     cleared += 1;
   }
   return cleared;
@@ -2201,8 +2235,9 @@ export const createProjectFromPdf = mutation({
           fontWeight?: "normal" | "bold";
           lineHeight?: number;
         };
-        await ctx.db.patch(newId, {
-          data: {
+        await ctx.db.patch(
+          newId,
+          blockRowFields({
             type: "text",
             text: tb.text,
             align: tb.align,
@@ -2215,22 +2250,23 @@ export const createProjectFromPdf = mutation({
             ...(tb.lineHeight !== undefined
               ? { lineHeight: tb.lineHeight }
               : {}),
-          },
-        });
+          })
+        );
         continue;
       }
 
       if (b.type === "section") {
         const sb = b as unknown as { blocks: string[]; ref?: string };
-        await ctx.db.patch(newId, {
-          data: {
+        await ctx.db.patch(
+          newId,
+          blockRowFields({
             type: "section",
             children: (sb.blocks ?? [])
               .map((cid) => newIdByImportedId.get(cid))
               .filter((id): id is Id<"blocks"> => id != null),
             ref: sb.ref ? newIdByImportedId.get(sb.ref) : undefined,
-          },
-        });
+          })
+        );
         continue;
       }
 
@@ -2239,8 +2275,9 @@ export const createProjectFromPdf = mutation({
           blocks: Array<{ blockId: string; span: number }>;
           ref?: string;
         };
-        await ctx.db.patch(newId, {
-          data: {
+        await ctx.db.patch(
+          newId,
+          blockRowFields({
             type: "columns",
             children: (cb.blocks ?? [])
               .map((c) => {
@@ -2252,8 +2289,8 @@ export const createProjectFromPdf = mutation({
                 (c): c is { blockId: Id<"blocks">; span: number } => c != null
               ),
             ref: cb.ref ? newIdByImportedId.get(cb.ref) : undefined,
-          },
-        });
+          })
+        );
         continue;
       }
 
@@ -2268,8 +2305,9 @@ export const createProjectFromPdf = mutation({
         ref?: string;
       };
 
-      await ctx.db.patch(newId, {
-        data: {
+      await ctx.db.patch(
+        newId,
+        blockRowFields({
           type: "list",
           children: (lb.blocks ?? [])
             .map((cid) => newIdByImportedId.get(cid))
@@ -2280,8 +2318,8 @@ export const createProjectFromPdf = mutation({
           leftSpace: lb.leftSpace,
           rightSpace: lb.rightSpace,
           ref: lb.ref ? newIdByImportedId.get(lb.ref) : undefined,
-        },
-      });
+        })
+      );
     }
 
     const mainLayoutImported = getMainLayoutImportedBlockIds(

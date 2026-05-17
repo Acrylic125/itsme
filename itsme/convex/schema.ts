@@ -41,6 +41,8 @@ export default defineSchema({
 
   blocks: defineTable({
     documentId: v.id("documents"),
+    /** Denormalized from `data.ref` for indexed variant-group lookups. */
+    ref: v.optional(v.id("blocks")),
     data: v.union(
       v.object({
         type: v.literal("text"),
@@ -82,7 +84,9 @@ export default defineSchema({
         ref: v.optional(v.id("blocks")),
       })
     ),
-  }).index("by_documentId", ["documentId"]),
+  })
+    .index("by_documentId", ["documentId"])
+    .index("by_ref", ["ref"]),
 
   documentPageStyles: defineTable({
     documentId: v.id("documents"),

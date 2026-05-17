@@ -72,12 +72,13 @@ export function hasBlockDiffToMaster(args: {
       return currentBlock.text !== masterBlock.text;
     }
     case "spacer": {
+      // We do not care if the spacer is missing from the master document.
       if (!masterBlockId) {
-        return true;
+        return false;
       }
       const masterBlock = masterBlockById.get(masterBlockId);
       if (!masterBlock || masterBlock.type !== "spacer") {
-        return true;
+        return false;
       }
       return currentBlock.height !== masterBlock.height;
     }

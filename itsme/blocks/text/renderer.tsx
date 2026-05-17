@@ -503,6 +503,18 @@ function TextBlockComponent({
     return block.id as Id<"blocks">;
   }, [block.id, clientIdMappings]);
 
+  const anchorBlockIdForContentPresets = useMemo(() => {
+    if (block.type !== "text") return null;
+    if (block.ref) {
+      if (block.ref.startsWith("CLIENT_ID:")) {
+        const resolved = clientIdMappings.clientToConvex.get(block.ref);
+        return resolved ? (resolved as Id<"blocks">) : null;
+      }
+      return block.ref as Id<"blocks">;
+    }
+    return convexBlockIdForContentPresets;
+  }, [block, clientIdMappings, convexBlockIdForContentPresets]);
+
   const handleContentPresetSelect = useCallback(
     (nextText: string) => {
       updateBlocks((current) => ({
@@ -734,6 +746,7 @@ function TextBlockComponent({
                 }}
                 convexDocumentId={convexDocumentId}
                 convexBlockId={convexBlockIdForContentPresets}
+                anchorBlockId={anchorBlockIdForContentPresets}
                 onContentPresetSelect={handleContentPresetSelect}
                 fontSizePt={fontSizePt}
                 onFontSizePtCommit={(nextFontSizePt) => {
